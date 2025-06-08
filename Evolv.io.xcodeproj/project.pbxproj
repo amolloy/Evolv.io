@@ -7,7 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		B44879442DF60ACB005212B0 /* README in Resources */ = {isa = PBXBuildFile; fileRef = B44879432DF60AC7005212B0 /* README */; };
+		B44879442DF60ACB005212B0 /* README.md in Resources */ = {isa = PBXBuildFile; fileRef = B44879432DF60AC7005212B0 /* README.md */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -31,7 +31,7 @@
 		B44879182DF60A68005212B0 /* Evolv.io.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Evolv.io.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		B44879262DF60A69005212B0 /* Evolv.ioTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = Evolv.ioTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		B44879302DF60A69005212B0 /* Evolv.ioUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = Evolv.ioUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
-		B44879432DF60AC7005212B0 /* README */ = {isa = PBXFileReference; lastKnownFileType = text; path = README; sourceTree = "<group>"; };
+		B44879432DF60AC7005212B0 /* README.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = README.md; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -80,7 +80,7 @@
 		B448790F2DF60A67005212B0 = {
 			isa = PBXGroup;
 			children = (
-				B44879432DF60AC7005212B0 /* README */,
+				B44879432DF60AC7005212B0 /* README.md */,
 				B448791A2DF60A68005212B0 /* Evolv.io */,
 				B44879292DF60A69005212B0 /* Evolv.ioTests */,
 				B44879332DF60A69005212B0 /* Evolv.ioUITests */,
@@ -218,7 +218,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				B44879442DF60ACB005212B0 /* README in Resources */,
+				B44879442DF60ACB005212B0 /* README.md in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
