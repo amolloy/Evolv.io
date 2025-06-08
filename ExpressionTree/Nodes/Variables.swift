@@ -8,15 +8,19 @@
 class VariableX: SimpleNode, Node {
 	let name = "x"
 
-	override func evaluatePixel(x: Float, y: Float) -> SIMD3<Float> {
-		return SIMD3<Float>(x, x, x)
+	override func evaluatePixel(x: PixelBuffer.ComponentType, y: PixelBuffer.ComponentType, parameters: [PixelBuffer]) -> PixelBuffer.Value {
+		return PixelBuffer.Value(PixelBuffer.ComponentType(x),
+								 PixelBuffer.ComponentType(x),
+								 PixelBuffer.ComponentType(x))
 	}
 }
 
 class VariableY: SimpleNode, Node {
 	let name = "y"
 
-	override func evaluatePixel(x: Float, y: Float) -> SIMD3<Float> {
-		return SIMD3<Float>(y, y, y)
+	override func evaluatePixel(x: PixelBuffer.ComponentType, y: PixelBuffer.ComponentType, parameters: [PixelBuffer]) -> PixelBuffer.Value {
+		return PixelBuffer.Value(PixelBuffer.ComponentType(y),
+								 PixelBuffer.ComponentType(y),
+								 PixelBuffer.ComponentType(y))
 	}
 }
