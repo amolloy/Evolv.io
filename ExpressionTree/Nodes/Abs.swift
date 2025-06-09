@@ -23,10 +23,10 @@ public class Abs: SimpleNode {
 		return "abs"
 	}
 
-	public override func evaluatePixel(x: PixelBuffer.ComponentType, y: PixelBuffer.ComponentType, parameters: [PixelBuffer]) -> PixelBuffer.Value {
+	public override func evaluatePixel(at coord: PixelBuffer.Coordinate, parameters: [PixelBuffer]) -> PixelBuffer.Value {
 		assert(parameters.count == 1)
 
-		let v = parameters[0].sampleBilinear(u: x, v: y)
+		let v = parameters[0].sampleBilinear(at: coord)
 		return abs(v)
 	}
 }

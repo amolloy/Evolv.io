@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import simd
 
 struct Perlin {
 	typealias ComponentType = PixelBuffer.ComponentType
@@ -27,21 +28,21 @@ struct Perlin {
 		return ((h & 1) == 0 ? u : -u) + ((h & 2) == 0 ? v : -v)
 	}
 
-	static func noise(x: ComponentType, y: ComponentType, seed: Int) -> ComponentType {
+	static func noise(at coord: SIMD2<ComponentType>, seed: Int) -> ComponentType {
 		let perm = permutation
 		let offset = seed & 255
 
 		// Grid coordinates
-		let xi = Int(floor(x)) & 255
-		let yi = Int(floor(y)) & 255
-		
-		// Local coordinates
-		let xf = x - floor(x)
-		let yf = y - floor(y)
+		let cell = floor(coord)
+		let xi = Int(cell.x) & 255
+		let yi = Int(cell.y) & 255
+
+		// Local coordinates within cell
+		let frac = coord - cell
 
 		// Fade curves
-		let u = fade(xf)
-		let v = fade(yf)
+		let u = fade(frac.x)
+		let v = fade(frac.y)
 
 		// Hash coordinates of the 4 square corners
 		let aa = perm[(perm[(xi + offset) & 255] + yi) & 255]
@@ -50,8 +51,8 @@ struct Perlin {
 		let bb = perm[(perm[(xi + 1 + offset) & 255] + yi + 1) & 255]
 
 		// Gradient results for each corner
-		let x1 = lerp(u, grad(aa, xf, yf), grad(ba, xf - 1, yf))
-		let x2 = lerp(u, grad(ab, xf, yf - 1), grad(bb, xf - 1, yf - 1))
+		let x1 = lerp(u, grad(aa, frac.x, frac.y), grad(ba, frac.x - 1, frac.y))
+		let x2 = lerp(u, grad(ab, frac.x, frac.y - 1), grad(bb, frac.x - 1, frac.y - 1))
 
 		// Final interpolated result
 		return (lerp(v, x1, x2) + 1) / 2

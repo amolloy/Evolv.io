@@ -8,14 +8,12 @@
 public class Constant: SimpleNode {
 	override public var name: String { "constant" }
 	public let value: PixelBuffer.ComponentType
-
+	
 	public init(value: PixelBuffer.ComponentType) {
 		self.value = value
 	}
-
-	public override func evaluatePixel(x: PixelBuffer.ComponentType, y: PixelBuffer.ComponentType, parameters: [PixelBuffer]) -> PixelBuffer.Value {
-		return PixelBuffer.Value(PixelBuffer.ComponentType(value),
-								 PixelBuffer.ComponentType(value),
-								 PixelBuffer.ComponentType(value))
+	
+	public override func evaluatePixel(at coord: PixelBuffer.Coordinate, parameters: [PixelBuffer]) -> PixelBuffer.Value {
+		return PixelBuffer.Value(repeating: value)
 	}
 }

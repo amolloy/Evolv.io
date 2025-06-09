@@ -23,11 +23,11 @@ public class And: SimpleNode {
 		return "and"
 	}
 
-	public override func evaluatePixel(x: PixelBuffer.ComponentType, y: PixelBuffer.ComponentType, parameters: [PixelBuffer]) -> PixelBuffer.Value {
+	public override func evaluatePixel(at coord: PixelBuffer.Coordinate, parameters: [PixelBuffer]) -> PixelBuffer.Value {
 		assert(parameters.count == 2)
 
-		let v0 = parameters[0].sampleBilinear(u: x, v: y)
-		let v1 = parameters[1].sampleBilinear(u: x, v: y)
+		let v0 = parameters[0].sampleBilinear(at: coord)
+		let v1 = parameters[1].sampleBilinear(at: coord)
 
 		var result = PixelBuffer.Value(repeating: 0)
 		for i in 0..<3 {
