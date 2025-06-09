@@ -10,19 +10,21 @@ import ExpressionTree
 
 struct ContentView: View {
 	let tree = Tree(width: 900, height: 900,
-					root:And(children: [
-						VariableX(),
-						VariableY()])
-					)
+					root:
+						BWNoise(children: [
+							Constant(value: 0.2),
+							Constant(value: 2.0),
+						])
+	)
 
-    var body: some View {
-        VStack {
+	var body: some View {
+		VStack {
 			RenderedImageView(expressionTree: tree)
 		}
-        .padding()
-    }
+		.padding()
+	}
 }
 
 #Preview {
-    ContentView()
+	ContentView()
 }
