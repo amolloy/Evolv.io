@@ -28,26 +28,32 @@ struct Perlin {
 	}
 
 	static func noise(x: ComponentType, y: ComponentType, seed: Int) -> ComponentType {
-		let X = Int(floor(x)) & 255
-		let Y = Int(floor(y)) & 255
+		let perm = permutation
+		let offset = seed & 255
 
+		// Grid coordinates
+		let xi = Int(floor(x)) & 255
+		let yi = Int(floor(y)) & 255
+		
+		// Local coordinates
 		let xf = x - floor(x)
 		let yf = y - floor(y)
 
+		// Fade curves
 		let u = fade(xf)
 		let v = fade(yf)
 
-		let perm = permutation.map { ($0 + seed) & 255 }
+		// Hash coordinates of the 4 square corners
+		let aa = perm[(perm[(xi + offset) & 255] + yi) & 255]
+		let ab = perm[(perm[(xi + offset) & 255] + yi + 1) & 255]
+		let ba = perm[(perm[(xi + 1 + offset) & 255] + yi) & 255]
+		let bb = perm[(perm[(xi + 1 + offset) & 255] + yi + 1) & 255]
 
-		let aa = perm[perm[X] + Y]
-		let ab = perm[perm[X] + Y + 1]
-		let ba = perm[perm[X + 1] + Y]
-		let bb = perm[perm[X + 1] + Y + 1]
-
+		// Gradient results for each corner
 		let x1 = lerp(u, grad(aa, xf, yf), grad(ba, xf - 1, yf))
 		let x2 = lerp(u, grad(ab, xf, yf - 1), grad(bb, xf - 1, yf - 1))
 
-		let result = lerp(v, x1, x2)
-		return (result + 1) / 2  // normalize to [0,1]
+		// Final interpolated result
+		return (lerp(v, x1, x2) + 1) / 2
 	}
 }
