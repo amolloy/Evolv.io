@@ -8,8 +8,8 @@
 // Conveniece class that most operators can inherit from that handles
 // the standard traversal of pixels
 
-class SimpleNode {
-	func evaluate(width: Int, height: Int, parameters: [PixelBuffer]) -> PixelBuffer {
+public class SimpleNode {
+	public func evaluate(width: Int, height: Int, parameters: [PixelBuffer]) -> PixelBuffer {
 		var result = PixelBuffer(width: width, height: height)
 		
 		for y in 0..<height {
@@ -22,7 +22,7 @@ class SimpleNode {
 		return result
 	}
 
-	func evaluatePixel(x: PixelBuffer.ComponentType, y: PixelBuffer.ComponentType, parameters: [PixelBuffer]) -> PixelBuffer.Value {
+	public func evaluatePixel(x: PixelBuffer.ComponentType, y: PixelBuffer.ComponentType, parameters: [PixelBuffer]) -> PixelBuffer.Value {
 		fatalError("Subclasses must override evaluatePixel")
 	}
 }

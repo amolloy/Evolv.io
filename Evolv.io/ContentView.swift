@@ -6,15 +6,16 @@
 //
 
 import SwiftUI
+import ExpressionTree
 
 struct ContentView: View {
+	let tree = Tree(width: 900, height: 900,
+					root: VariableX())
+
     var body: some View {
         VStack {
-            Image(systemName: "globe")
-                .imageScale(.large)
-                .foregroundStyle(.tint)
-            Text("Hello, world!")
-        }
+			RenderedImageView(expressionTree: tree)
+		}
         .padding()
     }
 }

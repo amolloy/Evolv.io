@@ -5,7 +5,7 @@
 //  Created by Andy Molloy on 6/8/25.
 //
 
-protocol Node {
+public protocol Node {
 	var name: String { get }
 	func evaluate(width: Int, height: Int, parameters: [PixelBuffer]) -> PixelBuffer
 }

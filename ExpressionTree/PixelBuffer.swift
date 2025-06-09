@@ -7,10 +7,11 @@
 
 import Foundation
 import simd
+import CoreImage
 
-struct PixelBuffer {
-	typealias ComponentType = Double
-	typealias Value = SIMD3<ComponentType>
+public struct PixelBuffer {
+	public typealias ComponentType = Double
+	public typealias Value = SIMD3<ComponentType>
 
 	let width: Int
 	let height: Int
@@ -51,5 +52,40 @@ extension PixelBuffer {
 		let final  = simd_mix(top, bottom, Value(repeating: ty))
 
 		return final
+	}
+}
+
+public extension PixelBuffer {
+	func makeCGImage() -> CGImage? {
+		// Convert to [UInt8] array
+		let pixelData: [UInt8] = data.flatMap { pixel in
+			let r = UInt8(clamping: Int(pixel.x * 255))
+			let g = UInt8(clamping: Int(pixel.y * 255))
+			let b = UInt8(clamping: Int(pixel.z * 255))
+			return [r, g, b]
+		}
+
+		let rgbColorSpace = CGColorSpaceCreateDeviceRGB()
+		let bytesPerPixel = 3
+		let bitsPerComponent = 8
+		let bytesPerRow = bytesPerPixel * width
+
+		guard let providerRef = CGDataProvider(data: Data(pixelData) as CFData) else {
+			return nil
+		}
+
+		return CGImage(
+			width: width,
+			height: height,
+			bitsPerComponent: bitsPerComponent,
+			bitsPerPixel: bitsPerComponent * bytesPerPixel,
+			bytesPerRow: bytesPerRow,
+			space: rgbColorSpace,
+			bitmapInfo: CGBitmapInfo(rawValue: CGImageAlphaInfo.none.rawValue),
+			provider: providerRef,
+			decode: nil,
+			shouldInterpolate: true,
+			intent: .defaultIntent
+		)
 	}
 }

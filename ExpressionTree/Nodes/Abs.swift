@@ -7,10 +7,10 @@
 
 import simd
 
-class Abs: SimpleNode, Node {
-	let name = "abs"
+public class Abs: SimpleNode, Node {
+	public let name = "abs"
 
-	override func evaluatePixel(x: PixelBuffer.ComponentType, y: PixelBuffer.ComponentType, parameters: [PixelBuffer]) -> PixelBuffer.Value {
+	public override func evaluatePixel(x: PixelBuffer.ComponentType, y: PixelBuffer.ComponentType, parameters: [PixelBuffer]) -> PixelBuffer.Value {
 		assert(parameters.count == 1)
 
 		let v = parameters[0].sampleBilinear(u: x, v: y)
