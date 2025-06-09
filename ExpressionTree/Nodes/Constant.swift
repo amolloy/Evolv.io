@@ -5,8 +5,8 @@
 //  Created by Andy Molloy on 6/8/25.
 //
 
-public class Constant: SimpleNode, Node {
-	public let name = "constant"
+public class Constant: SimpleNode {
+	override public var name: String { "constant" }
 	public let value: PixelBuffer.ComponentType
 
 	public init(value: PixelBuffer.ComponentType) {

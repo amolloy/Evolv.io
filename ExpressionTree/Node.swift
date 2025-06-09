@@ -7,5 +7,6 @@
 
 public protocol Node {
 	var name: String { get }
-	func evaluate(width: Int, height: Int, parameters: [PixelBuffer]) -> PixelBuffer
+	var children: [Node] { get }
+	func evaluate(width: Int, height: Int) -> PixelBuffer
 }

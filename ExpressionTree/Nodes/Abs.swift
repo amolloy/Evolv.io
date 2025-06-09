@@ -7,8 +7,21 @@
 
 import simd
 
-public class Abs: SimpleNode, Node {
-	public let name = "abs"
+public class Abs: SimpleNode {
+	public init(children: [any Node]) {
+		assert(children.count == 1)
+		self._children = children
+	}
+
+	private let _children: [any Node]
+
+	public override var children: [any Node] {
+		return _children
+	}
+
+	override public var name: String {
+		return "abs"
+	}
 
 	public override func evaluatePixel(x: PixelBuffer.ComponentType, y: PixelBuffer.ComponentType, parameters: [PixelBuffer]) -> PixelBuffer.Value {
 		assert(parameters.count == 1)

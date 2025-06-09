@@ -5,8 +5,8 @@
 //  Created by Andy Molloy on 6/8/25.
 //
 
-public class VariableX: SimpleNode, Node {
-	public let name = "x"
+public class VariableX: SimpleNode {
+	override public var name: String { "x" }
 
 	public override init() {
 	}
@@ -18,9 +18,9 @@ public class VariableX: SimpleNode, Node {
 	}
 }
 
-public class VariableY: SimpleNode, Node {
-	public let name = "y"
-	
+public class VariableY: SimpleNode {
+	override public var name:String  { "y" }
+
 	public override init() {
 	}
 

@@ -19,6 +19,6 @@ public class Tree {
 	}
 
 	public func evaluate() -> PixelBuffer {
-		return root.evaluate(width: width, height: height, parameters: [])
+		return root.evaluate(width: width, height: height)
 	}
 }

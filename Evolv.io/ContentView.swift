@@ -10,7 +10,7 @@ import ExpressionTree
 
 struct ContentView: View {
 	let tree = Tree(width: 900, height: 900,
-					root: VariableX())
+					root: Abs(children: [VariableX()]))
 
     var body: some View {
         VStack {
