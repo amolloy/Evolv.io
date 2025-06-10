@@ -8,22 +8,16 @@
 import simd
 
 public class And: SimpleNode {
-	public init(children: [any Node]) {
-		assert(children.count == 2)
-		self._children = children
-	}
-
-	private let _children: [any Node]
-
-	public override var children: [any Node] {
-		return _children
+	public override init(children: [any Node]) {
+		assert(children.count == 1)
+		super.init(children: children)
 	}
 
 	override public var name: String {
 		return "and"
 	}
 
-	public override func evaluatePixel(at coord: PixelBuffer.Coordinate, width: Int, height: Int, parameters: [PixelBuffer]) -> PixelBuffer.Value {
+	public override func evaluatePixel(at coord: PixelBuffer.Coordinate, width: Int, height: Int, parameters: [ExpressionResult]) -> PixelBuffer.Value {
 		assert(parameters.count == 2)
 
 		let v0 = parameters[0].sampleBilinear(at: coord)

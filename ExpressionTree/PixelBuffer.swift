@@ -9,10 +9,10 @@ import Foundation
 import simd
 import CoreImage
 
-public struct PixelBuffer {
-	public typealias ComponentType = Double
-	public typealias Value = SIMD3<ComponentType>
-	public typealias Coordinate = SIMD2<ComponentType>
+public struct PixelBuffer: ExpressionResult {
+	public typealias Value = Tree.Value
+	public typealias ComponentType = Tree.ComponentType
+	public typealias Coordinate = Tree.Coordinate
 
 	let width: Int
 	let height: Int
@@ -24,7 +24,7 @@ public struct PixelBuffer {
 		self.data = Array(repeating: Value(0, 0, 0), count: width * height)
 	}
 	
-	subscript(x: Int, y: Int) -> Value {
+	public subscript(x: Int, y: Int) -> Value {
 		get {
 			let wrappedX = ((x % width) + width) % width
 			let wrappedY = ((y % height) + height) % height
@@ -35,7 +35,7 @@ public struct PixelBuffer {
 }
 
 extension PixelBuffer {
-	func sampleBilinear(at coord: Coordinate) -> Value {
+	public func sampleBilinear(at coord: Coordinate) -> Value {
 		let f = (coord + 0.5) * Coordinate(ComponentType(width - 1), ComponentType(height - 1))
 		
 		let x0 = Int(floor(f.x))

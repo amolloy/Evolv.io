@@ -14,22 +14,18 @@ public final class GradientDirection: SimpleNode {
 	public typealias Value = PixelBuffer.Value
 	public typealias CT = PixelBuffer.ComponentType
 
-	private let _children: [Node]
-
-	public init(children: [Node]) {
-		assert(children.count == 3)
-		self._children = children
+	public override init(children: [any Node]) {
+		assert(children.count == 1)
+		super.init(children: children)
 	}
 
 	public override var name: String { "gradient-dir" }
-
-	public override var children: [Node] { _children }
 
 	private let delta: CT = 0.005
 	private let heightFactor: CT = 200.0
 	private let lightZ: CT = 0.5
 
-	public override func evaluatePixel(at coord: Coordinate, width: Int, height: Int, parameters: [PixelBuffer]) -> Value {
+	public override func evaluatePixel(at coord: Coordinate, width: Int, height: Int, parameters: [ExpressionResult]) -> Value {
 		let source = parameters[0]
 		let lightDirXSource = parameters[1]
 		let lightDirYSource = parameters[2]

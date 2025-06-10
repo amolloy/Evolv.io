@@ -8,22 +8,22 @@
 // Conveniece class that most operators can inherit from that handles
 // the standard traversal of pixels
 
-public class SimpleNode: Node {
-	public var name: String {
+public class SimpleNode: MultiChildNode {
+	public override var name: String {
 		fatalError("subclass must override `name`")
 	}
 	
-	public var children: [Node] {
+	public override var children: [Node] {
 		[Node]()
 	}
 	
 	typealias CT = PixelBuffer.ComponentType
 	typealias Coord = PixelBuffer.Coordinate
 	
-	public func evaluate(width: Int, height: Int) -> PixelBuffer {
+	public override func evaluate(width: Int, height: Int) -> ExpressionResult {
 		var result = PixelBuffer(width: width, height: height)
 		
-		var calculatedChildren = [PixelBuffer]()
+		var calculatedChildren = [ExpressionResult]()
 		calculatedChildren.reserveCapacity(children.count)
 		for child in children {
 			calculatedChildren.append(child.evaluate(width: width, height: height))
@@ -41,7 +41,7 @@ public class SimpleNode: Node {
 		return result
 	}
 	
-	public func evaluatePixel(at coord: PixelBuffer.Coordinate, width: Int, height: Int, parameters: [PixelBuffer]) -> PixelBuffer.Value {
+	public func evaluatePixel(at coord: Tree.Coordinate, width: Int, height: Int, parameters: [ExpressionResult]) -> ExpressionResult.Value {
 		fatalError("Subclasses must override evaluatePixel")
 	}
 }

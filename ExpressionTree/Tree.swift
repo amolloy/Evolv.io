@@ -8,6 +8,10 @@
 import Foundation
 
 public class Tree {
+	public typealias ComponentType = Double
+	public typealias Value = SIMD3<ComponentType>
+	public typealias Coordinate = SIMD2<ComponentType>
+
 	let width: Int
 	let height: Int
 	let root: any Node
@@ -19,6 +23,6 @@ public class Tree {
 	}
 
 	public func evaluate() -> PixelBuffer {
-		return root.evaluate(width: width, height: height)
+		return root.evaluate(width: width, height: height) as! PixelBuffer
 	}
 }

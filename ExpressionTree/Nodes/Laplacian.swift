@@ -25,7 +25,7 @@ public final class Laplacian: ConvolutionFilterNode {
 		(0.0,  1.0,  0.0)
 	))
 
-	public override func kernel(at coord: PixelBuffer.Coordinate, parameters: [PixelBuffer]) -> Kernel<CT> {
+	public override func kernel(at coord: PixelBuffer.Coordinate, parameters: [ExpressionResult]) -> Kernel<CT> {
 		return Self.laplacianKernel
 	}
 

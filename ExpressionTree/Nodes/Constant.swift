@@ -6,14 +6,33 @@
 //
 
 public class Constant: SimpleNode {
-	override public var name: String { "constant" }
-	public let value: PixelBuffer.ComponentType
-	
-	public init(value: PixelBuffer.ComponentType) {
-		self.value = value
+	public let value: Tree.ComponentType
+	public override var name: String {
+		get { "\(value)" }
 	}
-	
-	public override func evaluatePixel(at coord: PixelBuffer.Coordinate, width: Int, height: Int, parameters: [PixelBuffer]) -> PixelBuffer.Value {
-		return PixelBuffer.Value(repeating: value)
+
+	public init(value: Tree.ComponentType) {
+		self.value = value
+		super.init(children: [])
+	}
+
+	public override func evaluate(width: Int, height: Int) -> any ExpressionResult {
+		return ConstantResult(value)
+	}
+}
+
+struct ConstantResult : ExpressionResult {
+	let value: Value
+
+	init(_ value: Tree.ComponentType) {
+		self.value = Value(repeating: value)
+	}
+
+	public subscript(x: Int, y: Int) -> Value {
+		return value
+	}
+
+	public func sampleBilinear(at coord: Tree.Coordinate) -> Value {
+		return value
 	}
 }

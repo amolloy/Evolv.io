@@ -25,7 +25,7 @@ open class ConvolutionFilterNode: Node {
 	/// A bias (offset) to add to the convolution result. Subclasses can override this.
 	open var bias: CT { 0.0 }
 
-	public func evaluate(width: Int, height: Int) -> PixelBuffer {
+	public func evaluate(width: Int, height: Int) -> ExpressionResult {
 		let parameters = children.map { $0.evaluate(width: width, height: height) }
 
 		guard !parameters.isEmpty else {
@@ -56,7 +56,7 @@ open class ConvolutionFilterNode: Node {
 		return result
 	}
 
-	open func kernel(at coord: PixelBuffer.Coordinate, parameters: [PixelBuffer]) -> Kernel<CT> {
+	open func kernel(at coord: PixelBuffer.Coordinate, parameters: [ExpressionResult]) -> Kernel<CT> {
 		fatalError("Subclass must override `kernel(at:parameters:)`")
 	}
 }

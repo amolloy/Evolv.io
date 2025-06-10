@@ -6,22 +6,16 @@
 //
 
 public class WarpedColorNoise: SimpleNode {
-	public init(children: [any Node]) {
-		assert(children.count == 4)
-		self._children = children
-	}
-
-	private let _children: [any Node]
-
-	public override var children: [any Node] {
-		return _children
+	public override init(children: [any Node]) {
+		assert(children.count == 1)
+		super.init(children: children)
 	}
 
 	override public var name: String {
 		return "warped-color-noise"
 	}
 
-	public override func evaluatePixel(at coord: PixelBuffer.Coordinate, width: Int, height: Int, parameters: [PixelBuffer]) -> PixelBuffer.Value {
+	public override func evaluatePixel(at coord: Tree.Coordinate, width: Int, height: Int, parameters: [ExpressionResult]) -> ExpressionResult.Value {
 		assert(parameters.count == 4)
 
 		let u = parameters[0].sampleBilinear(at: coord)
