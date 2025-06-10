@@ -19,15 +19,15 @@ public final class Laplacian: ConvolutionFilterNode {
 	public override var name: String { "laplacian" }
 	public override var children: [Node] { _children }
 
-	private static let laplacianKernel = simd_double3x3(rows: [
-		SIMD3<Double>(0,  1,  0),
-		SIMD3<Double>(1, -4,  1),
-		SIMD3<Double>(0,  1,  0)
-	])
+	private static let laplacianKernel = Kernel<CT>(rows: (
+		(0.0,  1.0,  0.0),
+		(1.0, -4.0,  1.0),
+		(0.0,  1.0,  0.0)
+	))
 
-	public override func kernel(at coord: PixelBuffer.Coordinate, parameters: [PixelBuffer]) -> simd_double3x3 {
+	public override func kernel(at coord: PixelBuffer.Coordinate, parameters: [PixelBuffer]) -> Kernel<CT> {
 		return Self.laplacianKernel
 	}
 
-	public override var bias: Double { 0.5 }
+	public override var bias: CT { 0.5 }
 }
