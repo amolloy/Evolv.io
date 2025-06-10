@@ -23,7 +23,7 @@ public class Mod: SimpleNode {
 		return "mod"
 	}
 	
-	public override func evaluatePixel(at coord: PixelBuffer.Coordinate, parameters: [PixelBuffer]) -> PixelBuffer.Value {
+	public override func evaluatePixel(at coord: PixelBuffer.Coordinate, width: Int, height: Int, parameters: [PixelBuffer]) -> PixelBuffer.Value {
 		assert(parameters.count == 2)
 		let v0 = parameters[0].sampleBilinear(at: coord)
 		let v1 = parameters[1].sampleBilinear(at: coord)

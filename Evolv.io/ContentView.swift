@@ -11,10 +11,14 @@ import ExpressionTree
 struct ContentView: View {
 	let tree = Tree(width: 900, height: 900,
 					root:
+					GradientDirection(children: [
 						BWNoise(children: [
-							Constant(value: 0.2),
-							Constant(value: 2.0),
-						])
+							Constant(value: 0.15),
+							Constant(value: 2),
+						]),
+						Constant(value: 0.0),
+						Constant(value: 0.0)
+					])
 	)
 
 	var body: some View {

@@ -32,13 +32,16 @@ public class SimpleNode: Node {
 		for y in 0..<height {
 			for x in 0..<width {
 				let coord = (Coord(CT(x), CT(y)) / Coord(CT(width), CT(height))) - Coord(repeating: 0.5)
-				result[x, y] = evaluatePixel(at: coord, parameters: calculatedChildren)
+				result[x, y] = evaluatePixel(at: coord,
+											 width: width,
+											 height: height,
+											 parameters: calculatedChildren)
 			}
 		}
 		return result
 	}
 	
-	public func evaluatePixel(at coord: PixelBuffer.Coordinate, parameters: [PixelBuffer]) -> PixelBuffer.Value {
+	public func evaluatePixel(at coord: PixelBuffer.Coordinate, width: Int, height: Int, parameters: [PixelBuffer]) -> PixelBuffer.Value {
 		fatalError("Subclasses must override evaluatePixel")
 	}
 }

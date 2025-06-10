@@ -13,7 +13,7 @@ public class Constant: SimpleNode {
 		self.value = value
 	}
 	
-	public override func evaluatePixel(at coord: PixelBuffer.Coordinate, parameters: [PixelBuffer]) -> PixelBuffer.Value {
+	public override func evaluatePixel(at coord: PixelBuffer.Coordinate, width: Int, height: Int, parameters: [PixelBuffer]) -> PixelBuffer.Value {
 		return PixelBuffer.Value(repeating: value)
 	}
 }

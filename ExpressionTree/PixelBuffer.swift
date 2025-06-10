@@ -13,7 +13,7 @@ public struct PixelBuffer {
 	public typealias ComponentType = Double
 	public typealias Value = SIMD3<ComponentType>
 	public typealias Coordinate = SIMD2<ComponentType>
-	
+
 	let width: Int
 	let height: Int
 	var data: [Value]
@@ -25,7 +25,11 @@ public struct PixelBuffer {
 	}
 	
 	subscript(x: Int, y: Int) -> Value {
-		get { data[y * width + x] }
+		get {
+			let wrappedX = ((x % width) + width) % width
+			let wrappedY = ((y % height) + height) % height
+			return data[wrappedY * width + wrappedX]
+		}
 		set { data[y * width + x] = newValue }
 	}
 }

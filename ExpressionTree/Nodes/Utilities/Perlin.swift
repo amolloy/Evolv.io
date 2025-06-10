@@ -28,9 +28,9 @@ struct Perlin {
 		return ((h & 1) == 0 ? u : -u) + ((h & 2) == 0 ? v : -v)
 	}
 
-	static func noise(at coord: SIMD2<ComponentType>, seed: Int) -> ComponentType {
+	static func noise(at coord: SIMD2<ComponentType>, offset inOffset: Int) -> ComponentType {
 		let perm = permutation
-		let offset = seed & 255
+		let offset = inOffset & 255
 
 		// Grid coordinates
 		let cell = floor(coord)
