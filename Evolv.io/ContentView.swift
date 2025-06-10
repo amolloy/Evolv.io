@@ -8,22 +8,94 @@
 import SwiftUI
 import ExpressionTree
 
+let width = 900
+let height = 900
+
 struct ContentView: View {
-	let tree = Tree(width: 900, height: 900,
-					root:
-					GradientDirection(children: [
-						BWNoise(children: [
-							Constant(value: 0.15),
-							Constant(value: 2),
-						]),
-						Constant(value: 0.0),
-						Constant(value: 0.0)
-					])
+	let simpleXSample = Tree(width: width,
+							 height: height,
+							 root: VariableX())
+
+	let simpleYSample = Tree(width: width,
+							 height: height,
+							 root: VariableY())
+
+	let absXSample = Tree(width: width,
+						  height: height,
+						  root: Abs(children: [VariableX()]))
+
+	let modSample = Tree(width: width,
+						 height: height,
+						 root: Mod(children: [
+							VariableX(),
+							Abs(children: [
+								VariableY()
+							])
+						 ]))
+
+	let andSample = Tree(width: width,
+						 height: height,
+						 root: And(children:[
+							VariableX(),
+							VariableY()
+						 ]))
+
+	let bwNoiseSample = Tree(width: width,
+							 height: height,
+							 root: BWNoise(children: [
+								Constant(value: 0.2),
+								Constant(value: 2.0)
+							 ]))
+
+	let colorNoiseSample = Tree(width: width,
+								height: height,
+								root: ColorNoise(children: [
+									Constant(value: 0.1),
+									Constant(value: 2.0)
+								]))
+
+	let gradDirSample = Tree(width: 900, height: 900,
+							 root:
+								GradientDirection(children: [
+									BWNoise(children: [
+										Constant(value: 0.15),
+										Constant(value: 2),
+									]),
+									Constant(value: 0.0),
+									Constant(value: 0.0)
+								])
 	)
 
+	let warpedColorNoiseSample = Tree(width: width,
+									  height: height,
+									  root: WarpedColorNoise(children: [
+										Mult(children: [
+											VariableX(),
+											Constant(value: 0.2)
+										]),
+										VariableY(),
+										Constant(value: 0.1),
+										Constant(value: 2.0)
+									  ]))
+
+
 	var body: some View {
-		VStack {
-			RenderedImageView(expressionTree: tree)
+		Grid {
+			GridRow {
+				RenderedImageView(expressionTree: simpleXSample)
+				RenderedImageView(expressionTree: simpleYSample)
+				RenderedImageView(expressionTree: absXSample)
+			}
+			GridRow {
+				RenderedImageView(expressionTree: modSample)
+				RenderedImageView(expressionTree: andSample)
+				RenderedImageView(expressionTree: bwNoiseSample)
+			}
+			GridRow {
+				RenderedImageView(expressionTree: colorNoiseSample)
+				RenderedImageView(expressionTree: gradDirSample)
+				RenderedImageView(expressionTree: warpedColorNoiseSample)
+			}
 		}
 		.padding()
 	}
