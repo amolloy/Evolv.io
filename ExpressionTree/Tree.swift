@@ -35,11 +35,6 @@ public class Tree {
 
 				data[y * width + x] = result.sampleBilinear(at: Coordinate(x: xc,
 																		   y: yc))
-				if (data[y * width + x].x.isNaN) {
-					print("Got a naaaaan")
-					let _ = result.sampleBilinear(at: Coordinate(x: xc,
-																 y: yc))
-				}
 			}
 		}
 
@@ -72,5 +67,9 @@ public class Tree {
 			shouldInterpolate: true,
 			intent: .defaultIntent
 		)
+	}
+
+	public func toString() -> String {
+		return root.toString()
 	}
 }

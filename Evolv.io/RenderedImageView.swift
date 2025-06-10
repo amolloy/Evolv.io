@@ -23,6 +23,7 @@ struct RenderedImageView: View {
 			}
 		}
 		.task {
+			print(expressionTree.toString())
 			image = expressionTree.evaluate()
 		}
 	}
