@@ -7,5 +7,7 @@
 
 public protocol Node {
 	var name: String { get }
-	func evaluate(width: Int, height: Int) -> ExpressionResult
+	var children: [Node] { get }
+
+	func evaluate(using evaluator: Evaluator) -> any ExpressionResult
 }

@@ -5,6 +5,7 @@
 //  Created by Andy Molloy on 6/10/25.
 //
 
+/*
 import Foundation
 import simd
 
@@ -31,3 +32,6 @@ public final class Laplacian: ConvolutionFilterNode {
 
 	public override var bias: CT { 0.5 }
 }
+
+*/
+

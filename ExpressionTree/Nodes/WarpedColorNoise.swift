@@ -5,23 +5,54 @@
 //  Created by Andy Molloy on 6/9/25.
 //
 
-public class WarpedColorNoise: SimpleNode {
-	public override init(children: [any Node]) {
-		assert(children.count == 1)
-		super.init(children: children)
-	}
+import simd
 
-	override public var name: String {
+public class WarpedColorNoise: Node {
+	public var name: String {
 		return "warped-color-noise"
 	}
 
-	public override func evaluatePixel(at coord: Tree.Coordinate, width: Int, height: Int, parameters: [ExpressionResult]) -> ExpressionResult.Value {
-		assert(parameters.count == 4)
+	public var children: [any Node]
 
-		let u = parameters[0].sampleBilinear(at: coord)
-		let v = parameters[1].sampleBilinear(at: coord)
-		let v0 = parameters[2].sampleBilinear(at: coord) * 100
-		let v1 = parameters[3].sampleBilinear(at: coord)
+	public init(_ children: [any Node]) {
+		assert(children.count == 4)
+		self.children = children
+	}
+
+	public func evaluate(using evaluator: Evaluator) -> any ExpressionResult {
+		if let cachedResult = evaluator.result(for: self) {
+			return cachedResult
+		}
+
+		assert(children.count == 4)
+		let result = WarperColorNoiseResult(children.map { $0.evaluate(using: evaluator) })
+
+		evaluator.setResult(result, for: self)
+
+		return result
+	}
+}
+
+class WarperColorNoiseResult: ExpressionResult {
+	let e0: ExpressionResult
+	let e1: ExpressionResult
+	let e2: ExpressionResult
+	let e3: ExpressionResult
+
+	init(_ es: [ExpressionResult]) {
+		assert(es.count == 4)
+		self.e0 = es[0]
+		self.e1 = es[1]
+		self.e2 = es[2]
+		self.e3 = es[3]
+	}
+
+	func sampleBilinear(at coord: Coordinate) -> Value {
+		let u = e0.sampleBilinear(at: coord)
+		let v = e1.sampleBilinear(at: coord)
+
+		let v0 = e2.sampleBilinear(at: coord) * 50
+		let v1 = e3.sampleBilinear(at: coord)
 
 		var result = PixelBuffer.Value(repeating: 0)
 		for i in 0..<3 {

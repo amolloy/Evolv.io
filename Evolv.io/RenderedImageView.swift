@@ -23,8 +23,7 @@ struct RenderedImageView: View {
 			}
 		}
 		.task {
-			let pixelBuffer = expressionTree.evaluate()
-			image = pixelBuffer.makeCGImage()
+			image = expressionTree.evaluate()
 		}
 	}
 }

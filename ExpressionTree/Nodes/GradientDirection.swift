@@ -6,29 +6,58 @@
 //  Rewritten with Emboss/Lighting Model on 6/10/25.
 //
 
-import Foundation
 import simd
 
-public final class GradientDirection: SimpleNode {
+public class GradientDirection: Node {
+	public var name: String {
+		return "gradient-dir"
+	}
+
+	public var children: [any Node]
+
+	public init(_ children: [any Node]) {
+		assert(children.count == 4)
+		self.children = children
+	}
+
+	public func evaluate(using evaluator: Evaluator) -> any ExpressionResult {
+		if let cachedResult = evaluator.result(for: self) {
+			return cachedResult
+		}
+
+		assert(children.count == 3)
+		let result = GradientDirectionResult(children.map { $0.evaluate(using: evaluator) })
+
+		evaluator.setResult(result, for: self)
+
+		return result
+	}
+}
+
+class GradientDirectionResult: ExpressionResult {
 	public typealias Coordinate = PixelBuffer.Coordinate
 	public typealias Value = PixelBuffer.Value
 	public typealias CT = PixelBuffer.ComponentType
 
-	public override init(children: [any Node]) {
-		assert(children.count == 1)
-		super.init(children: children)
-	}
-
-	public override var name: String { "gradient-dir" }
+	let e0: ExpressionResult
+	let e1: ExpressionResult
+	let e2: ExpressionResult
 
 	private let delta: CT = 0.005
 	private let heightFactor: CT = 200.0
 	private let lightZ: CT = 0.5
 
-	public override func evaluatePixel(at coord: Coordinate, width: Int, height: Int, parameters: [ExpressionResult]) -> Value {
-		let source = parameters[0]
-		let lightDirXSource = parameters[1]
-		let lightDirYSource = parameters[2]
+	init(_ es: [ExpressionResult]) {
+		assert(es.count == 4)
+		self.e0 = es[0]
+		self.e1 = es[1]
+		self.e2 = es[2]
+	}
+
+	func sampleBilinear(at coord: Coordinate) -> Value {
+		let source = e0
+		let lightDirXSource = e1.sampleBilinear(at: coord)
+		let lightDirYSource = e2.sampleBilinear(at: coord)
 
 		let height_x1 = source.sampleBilinear(at: coord + Coordinate(delta, 0)).averageLuminance()
 		let height_x2 = source.sampleBilinear(at: coord - Coordinate(delta, 0)).averageLuminance()
@@ -40,8 +69,8 @@ public final class GradientDirection: SimpleNode {
 
 		let surfaceNormal = Value(-Gx, -Gy, 1.0 / heightFactor)
 
-		var lightDx = lightDirXSource.sampleBilinear(at: coord).averageLuminance()
-		var lightDy = lightDirYSource.sampleBilinear(at: coord).averageLuminance()
+		var lightDx = lightDirXSource.averageLuminance()
+		var lightDy = lightDirYSource.averageLuminance()
 
 		if lightDx < 0.0006 && lightDy < 0.0006 {
 			lightDx = -0.5
@@ -58,8 +87,7 @@ public final class GradientDirection: SimpleNode {
 		let dotProduct = dot(normal_normalized, light_normalized)
 		let finalValue = (dotProduct + 1.0) * 0.5
 
-		return Value(repeating: finalValue)
-	}
+		return Value(repeating: finalValue)	}
 }
 
 public func simd_normalize(safe vector: PixelBuffer.Value) -> PixelBuffer.Value? {

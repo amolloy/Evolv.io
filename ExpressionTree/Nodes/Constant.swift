@@ -5,19 +5,21 @@
 //  Created by Andy Molloy on 6/8/25.
 //
 
-public class Constant: SimpleNode {
+public class Constant: Node {
+	public var children: [any Node]
 	public let value: Tree.ComponentType
-	public override var name: String {
+
+	public var name: String {
 		get { "\(value)" }
 	}
 
-	public init(value: Tree.ComponentType) {
+	public init(_ value: Tree.ComponentType) {
 		self.value = value
-		super.init(children: [])
+		self.children = []
 	}
 
-	public override func evaluate(width: Int, height: Int) -> any ExpressionResult {
-		return ConstantResult(value)
+	public func evaluate(using evaluator: Evaluator) -> any ExpressionResult {
+		return ConstantResult(self.value)
 	}
 }
 
@@ -26,10 +28,6 @@ struct ConstantResult : ExpressionResult {
 
 	init(_ value: Tree.ComponentType) {
 		self.value = Value(repeating: value)
-	}
-
-	public subscript(x: Int, y: Int) -> Value {
-		return value
 	}
 
 	public func sampleBilinear(at coord: Tree.Coordinate) -> Value {

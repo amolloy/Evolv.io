@@ -5,6 +5,7 @@
 //  Created by Andy Molloy on 6/10/25.
 //
 
+/*
 import Foundation
 import simd
 
@@ -96,3 +97,5 @@ public struct Kernel<Scalar: FloatingPoint> {
 		}
 	}
 }
+*/
+

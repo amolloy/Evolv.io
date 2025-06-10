@@ -22,62 +22,60 @@ struct ContentView: View {
 
 	let absXSample = Tree(width: width,
 						  height: height,
-						  root: Abs(children: [VariableX()]))
+						  root: Abs([VariableX()]))
 
 	let modSample = Tree(width: width,
 						 height: height,
-						 root: Mod(children: [
+						 root: Mod([
 							VariableX(),
-							Abs(children: [
+							Abs([
 								VariableY()
 							])
 						 ]))
 
 	let andSample = Tree(width: width,
 						 height: height,
-						 root: And(children:[
+						 root: And([
 							VariableX(),
 							VariableY()
 						 ]))
 
 	let bwNoiseSample = Tree(width: width,
 							 height: height,
-							 root: BWNoise(children: [
-								Constant(value: 0.2),
-								Constant(value: 2.0)
+							 root: BWNoise([
+								Constant(0.2),
+								Constant(2.0)
 							 ]))
 
 	let colorNoiseSample = Tree(width: width,
 								height: height,
-								root: ColorNoise(children: [
-									Constant(value: 0.1),
-									Constant(value: 2.0)
+								root: ColorNoise([
+									Constant(0.1),
+									Constant(2.0)
 								]))
 
 	let gradDirSample = Tree(width: 900, height: 900,
 							 root:
-								GradientDirection(children: [
-									BWNoise(children: [
-										Constant(value: 0.15),
-										Constant(value: 2),
+								GradientDirection([
+									BWNoise([
+										Constant(0.15),
+										Constant(2),
 									]),
-									Constant(value: 0.0),
-									Constant(value: 0.0)
-								])
-	)
+									Constant(0.0),
+									Constant(0.0)
+								]))
 
 	let warpedColorNoiseSample = Tree(width: width,
 									  height: height,
-									  root: WarpedColorNoise(children: [
-										Mult(children: [
+									  root: WarpedColorNoise([
+										Mult([
 											VariableX(),
-											Constant(value: 0.2)
+											Constant(0.2)
 										]),
 										VariableY(),
-										Constant(value: 0.1),
-										Constant(value: 2.0)
+										Constant(0.1),
+										Constant(2.0)
 									  ]))
-
 
 	var body: some View {
 		Grid {

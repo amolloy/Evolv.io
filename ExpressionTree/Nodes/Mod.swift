@@ -7,25 +7,53 @@
 
 import simd
 
-public class Mod: SimpleNode {
-	public override init(children: [any Node]) {
-		assert(children.count == 1)
-		super.init(children: children)
-	}
-
-	override public var name: String {
+public class Mod: Node {
+	public var name: String {
 		return "mod"
 	}
-	
-	public override func evaluatePixel(at coord: Tree.Coordinate, width: Int, height: Int, parameters: [ExpressionResult]) -> ExpressionResult.Value {
-		assert(parameters.count == 2)
-		let v0 = parameters[0].sampleBilinear(at: coord)
-		let v1 = parameters[1].sampleBilinear(at: coord)
-		
-		let remainder = fmod(v0, v1)
+
+	public var children: [any Node]
+
+	public init(_ children: [any Node]) {
+		assert(children.count == 2)
+		self.children = children
+	}
+
+	public func evaluate(using evaluator: Evaluator) -> any ExpressionResult {
+		if let cachedResult = evaluator.result(for: self) {
+			return cachedResult
+		}
+
+		assert(children.count == 2)
+		let result = ModResult(children.map { $0.evaluate(using: evaluator) })
+
+		evaluator.setResult(result, for: self)
+
+		return result
+	}
+}
+
+class ModResult: ExpressionResult {
+	let e0: ExpressionResult
+	let e1: ExpressionResult
+
+	init(_ es: [ExpressionResult]) {
+		assert(es.count == 2)
+		self.e0 = es[0]
+		self.e1 = es[1]
+	}
+
+	func sampleBilinear(at coord: Coordinate) -> Value {
+		let v0 = e0.sampleBilinear(at: coord)
+		let v1 = e1.sampleBilinear(at: coord)
+
+		let isZeroMask = (v1 .== .zero)
+		let safeDivisor = v1.replacing(with: 1.0, where: isZeroMask)
+
+		let remainder = fmod(v0, safeDivisor)
 		let isNegativeRemainder = remainder .< 0.0
 		let positiveRemainder = remainder.replacing(with: remainder + v1, where: isNegativeRemainder)
-		
+
 		return positiveRemainder
 	}
 }

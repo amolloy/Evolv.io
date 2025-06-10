@@ -7,21 +7,45 @@
 
 import simd
 
-public class And: SimpleNode {
-	public override init(children: [any Node]) {
-		assert(children.count == 1)
-		super.init(children: children)
-	}
-
-	override public var name: String {
+public class And: Node {
+	public var name: String {
 		return "and"
 	}
 
-	public override func evaluatePixel(at coord: PixelBuffer.Coordinate, width: Int, height: Int, parameters: [ExpressionResult]) -> PixelBuffer.Value {
-		assert(parameters.count == 2)
+	public var children: [any Node]
 
-		let v0 = parameters[0].sampleBilinear(at: coord)
-		let v1 = parameters[1].sampleBilinear(at: coord)
+	public init(_ children: [any Node]) {
+		assert(children.count == 2)
+		self.children = children
+	}
+
+	public func evaluate(using evaluator: Evaluator) -> any ExpressionResult {
+		if let cachedResult = evaluator.result(for: self) {
+			return cachedResult
+		}
+
+		assert(children.count == 2)
+		let result = AndResult( children.map { $0.evaluate(using: evaluator) } )
+
+		evaluator.setResult(result, for: self)
+
+		return result
+	}
+}
+
+class AndResult: ExpressionResult {
+	let e0: ExpressionResult
+	let e1: ExpressionResult
+
+	init(_ es: [ExpressionResult]) {
+		assert(es.count == 2)
+		self.e0 = es[0]
+		self.e1 = es[1]
+	}
+
+	func sampleBilinear(at coord: Coordinate) -> Value {
+		let v0 = e0.sampleBilinear(at: coord)
+		let v1 = e1.sampleBilinear(at: coord)
 
 		var result = PixelBuffer.Value(repeating: 0)
 		for i in 0..<3 {

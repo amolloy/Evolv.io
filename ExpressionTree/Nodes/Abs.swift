@@ -7,20 +7,40 @@
 
 import simd
 
-public class Abs: SimpleNode {
-	public override init(children: [any Node]) {
-		assert(children.count == 1)
-		super.init(children: children)
-	}
-
-	override public var name: String {
+public class Abs: Node {
+	public var name: String {
 		return "abs"
 	}
 
-	public override func evaluatePixel(at coord: PixelBuffer.Coordinate, width: Int, height: Int, parameters: [ExpressionResult]) -> PixelBuffer.Value {
-		assert(parameters.count == 1)
+	public var children: [any Node]
 
-		let v = parameters[0].sampleBilinear(at: coord)
-		return abs(v)
+	public init(_ children: [any Node]) {
+		assert(children.count == 1)
+		self.children = children
+	}
+
+	public func evaluate(using evaluator: Evaluator) -> any ExpressionResult {
+		if let cachedResult = evaluator.result(for: self) {
+			return cachedResult
+		}
+
+		assert(children.count == 1)
+		let result = AbsResult(children[0].evaluate(using: evaluator))
+
+		evaluator.setResult(result, for: self)
+
+		return result
+	}
+}
+
+class AbsResult: ExpressionResult {
+	let e: ExpressionResult
+
+	init(_ e: ExpressionResult) {
+		self.e = e
+	}
+
+	func sampleBilinear(at coord: Coordinate) -> Value {
+		return abs(e.sampleBilinear(at: coord))
 	}
 }

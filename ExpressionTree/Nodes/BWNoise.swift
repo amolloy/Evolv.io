@@ -5,28 +5,55 @@
 //  Created by Andy Molloy on 6/9/25.
 //
 
-public class BWNoise: SimpleNode {
-	public override init(children: [any Node]) {
-		assert(children.count == 1)
-		super.init(children: children)
-	}
+import simd
 
-	override public var name: String {
+public class BWNoise: Node {
+	public var name: String {
 		return "bw-noise"
 	}
-	
-	override public func evaluatePixel(at coord: Tree.Coordinate, width: Int, height: Int, parameters: [ExpressionResult]) -> ExpressionResult.Value {
-		assert(parameters.count == 2)
-		
-		let v0 = parameters[0].sampleBilinear(at: coord) * 100
-		let v1 = parameters[1].sampleBilinear(at: coord)
-		
+
+	public var children: [any Node]
+
+	public init(_ children: [any Node]) {
+		assert(children.count == 2)
+		self.children = children
+	}
+
+	public func evaluate(using evaluator: Evaluator) -> any ExpressionResult {
+		if let cachedResult = evaluator.result(for: self) {
+			return cachedResult
+		}
+
+		assert(children.count == 2)
+		let result = BWNoiseResult(children.map { $0.evaluate(using: evaluator) })
+
+		evaluator.setResult(result, for: self)
+
+		return result
+	}
+}
+
+class BWNoiseResult: ExpressionResult {
+	let e0: ExpressionResult
+	let e1: ExpressionResult
+
+	init(_ es: [ExpressionResult]) {
+		assert(es.count == 2)
+		self.e0 = es[0]
+		self.e1 = es[1]
+	}
+
+	func sampleBilinear(at coord: Coordinate) -> Value {
+		let v0 = e0.sampleBilinear(at: coord) * 50
+		let v1 = e1.sampleBilinear(at: coord)
+
 		var result = PixelBuffer.Value(repeating: 0)
 		for i in 0..<3 {
 			let scaled = coord * PixelBuffer.Coordinate(repeating: v0[i])
 			result[i] = Perlin.noise(at: scaled, offset: Int(v1[i]))
 		}
-		
+
 		return result
 	}
 }
+
