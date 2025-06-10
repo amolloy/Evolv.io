@@ -16,7 +16,7 @@ public class GradientDirection: Node {
 	public var children: [any Node]
 
 	public init(_ children: [any Node]) {
-		assert(children.count == 4)
+		assert(children.count == 3)
 		self.children = children
 	}
 
@@ -48,7 +48,7 @@ class GradientDirectionResult: ExpressionResult {
 	private let lightZ: CT = 0.5
 
 	init(_ es: [ExpressionResult]) {
-		assert(es.count == 4)
+		assert(es.count == 3)
 		self.e0 = es[0]
 		self.e1 = es[1]
 		self.e2 = es[2]
