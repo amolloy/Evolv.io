@@ -1,11 +1,11 @@
 //
-//  TripletConstant.swift
+//  ConstantTriplet.swift
 //  Evolv.io
 //
 //  Created by Andy Molloy on 6/12/25.
 //
 
-public class TripletConstant: Node {
+public class ConstantTriplet: Node {
 	public static var name: String {
 		"triplet-constant"
 	}
@@ -22,7 +22,7 @@ public class TripletConstant: Node {
 	}
 
 	public func evaluate(using evaluator: Evaluator) -> any ExpressionResult {
-		return TripletConstantResult(self.value)
+		return ConstantTripletResult(self.value)
 	}
 
 	public func toString() -> String {
@@ -30,7 +30,7 @@ public class TripletConstant: Node {
 	}
 }
 
-struct TripletConstantResult : ExpressionResult {
+struct ConstantTripletResult : ExpressionResult {
 	let value: Value
 
 	init(_ value: Tree.Value) {

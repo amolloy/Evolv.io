@@ -18,6 +18,7 @@ public final class NodeRegistry {
 			BWNoise.self,
 			ColorNoise.self,
 			Constant.self,
+			ConstantTriplet.self,
 			GradientDirection.self,
 			Mod.self,
 			Mult.self,
@@ -43,6 +44,25 @@ public final class NodeRegistry {
     }
 }
 
-enum ParseError: Error {
+public enum ParseError: Error {
+	case unexpectedEndOfInput
 	case unknownFunction(String)
+	case invalidToken(String)
+	case expectedClosingParenthesis
+	case invalidArgumentCount(expected: Int, found: Int)
+
+	public var errorDescription: String? {
+		switch self {
+			case .unexpectedEndOfInput:
+				return "Unexpected end of expression."
+			case .unknownFunction(let name):
+				return "Unknown function name: '\(name)'."
+			case .invalidToken(let token):
+				return "Invalid token found: '\(token)'."
+			case .expectedClosingParenthesis:
+				return "Expected a closing ')'."
+			case .invalidArgumentCount(let expected, let found):
+				return "Invalid argument count for function: expected \(expected), but found \(found)."
+		}
+	}
 }

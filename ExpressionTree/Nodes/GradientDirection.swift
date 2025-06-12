@@ -10,7 +10,7 @@ import simd
 
 public class GradientDirection: Node {
 	public static var name: String {
-		return "gradient-dir"
+		return "grad-direction"
 	}
 
 	public var children: [any Node]
