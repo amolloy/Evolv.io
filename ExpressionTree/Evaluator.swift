@@ -22,8 +22,8 @@ public final class Evaluator {
         self.context = EvaluationContext(width: width, height: height)
     }
     
-    public func evaluate(root: Node) -> any ExpressionResult {
-        return root.evaluate(using: self)
+    public func evaluate(node: Node) -> any ExpressionResult {
+        return node.evaluate(using: self)
     }
 
     internal func result(for node: Node) -> (any ExpressionResult)? {

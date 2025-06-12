@@ -34,7 +34,7 @@ public class Tree {
 
 	public func evaluate() -> CGImage? {
 		let evaluator = Evaluator(width: width, height: height)
-		let result = evaluator.evaluate(root: root)
+		let result = evaluator.evaluate(node: root)
 
 		var data = Array(repeating: Value(0, 0, 0), count: width * height)
 		for y in 0..<height {

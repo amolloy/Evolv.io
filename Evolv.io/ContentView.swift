@@ -45,10 +45,10 @@ struct ContentView: View {
 
 	static let test = [
 		"x",
-		"(if x 0.0 1.0)",
+		"(bump (+ (round x y) y) #(0.46 0.82 0.65) 0.02 #(0.1 0.06 0.1) #(0.99 0.06 0.41) 1.47 8.7 3.7)",
 	]
 
-	let expressions = ContentView.figure10
+	let expressions = ContentView.test
 
 	var body: some View {
 		Grid {
