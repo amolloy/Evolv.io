@@ -36,8 +36,8 @@ struct ContentView: View {
 	]
 
 	static let test = [
-		"y",
-		"(log (invert y) 0.5)",
+		"x",
+		"(+ 0.5 x)",
 	]
 
 	let expressions = ContentView.test

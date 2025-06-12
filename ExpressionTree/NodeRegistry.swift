@@ -14,6 +14,7 @@ public final class NodeRegistry {
     public init() {
         let nodeTypes: [Node.Type] = [
 			Abs.self,
+			Add.self,
 			And.self,
 			BWNoise.self,
 			ColorNoise.self,
