@@ -14,7 +14,7 @@ let height = 900
 struct ContentView: View {
 	static let parser = Parser()
 
-	let expressions = [
+	static let sampleGridExpressions = [
 		"x",
 		"y",
 		"(abs x)",
@@ -25,6 +25,8 @@ struct ContentView: View {
 		"(grad-direction (bw-noise .15 2) .0 .0)",
 		"(warped-color-noise (* X .2) Y .1 2)",
 	]
+
+	let expressions = ContentView.sampleGridExpressions
 
 	var body: some View {
 		Grid {
