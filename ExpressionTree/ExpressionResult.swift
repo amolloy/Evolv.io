@@ -6,5 +6,5 @@
 //
 
 public protocol ExpressionResult {
-	func sampleBilinear(at coord: Coordinate) -> Value
+	func value(at coord: Coordinate) -> Value
 }

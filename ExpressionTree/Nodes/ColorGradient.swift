@@ -46,13 +46,13 @@ private struct ColorGradientResult: ExpressionResult {
     // These values represent 0, 1/3, and 2/3 of a full cycle.
     private static let phaseShifts = Value(0.0, 0.333, 0.666)
 
-	func sampleBilinear(at coord: Coordinate) -> Value {
-        let input = inputSource.sampleBilinear(at: coord).averageLuminance()
-        let offset = offsetSource.sampleBilinear(at: coord).averageLuminance()
-        let range = rangeSource.sampleBilinear(at: coord).averageLuminance()
-        let phase = phaseSource.sampleBilinear(at: coord).averageLuminance()
+	func value(at coord: Coordinate) -> Value {
+        let input = inputSource.value(at: coord).averageLuminance()
+        let offset = offsetSource.value(at: coord).averageLuminance()
+        let range = rangeSource.value(at: coord).averageLuminance()
+        let phase = phaseSource.value(at: coord).averageLuminance()
 
-        let centerColor = centerSource.sampleBilinear(at: coord)
+        let centerColor = centerSource.value(at: coord)
 
         let angle = (input + offset) * phase * 2.0 * .pi
         let angles = Value(repeating: angle) + Self.phaseShifts * 2.0 * .pi

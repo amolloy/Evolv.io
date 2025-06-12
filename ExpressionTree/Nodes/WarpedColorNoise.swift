@@ -47,12 +47,12 @@ class WarperColorNoiseResult: ExpressionResult {
 		self.e3 = es[3]
 	}
 
-	func sampleBilinear(at coord: Coordinate) -> Value {
-		let u = e0.sampleBilinear(at: coord)
-		let v = e1.sampleBilinear(at: coord)
+	func value(at coord: Coordinate) -> Value {
+		let u = e0.value(at: coord)
+		let v = e1.value(at: coord)
 
-		let v0 = e2.sampleBilinear(at: coord) * 50
-		let v1 = e3.sampleBilinear(at: coord)
+		let v0 = e2.value(at: coord) * 50
+		let v1 = e3.value(at: coord)
 
 		var result = Value(repeating: 0)
 		for i in 0..<3 {

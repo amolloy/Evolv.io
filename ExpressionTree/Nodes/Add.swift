@@ -41,9 +41,9 @@ class AddResult: ExpressionResult {
 		self.e1 = es[1]
 	}
 
-	func sampleBilinear(at coord: Coordinate) -> Value {
-		let v0 = e0.sampleBilinear(at: coord)
-		let v1 = e1.sampleBilinear(at: coord)
+	func value(at coord: Coordinate) -> Value {
+		let v0 = e0.value(at: coord)
+		let v1 = e1.value(at: coord)
 
 		return v0 + v1
 	}

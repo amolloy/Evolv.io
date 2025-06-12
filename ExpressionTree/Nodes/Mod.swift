@@ -43,9 +43,9 @@ class ModResult: ExpressionResult {
 		self.e1 = es[1]
 	}
 
-	func sampleBilinear(at coord: Coordinate) -> Value {
-		let v0 = e0.sampleBilinear(at: coord)
-		let v1 = e1.sampleBilinear(at: coord)
+	func value(at coord: Coordinate) -> Value {
+		let v0 = e0.value(at: coord)
+		let v1 = e1.value(at: coord)
 
 		let isZeroMask = (v1 .== .zero)
 		let safeDivisor = v1.replacing(with: 1.0, where: isZeroMask)

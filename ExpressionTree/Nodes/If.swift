@@ -43,10 +43,10 @@ class IfResult: ExpressionResult {
 		self.e2 = es[2]
 	}
 
-	func sampleBilinear(at coord: Coordinate) -> Value {
-		let condition = e0.sampleBilinear(at: coord)
-		let thenVector = e1.sampleBilinear(at: coord)
-		let elseVector = e2.sampleBilinear(at: coord)
+	func value(at coord: Coordinate) -> Value {
+		let condition = e0.value(at: coord)
+		let thenVector = e1.value(at: coord)
+		let elseVector = e2.value(at: coord)
 
 		var result = Value.zero
 		for i in 0..<3 {

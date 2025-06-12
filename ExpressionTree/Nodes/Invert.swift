@@ -38,7 +38,7 @@ class InvertResult: ExpressionResult {
 		self.e = e
 	}
 
-	func sampleBilinear(at coord: Coordinate) -> Value {
-		return -e.sampleBilinear(at: coord)
+	func value(at coord: Coordinate) -> Value {
+		return -e.value(at: coord)
 	}
 }

@@ -29,7 +29,7 @@ public struct PixelBuffer: ExpressionResult {
 		set { data[y * width + x] = newValue }
 	}
 
-	public func sampleBilinear(at coord: Coordinate) -> Value {
+	public func value(at coord: Coordinate) -> Value {
 		let f = (coord + 0.5) * Coordinate(ComponentType(width - 1), ComponentType(height - 1))
 
 		let x0 = Int(floor(f.x))

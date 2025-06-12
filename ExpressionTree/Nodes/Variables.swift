@@ -20,7 +20,7 @@ struct VariableXValue: ExpressionResult {
 
 	let evaluator: Evaluator
 
-	func sampleBilinear(at coord: Coordinate) -> Value {
+	func value(at coord: Coordinate) -> Value {
 		return Value(repeating: coord.x)
 	}
 }
@@ -40,7 +40,7 @@ struct VariableYValue: ExpressionResult {
 
 	let evaluator: Evaluator
 
-	func sampleBilinear(at coord: Coordinate) -> Value {
+	func value(at coord: Coordinate) -> Value {
 		return Value(repeating: coord.y)
 	}
 }

@@ -37,7 +37,7 @@ struct ConstantTripletResult : ExpressionResult {
 		self.value = value
 	}
 
-	public func sampleBilinear(at coord: Coordinate) -> Value {
+	public func value(at coord: Coordinate) -> Value {
 		return value
 	}
 }

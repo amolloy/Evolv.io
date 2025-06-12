@@ -43,9 +43,9 @@ class LogResult: ExpressionResult {
 		self.e1 = es[1]
 	}
 
-	func sampleBilinear(at coord: Coordinate) -> Value {
-		let inputValue = e0.sampleBilinear(at: coord)
-		let inputBase = e1.sampleBilinear(at: coord)
+	func value(at coord: Coordinate) -> Value {
+		let inputValue = e0.value(at: coord)
+		let inputBase = e1.value(at: coord)
 
 		var resultVector = Value.zero
 

@@ -40,7 +40,7 @@ class AbsResult: ExpressionResult {
 		self.e = e
 	}
 
-	func sampleBilinear(at coord: Coordinate) -> Value {
-		return abs(e.sampleBilinear(at: coord))
+	func value(at coord: Coordinate) -> Value {
+		return abs(e.value(at: coord))
 	}
 }

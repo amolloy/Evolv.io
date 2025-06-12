@@ -20,7 +20,7 @@ public extension Node {
 			for x in 0..<width {
 				let xc = ComponentType(x) / ComponentType(width) * 2.0 - 1.0
 
-				let pixel = result.sampleBilinear(at: Coordinate(x: xc,
+				let pixel = result.value(at: Coordinate(x: xc,
 																 y: yc))
 
 				data[y * width + x] = pixel.sanitized()
