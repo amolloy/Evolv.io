@@ -18,6 +18,7 @@ public final class NodeRegistry {
 			And.self,
 			Div.self,
 			BWNoise.self,
+			ColorGradient.self,
 			ColorNoise.self,
 			Constant.self,
 			ConstantTriplet.self,

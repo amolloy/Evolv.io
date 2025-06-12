@@ -93,9 +93,3 @@ public func simd_normalize(safe vector: Value) -> Value? {
 	}
 	return vector / length
 }
-
-fileprivate extension Value {
-	func averageLuminance() -> ComponentType {
-		return (self.x + self.y + self.z) / 3.0
-	}
-}

@@ -12,6 +12,12 @@ public typealias ComponentType = Double
 public typealias Value = SIMD3<ComponentType>
 public typealias Coordinate = SIMD2<ComponentType>
 
+extension Value {
+	func averageLuminance() -> ComponentType {
+		return (self.x + self.y + self.z) / 3.0
+	}
+}
+
 internal let epsilon: ComponentType = 1e-9
 
 public class Tree {

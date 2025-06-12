@@ -37,7 +37,7 @@ struct ContentView: View {
 
 	static let test = [
 		"x",
-		"(round (/ (+ x 1) 2) 0.25)",
+		"(color-grad x 0.0 0.5 #(0.5 0.5 0.5) 1.0)",
 	]
 
 	let expressions = ContentView.test
