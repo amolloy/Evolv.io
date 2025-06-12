@@ -12,90 +12,50 @@ let width = 900
 let height = 900
 
 struct ContentView: View {
-	let simpleXSample = Tree(width: width,
-							 height: height,
-							 root: VariableX([]))
+	static let parser = Parser()
 
-	let simpleYSample = Tree(width: width,
-							 height: height,
-							 root: VariableY([]))
-
-	let absXSample = Tree(width: width,
-						  height: height,
-						  root: Abs([VariableX([])]))
-
-	let modSample = Tree(width: width,
-						 height: height,
-						 root: Mod([
-							VariableX([]),
-							Abs([
-								VariableY([])
-							])
-						 ]))
-
-	let andSample = Tree(width: width,
-						 height: height,
-						 root: And([
-							VariableX([]),
-							VariableY([])
-						 ]))
-
-	let bwNoiseSample = Tree(width: width,
-							 height: height,
-							 root: BWNoise([
-								Constant(0.2),
-								Constant(2.0)
-							 ]))
-
-	let colorNoiseSample = Tree(width: width,
-								height: height,
-								root: ColorNoise([
-									Constant(0.1),
-									Constant(2.0)
-								]))
-
-	let gradDirSample = Tree(width: 900, height: 900,
-							 root:
-								GradientDirection([
-									BWNoise([
-										Constant(0.15),
-										Constant(2),
-									]),
-									Constant(0.0),
-									Constant(0.0)
-								]))
-
-	let warpedColorNoiseSample = Tree(width: width,
-									  height: height,
-									  root: WarpedColorNoise([
-										Mult([
-											VariableX([]),
-											Constant(0.2)
-										]),
-										VariableY([]),
-										Constant(0.1),
-										Constant(2.0)
-									  ]))
+	let expressions = [
+		"x",
+		"y",
+		"(abs x)",
+		"(mod X (abs Y))",
+		"(and X Y)",
+		"(bw-noise .2 2)",
+		"(color-noise .1 2)",
+		"(grad-direction (bw-noise .15 2) .0 .0)",
+		"(warped-color-noise (* X .2) Y .1 2)",
+	]
 
 	var body: some View {
 		Grid {
-			GridRow {
-				RenderedImageView(expressionTree: simpleXSample)
-				RenderedImageView(expressionTree: simpleYSample)
-				RenderedImageView(expressionTree: absXSample)
-			}
-			GridRow {
-				RenderedImageView(expressionTree: modSample)
-				RenderedImageView(expressionTree: andSample)
-				RenderedImageView(expressionTree: bwNoiseSample)
-			}
-			GridRow {
-				RenderedImageView(expressionTree: colorNoiseSample)
-				RenderedImageView(expressionTree: gradDirSample)
-				RenderedImageView(expressionTree: warpedColorNoiseSample)
+			ForEach(Array(stride(from: 0, to: expressions.count, by: 3)), id: \.self) { row in
+				ImageRowView(expressions: expressions[(row)..<(row + 3)])
 			}
 		}
 		.padding()
+	}
+}
+
+struct ImageRowView<C: RandomAccessCollection>: View where C.Element == String, C.Index == Int {
+	let expressions: C
+	private let parser = Parser()
+
+	func node(for expression: String) -> Node {
+		do {
+			return try parser.parse(expression)
+		} catch {
+			print("Parser error processing '\(expression)': \(error.localizedDescription)")
+			return Constant(0)
+		}
+	}
+
+	var body: some View {
+		GridRow {
+			ForEach(expressions, id:\.self) { expression in
+				let node = node(for: expression)
+				RenderedImageView(expressionTree: Tree(width: 900, height: 900, root: node))
+			}
+		}
 	}
 }
 
