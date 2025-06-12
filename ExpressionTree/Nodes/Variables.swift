@@ -6,9 +6,9 @@
 //
 
 public class VariableX: Node {
-	public var name: String { "x" }
+	public static var name: String { "x" }
 	public var children: [any Node] = []
-	public init() {}
+	required public init(_ children: [Node]) {}
 
 	public func evaluate(using evaluator: Evaluator) -> any ExpressionResult {
 		return VariableXValue(evaluator: evaluator)
@@ -26,10 +26,10 @@ struct VariableXValue: ExpressionResult {
 }
 
 public class VariableY: Node {
-	public var name: String { "y" }
+	public static var name: String { "y" }
 	public var children: [any Node] = []
-	public init() {}
-	
+	required public init(_ children: [Node]) {}
+
 	public func evaluate(using evaluator: Evaluator) -> any ExpressionResult {
 		return VariableYValue(evaluator: evaluator)
 	}

@@ -14,30 +14,30 @@ let height = 900
 struct ContentView: View {
 	let simpleXSample = Tree(width: width,
 							 height: height,
-							 root: VariableX())
+							 root: VariableX([]))
 
 	let simpleYSample = Tree(width: width,
 							 height: height,
-							 root: VariableY())
+							 root: VariableY([]))
 
 	let absXSample = Tree(width: width,
 						  height: height,
-						  root: Abs([VariableX()]))
+						  root: Abs([VariableX([])]))
 
 	let modSample = Tree(width: width,
 						 height: height,
 						 root: Mod([
-							VariableX(),
+							VariableX([]),
 							Abs([
-								VariableY()
+								VariableY([])
 							])
 						 ]))
 
 	let andSample = Tree(width: width,
 						 height: height,
 						 root: And([
-							VariableX(),
-							VariableY()
+							VariableX([]),
+							VariableY([])
 						 ]))
 
 	let bwNoiseSample = Tree(width: width,
@@ -69,10 +69,10 @@ struct ContentView: View {
 									  height: height,
 									  root: WarpedColorNoise([
 										Mult([
-											VariableX(),
+											VariableX([]),
 											Constant(0.2)
 										]),
-										VariableY(),
+										VariableY([]),
 										Constant(0.1),
 										Constant(2.0)
 									  ]))

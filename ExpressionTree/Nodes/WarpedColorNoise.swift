@@ -8,13 +8,13 @@
 import simd
 
 public class WarpedColorNoise: Node {
-	public var name: String {
+	public static var name: String {
 		return "warped-color-noise"
 	}
 
 	public var children: [any Node]
 
-	public init(_ children: [any Node]) {
+	required public init(_ children: [any Node]) {
 		assert(children.count == 4)
 		self.children = children
 	}

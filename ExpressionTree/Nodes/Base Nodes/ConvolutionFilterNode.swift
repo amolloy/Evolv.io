@@ -12,7 +12,7 @@ import simd
 open class ConvolutionFilterNode: Node {
 	public typealias CT = PixelBuffer.ComponentType
 
-	public var name: String {
+	public static var name: String {
 		fatalError("Subclass must override `name`")
 	}
 

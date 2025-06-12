@@ -9,13 +9,13 @@
 import simd
 
 public class GradientDirection: Node {
-	public var name: String {
+	public static var name: String {
 		return "gradient-dir"
 	}
 
 	public var children: [any Node]
 
-	public init(_ children: [any Node]) {
+	required public init(_ children: [any Node]) {
 		assert(children.count == 3)
 		self.children = children
 	}

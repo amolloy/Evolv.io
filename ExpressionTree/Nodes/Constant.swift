@@ -6,16 +6,19 @@
 //
 
 public class Constant: Node {
-	public var children: [any Node]
+	public static var name: String {
+		"constant"
+	}
+
+	public var children: [any Node] = []
 	public let value: Tree.ComponentType
 
-	public var name: String {
-		get { "\(value)" }
+	required public init(_ children: [Node]) {
+		value = 0.0
 	}
 
 	public init(_ value: Tree.ComponentType) {
 		self.value = value
-		self.children = []
 	}
 
 	public func evaluate(using evaluator: Evaluator) -> any ExpressionResult {

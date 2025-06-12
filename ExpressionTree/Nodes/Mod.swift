@@ -8,13 +8,13 @@
 import simd
 
 public class Mod: Node {
-	public var name: String {
+	public static var name: String {
 		return "mod"
 	}
 
 	public var children: [any Node]
 
-	public init(_ children: [any Node]) {
+	required public init(_ children: [any Node]) {
 		assert(children.count == 2)
 		self.children = children
 	}

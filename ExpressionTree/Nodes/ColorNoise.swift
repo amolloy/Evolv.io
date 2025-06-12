@@ -8,13 +8,13 @@
 import simd
 
 public class ColorNoise: Node {
-	public var name: String {
+	public static var name: String {
 		return "color-noise"
 	}
 
 	public var children: [any Node]
 
-	public init(_ children: [any Node]) {
+	required public init(_ children: [any Node]) {
 		assert(children.count == 2)
 		self.children = children
 	}

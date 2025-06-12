@@ -6,9 +6,11 @@
 //
 
 public protocol Node {
-	var name: String { get }
+	static var name: String { get }
 	var children: [Node] { get }
 
+	init(_ children: [Node]) throws
+	
 	func evaluate(using evaluator: Evaluator) -> any ExpressionResult
 	func toString() -> String
 }
@@ -22,7 +24,7 @@ public extension Node {
 			str += "("
 		}
 
-		str += "\(name)"
+		str += "\(Self.name)"
 		if hasChildren {
 			let childStrings = children.map { $0.toString() }
 			str += " \(childStrings.joined(separator: " "))"
