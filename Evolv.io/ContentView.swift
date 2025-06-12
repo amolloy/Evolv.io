@@ -37,7 +37,7 @@ struct ContentView: View {
 
 	static let test = [
 		"y",
-		"(invert y)",
+		"(log (invert y) 0.5)",
 	]
 
 	let expressions = ContentView.test
@@ -78,7 +78,7 @@ struct ImageRowView<C: RandomAccessCollection>: View where C.Element == String, 
 		GridRow {
 			ForEach(expressions, id:\.self) { expression in
 				let node = node(for: expression)
-				RenderedImageView(expressionTree: Tree(width: 900, height: 900, root: node))
+				RenderedImageView(expressionTree: Tree(width: 100, height: 100, root: node))
 			}
 		}
 	}

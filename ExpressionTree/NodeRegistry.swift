@@ -21,6 +21,7 @@ public final class NodeRegistry {
 			ConstantTriplet.self,
 			GradientDirection.self,
 			Invert.self,
+			Log.self,
 			Mod.self,
 			Mult.self,
 			VariableX.self,
