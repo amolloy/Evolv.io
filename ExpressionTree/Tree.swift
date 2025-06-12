@@ -29,7 +29,7 @@ public class Tree {
 
 		var data = Array(repeating: Value(0, 0, 0), count: width * height)
 		for y in 0..<height {
-			let yc = ComponentType(y) / ComponentType(height) * 2.0 - 1.0
+			let yc = ComponentType(height - y) / ComponentType(height) * 2.0 - 1.0
 			for x in 0..<width {
 				let xc = ComponentType(x) / ComponentType(width) * 2.0 - 1.0
 
