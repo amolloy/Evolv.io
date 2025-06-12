@@ -18,15 +18,19 @@ public final class Parser {
         return try parse(tokens: &tokens)
     }
 
-    private func tokenize(_ expression: String) -> [String] {
-        let spacedString = expression
-            .replacingOccurrences(of: "(", with: " ( ")
-            .replacingOccurrences(of: ")", with: " ) ")
-            .replacingOccurrences(of: "# (", with: " #( ")
-			.lowercased()
+	private func tokenize(_ expression: String) -> [String] {
+		let pattern = #"(#\(|\(|\)|[^\s\(\)]+)"#
 
-        return spacedString.split(whereSeparator: \.isWhitespace).map(String.init)
-    }
+		do {
+			let regex = try Regex(pattern)
+			let matches = expression.matches(of: regex)
+
+			return matches.map { expression[$0.range].lowercased() }
+		} catch {
+			print("Regex pattern failed: \(error). Falling back to simple split.")
+			return expression.split(whereSeparator: \.isWhitespace).map { String($0).lowercased() }
+		}
+	}
 
     private func parse(tokens: inout [String]) throws -> Node {
         guard let token = tokens.first else {

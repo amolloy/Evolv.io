@@ -26,12 +26,21 @@ struct ContentView: View {
 		"(warped-color-noise (* X .2) Y .1 2)",
 	]
 
-	let expressions = ContentView.sampleGridExpressions
+	static let figure9 = [
+	"""
+	(round (log (+ y (color-grad (round (+ (abs (round 
+		(log (+ y (color-grad (round (+ y (log (invert y) 15.5)) 
+		x) 3.1 1.86 #(0.95 0.7 0.59) 1.35)) 0.19) x)) (log (invert
+		y) 15.5)) x) 3.1 1.9 #(0.95 0.7 0.35) 1.35)) 0.19) x)
+	"""
+	]
+
+	let expressions = ContentView.figure9
 
 	var body: some View {
 		Grid {
 			ForEach(Array(stride(from: 0, to: expressions.count, by: 3)), id: \.self) { row in
-				ImageRowView(expressions: expressions[(row)..<(row + 3)])
+				ImageRowView(expressions: expressions[(row)..<(min(row + 3, expressions.count))])
 			}
 		}
 		.padding()
@@ -46,7 +55,16 @@ struct ImageRowView<C: RandomAccessCollection>: View where C.Element == String, 
 		do {
 			return try parser.parse(expression)
 		} catch {
-			print("Parser error processing '\(expression)': \(error.localizedDescription)")
+			print("Error parsing")
+			print(expression)
+			let desc: String
+			if let error = error as? ParseError {
+				desc = error.errorDescription ?? error.localizedDescription
+			} else {
+				desc = error.localizedDescription
+			}
+			print(desc)
+
 			return Constant(0)
 		}
 	}
