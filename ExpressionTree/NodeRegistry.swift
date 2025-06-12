@@ -20,6 +20,7 @@ public final class NodeRegistry {
 			Constant.self,
 			ConstantTriplet.self,
 			GradientDirection.self,
+			Invert.self,
 			Mod.self,
 			Mult.self,
 			VariableX.self,

@@ -35,7 +35,12 @@ struct ContentView: View {
 	"""
 	]
 
-	let expressions = ContentView.figure9
+	static let test = [
+		"y",
+		"(invert y)",
+	]
+
+	let expressions = ContentView.test
 
 	var body: some View {
 		Grid {
