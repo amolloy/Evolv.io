@@ -5,9 +5,10 @@
 //  Created by Andy Molloy on 6/10/25.
 //
 
+import CoreGraphics
+
 public struct EvaluationContext {
-	let width: Int
-	let height: Int
+	let size: CGSize
 }
 
 public final class Evaluator {
@@ -15,11 +16,10 @@ public final class Evaluator {
 
     private let context: EvaluationContext
 
-	internal var width: Int { get { context.width } }
-	internal var height: Int { get { context.height } }
+	internal var size: CGSize { get { context.size } }
 
-    public init(width: Int, height: Int) {
-        self.context = EvaluationContext(width: width, height: height)
+	public init(size: CGSize) {
+		self.context = EvaluationContext(size: size)
     }
     
     public func evaluate(node: Node) -> any ExpressionResult {

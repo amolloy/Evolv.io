@@ -16,6 +16,7 @@ public final class NodeRegistry {
 			Abs.self,
 			Add.self,
 			And.self,
+			Bump.self,
 			Div.self,
 			BWNoise.self,
 			ColorGradient.self,

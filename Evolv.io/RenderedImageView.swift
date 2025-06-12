@@ -9,7 +9,8 @@ import SwiftUI
 import ExpressionTree
 
 struct RenderedImageView: View {
-	let expressionTree: Tree
+	let size: CGSize
+	let expressionTree: Node
 	@State private var image: CGImage?
 
 	var body: some View {
@@ -24,7 +25,7 @@ struct RenderedImageView: View {
 		}
 		.task {
 			print(expressionTree.toString())
-			image = expressionTree.evaluate()
+			image = expressionTree.rasterize(size: size)
 		}
 	}
 }

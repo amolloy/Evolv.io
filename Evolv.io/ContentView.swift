@@ -86,7 +86,11 @@ struct ImageRowView<C: RandomAccessCollection>: View where C.Element == String, 
 		GridRow {
 			ForEach(expressions, id:\.self) { expression in
 				let node = node(for: expression)
-				RenderedImageView(expressionTree: Tree(width: 900, height: 900, root: node))
+				VStack {
+					RenderedImageView(size: CGSize(width: 900, height: 900),
+									  expressionTree: node)
+					NodeTreeView(node: node)
+				}
 			}
 		}
 	}
