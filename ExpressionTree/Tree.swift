@@ -7,6 +7,7 @@
 
 import Foundation
 import CoreImage
+import simd
 
 public typealias ComponentType = Double
 public typealias Value = SIMD3<ComponentType>
@@ -41,8 +42,10 @@ public class Tree {
 			for x in 0..<width {
 				let xc = ComponentType(x) / ComponentType(width) * 2.0 - 1.0
 
-				data[y * width + x] = result.sampleBilinear(at: Coordinate(x: xc,
-																		   y: yc))
+				let pixel = result.sampleBilinear(at: Coordinate(x: xc,
+																 y: yc))
+
+				data[y * width + x] = pixel.sanitized()
 			}
 		}
 
@@ -79,5 +82,36 @@ public class Tree {
 
 	public func toString() -> String {
 		return root.toString()
+	}
+}
+
+extension SIMD3 where Scalar == ComponentType {
+	/// Returns a new vector by replacing any non-finite values (NaN, infinity).
+	/// - NaN values are replaced with 0.0.
+	/// - Positive infinity is replaced with 1.0.
+	/// - Negative infinity is replaced with -1.0.
+	func sanitized() -> SIMD3<ComponentType> {
+		var newX = self.x
+		if newX.isNaN {
+			newX = 0.0
+		} else if newX.isInfinite {
+			newX = newX > 0 ? 1.0 : -1.0
+		}
+
+		var newY = self.y
+		if newY.isNaN {
+			newY = 0.0
+		} else if newY.isInfinite {
+			newY = newY > 0 ? 1.0 : -1.0
+		}
+
+		var newZ = self.z
+		if newZ.isNaN {
+			newZ = 0.0
+		} else if newZ.isInfinite {
+			newZ = newZ > 0 ? 1.0 : -1.0
+		}
+
+		return SIMD3<Double>(newX, newY, newZ)
 	}
 }

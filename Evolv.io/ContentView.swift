@@ -35,12 +35,20 @@ struct ContentView: View {
 	"""
 	]
 
-	static let test = [
-		"x",
-		"(color-grad x 0.0 0.5 #(0.5 0.5 0.5) 1.0)",
+	static let figure10 = [
+	"""
+		(rotate-vector (log(+ y (color-grad (round(+ (abs (round (log #(0.01 0.67 0.86) 0.19)
+		x)) (hsv-to-rgb (bump (if x 10.7 y) #(0.94 0.01 0.4) 0.78 #(0.18 0.28 0.58) #(0.4 0.92
+		0.58) 10.6 0.23 0.91))) X) 3.1 1.93 #(0.95 0.7 0.35) 3.03)) -0.03) X #(0.76 0.08 0.24))
+	"""
 	]
 
-	let expressions = ContentView.test
+	static let test = [
+		"x",
+		"(if x 0.0 1.0)",
+	]
+
+	let expressions = ContentView.figure10
 
 	var body: some View {
 		Grid {
@@ -78,7 +86,7 @@ struct ImageRowView<C: RandomAccessCollection>: View where C.Element == String, 
 		GridRow {
 			ForEach(expressions, id:\.self) { expression in
 				let node = node(for: expression)
-				RenderedImageView(expressionTree: Tree(width: 100, height: 100, root: node))
+				RenderedImageView(expressionTree: Tree(width: 900, height: 900, root: node))
 			}
 		}
 	}

@@ -67,7 +67,6 @@ class LogResult: ExpressionResult {
 			}
 		}
 
-		print(resultVector)
 		return resultVector
 	}
 }

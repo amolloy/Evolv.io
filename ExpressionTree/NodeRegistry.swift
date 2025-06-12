@@ -23,6 +23,7 @@ public final class NodeRegistry {
 			Constant.self,
 			ConstantTriplet.self,
 			GradientDirection.self,
+			If.self,
 			Invert.self,
 			Log.self,
 			Mod.self,
