@@ -24,6 +24,10 @@ public class Constant: Node {
 	public func evaluate(using evaluator: Evaluator) -> any ExpressionResult {
 		return ConstantResult(self.value)
 	}
+
+	public func toString() -> String {
+		return "\(value)"
+	}
 }
 
 struct ConstantResult : ExpressionResult {
