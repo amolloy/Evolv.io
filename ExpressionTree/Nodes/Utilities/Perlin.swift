@@ -9,8 +9,6 @@ import Foundation
 import simd
 
 struct Perlin {
-	typealias ComponentType = PixelBuffer.ComponentType
-
 	static let permutation: [Int] = (0...255).shuffled() + (0...255).shuffled()
 
 	static func fade(_ t: ComponentType) -> ComponentType {

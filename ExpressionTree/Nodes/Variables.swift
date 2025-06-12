@@ -16,7 +16,7 @@ public class VariableX: Node {
 }
 
 struct VariableXValue: ExpressionResult {
-	typealias CT = Tree.ComponentType
+	typealias CT = ComponentType
 
 	let evaluator: Evaluator
 
@@ -36,7 +36,7 @@ public class VariableY: Node {
 }
 
 struct VariableYValue: ExpressionResult {
-	typealias CT = Tree.ComponentType
+	typealias CT = ComponentType
 
 	let evaluator: Evaluator
 

@@ -35,17 +35,13 @@ public class GradientDirection: Node {
 }
 
 class GradientDirectionResult: ExpressionResult {
-	public typealias Coordinate = PixelBuffer.Coordinate
-	public typealias Value = PixelBuffer.Value
-	public typealias CT = PixelBuffer.ComponentType
-
 	let e0: ExpressionResult
 	let e1: ExpressionResult
 	let e2: ExpressionResult
 
-	private let delta: CT = 0.005
-	private let heightFactor: CT = 200.0
-	private let lightZ: CT = 0.5
+	private let delta = ComponentType(0.005)
+	private let heightFactor = ComponentType(200.0)
+	private let lightZ = ComponentType(0.5)
 
 	init(_ es: [ExpressionResult]) {
 		assert(es.count == 3)
@@ -90,7 +86,7 @@ class GradientDirectionResult: ExpressionResult {
 		return Value(repeating: finalValue)	}
 }
 
-public func simd_normalize(safe vector: PixelBuffer.Value) -> PixelBuffer.Value? {
+public func simd_normalize(safe vector: Value) -> Value? {
 	let length = simd_length(vector)
 	if length < 1e-9 { // Use a small epsilon for floating point comparison
 		return nil
@@ -98,8 +94,8 @@ public func simd_normalize(safe vector: PixelBuffer.Value) -> PixelBuffer.Value?
 	return vector / length
 }
 
-fileprivate extension PixelBuffer.Value {
-	func averageLuminance() -> PixelBuffer.ComponentType {
+fileprivate extension Value {
+	func averageLuminance() -> ComponentType {
 		return (self.x + self.y + self.z) / 3.0
 	}
 }

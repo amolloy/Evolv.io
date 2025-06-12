@@ -10,10 +10,6 @@ import simd
 import CoreImage
 
 public struct PixelBuffer: ExpressionResult {
-	public typealias Value = Tree.Value
-	public typealias ComponentType = Tree.ComponentType
-	public typealias Coordinate = Tree.Coordinate
-
 	let width: Int
 	let height: Int
 	var data: [Value]

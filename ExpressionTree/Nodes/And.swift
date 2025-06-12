@@ -47,12 +47,12 @@ class AndResult: ExpressionResult {
 		let v0 = e0.sampleBilinear(at: coord)
 		let v1 = e1.sampleBilinear(at: coord)
 
-		var result = PixelBuffer.Value(repeating: 0)
+		var result = Value(repeating: 0)
 		for i in 0..<3 {
-			let v0b = PixelBuffer.ComponentType.toBits(v0[i])
-			let v1b = PixelBuffer.ComponentType.toBits(v1[i])
+			let v0b = ComponentType.toBits(v0[i])
+			let v1b = ComponentType.toBits(v1[i])
 
-			result[i] = PixelBuffer.ComponentType.fromBits(v0b & v1b)
+			result[i] = ComponentType.fromBits(v0b & v1b)
 		}
 
 		return result

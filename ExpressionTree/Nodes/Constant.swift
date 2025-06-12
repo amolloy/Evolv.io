@@ -11,13 +11,13 @@ public class Constant: Node {
 	}
 
 	public var children: [any Node] = []
-	public let value: Tree.ComponentType
+	public let value: ComponentType
 
 	required public init(_ children: [Node]) {
 		value = 0.0
 	}
 
-	public init(_ value: Tree.ComponentType) {
+	public init(_ value: ComponentType) {
 		self.value = value
 	}
 
@@ -33,11 +33,11 @@ public class Constant: Node {
 struct ConstantResult : ExpressionResult {
 	let value: Value
 
-	init(_ value: Tree.ComponentType) {
+	init(_ value: ComponentType) {
 		self.value = Value(repeating: value)
 	}
 
-	public func sampleBilinear(at coord: Tree.Coordinate) -> Value {
+	public func sampleBilinear(at coord: Coordinate) -> Value {
 		return value
 	}
 }

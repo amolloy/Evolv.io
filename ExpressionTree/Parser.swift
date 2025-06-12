@@ -79,7 +79,7 @@ public final class Parser {
         guard tokens.first == ")" else { throw ParseError.expectedClosingParenthesis }
         tokens.removeFirst() // Consume the ')'
         
-		return ConstantTriplet(Tree.Value(values[0], values[1], values[2]))
+		return ConstantTriplet(Value(values[0], values[1], values[2]))
     }
 
     private func makeTerminalNode(token: String) throws -> Node {

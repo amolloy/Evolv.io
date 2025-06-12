@@ -8,11 +8,13 @@
 import Foundation
 import CoreImage
 
-public class Tree {
-	public typealias ComponentType = Double
-	public typealias Value = SIMD3<ComponentType>
-	public typealias Coordinate = SIMD2<ComponentType>
+public typealias ComponentType = Double
+public typealias Value = SIMD3<ComponentType>
+public typealias Coordinate = SIMD2<ComponentType>
 
+internal let epsilon: ComponentType = 1e-9
+
+public class Tree {
 	let width: Int
 	let height: Int
 	let root: any Node

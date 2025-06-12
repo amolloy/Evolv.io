@@ -54,10 +54,10 @@ class WarperColorNoiseResult: ExpressionResult {
 		let v0 = e2.sampleBilinear(at: coord) * 50
 		let v1 = e3.sampleBilinear(at: coord)
 
-		var result = PixelBuffer.Value(repeating: 0)
+		var result = Value(repeating: 0)
 		for i in 0..<3 {
-			let sampleCoord = PixelBuffer.Coordinate(u[i], v[i])
-			let scaled = sampleCoord * PixelBuffer.Coordinate(repeating: v0[i])
+			let sampleCoord = Coordinate(u[i], v[i])
+			let scaled = sampleCoord * Coordinate(repeating: v0[i])
 			result[i] = Perlin.noise(at: scaled, offset: Int(v1[i]) + i)
 		}
 

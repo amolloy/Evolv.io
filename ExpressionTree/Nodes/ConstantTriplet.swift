@@ -11,13 +11,13 @@ public class ConstantTriplet: Node {
 	}
 
 	public var children: [any Node] = []
-	public let value: Tree.Value
+	public let value: Value
 
 	required public init(_ children: [Node]) {
-		value = Tree.Value(repeating: 0)
+		value = Value(repeating: 0)
 	}
 
-	public init(_ value: Tree.Value) {
+	public init(_ value: Value) {
 		self.value = value
 	}
 
@@ -33,11 +33,11 @@ public class ConstantTriplet: Node {
 struct ConstantTripletResult : ExpressionResult {
 	let value: Value
 
-	init(_ value: Tree.Value) {
+	init(_ value: Value) {
 		self.value = value
 	}
 
-	public func sampleBilinear(at coord: Tree.Coordinate) -> Value {
+	public func sampleBilinear(at coord: Coordinate) -> Value {
 		return value
 	}
 }

@@ -6,8 +6,5 @@
 //
 
 public protocol ExpressionResult {
-	typealias Value = Tree.Value
-	typealias Coordinate = Tree.Coordinate
-
 	func sampleBilinear(at coord: Coordinate) -> Value
 }

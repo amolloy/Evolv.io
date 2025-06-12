@@ -10,7 +10,7 @@ import Foundation
 import simd
 
 open class ConvolutionFilterNode: Node {
-	public typealias CT = PixelBuffer.ComponentType
+	public typealias CT = ComponentType
 
 	public static var name: String {
 		fatalError("Subclass must override `name`")
@@ -38,10 +38,10 @@ open class ConvolutionFilterNode: Node {
 
 		for y in 0..<height {
 			for x in 0..<width {
-				let coord = (PixelBuffer.Coordinate(CT(x), CT(y)) / PixelBuffer.Coordinate(CT(width), CT(height))) - PixelBuffer.Coordinate(repeating: 0.5)
+				let coord = (Coordinate(CT(x), CT(y)) / Coordinate(CT(width), CT(height))) - Coordinate(repeating: 0.5)
 				let kernel = self.kernel(at: coord, parameters: parameters)
 
-				var total = PixelBuffer.Value(repeating: 0)
+				var total = Value(repeating: 0)
 
 				for ky in -1...1 {
 					for kx in -1...1 {
@@ -57,7 +57,7 @@ open class ConvolutionFilterNode: Node {
 		return result
 	}
 
-	open func kernel(at coord: PixelBuffer.Coordinate, parameters: [ExpressionResult]) -> Kernel<CT> {
+	open func kernel(at coord: Coordinate, parameters: [ExpressionResult]) -> Kernel<CT> {
 		fatalError("Subclass must override `kernel(at:parameters:)`")
 	}
 }
