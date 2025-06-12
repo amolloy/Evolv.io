@@ -1,13 +1,13 @@
 //
-//  Mult.swift
+//  Div.swift
 //  Evolv.io
 //
-//  Created by Andy Molloy on 6/10/25.
+//  Created by Andy Molloy on 6/12/25.
 //
 
-public class Mult: Node {
+public class Div: Node {
 	public static var name: String {
-		return "*"
+		return "/"
 	}
 
 	public var children: [any Node]
@@ -23,7 +23,7 @@ public class Mult: Node {
 		}
 
 		assert(children.count == 2)
-		let result = MultResult(children.map { $0.evaluate(using: evaluator) })
+		let result = DivResult(children.map { $0.evaluate(using: evaluator) })
 
 		evaluator.setResult(result, for: self)
 
@@ -31,7 +31,7 @@ public class Mult: Node {
 	}
 }
 
-class MultResult: ExpressionResult {
+class DivResult: ExpressionResult {
 	let e0: ExpressionResult
 	let e1: ExpressionResult
 
@@ -45,6 +45,6 @@ class MultResult: ExpressionResult {
 		let v0 = e0.sampleBilinear(at: coord)
 		let v1 = e1.sampleBilinear(at: coord)
 
-		return v0 * v1
+		return v0 / v1
 	}
 }
