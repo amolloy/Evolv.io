@@ -157,7 +157,7 @@ struct NodeHeaderView: View {
 				.rotationEffect(.degrees(displayNode.isExpanded ? 90 : 0))
 				.opacity(displayNode.children.isEmpty ? 0 : 1)
 			
-			Text(displayNode.node.toString())
+			Text(type(of: displayNode.node).name)
 				.font(.caption)
 				.lineLimit(nil)
 				.multilineTextAlignment(.leading)
