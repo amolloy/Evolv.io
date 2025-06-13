@@ -11,27 +11,27 @@ import ExpressionTree
 @MainActor
 final class TreeVisualizerViewModel: ObservableObject {
 	@Published private(set) var renderedThumbnails: [ObjectIdentifier: CGImage] = [:]
-
+	
 	private let rootNode: any Node
 	private let evaluator: Evaluator
-
+	
 	init(rootNode: any Node,
 		 evaluator: Evaluator) {
 		self.rootNode = rootNode
 		self.evaluator = evaluator
 	}
-
+	
 	func renderTree() {
 		Task {
 			await renderNodeAndDependencies(rootNode)
 		}
 	}
-
+	
 	private func renderNodeAndDependencies(_ node: any Node) async {
 		if renderedThumbnails[node.id] != nil {
 			return
 		}
-
+		
 		await withTaskGroup(of: Void.self) { group in
 			for child in node.children {
 				group.addTask {
@@ -39,7 +39,7 @@ final class TreeVisualizerViewModel: ObservableObject {
 				}
 			}
 		}
-
+		
 		let sia = ImageRenderingActor.shared
 		if let image = await sia.render(node: node, evaluator: evaluator) {
 			renderedThumbnails[node.id] = image
@@ -60,7 +60,7 @@ final class DisplayNode: ObservableObject, Identifiable {
 	let node: any Node
 	let children: [DisplayNode]
 	@Published var isExpanded: Bool = false
-
+	
 	init(node: any Node, isInitiallyExpanded: Bool = false) {
 		self.id = node.id
 		self.node = node
@@ -72,21 +72,24 @@ final class DisplayNode: ObservableObject, Identifiable {
 struct TreeVisualizerView: View {
 	@StateObject private var viewModel: TreeVisualizerViewModel
 	private let rootDisplayNode: DisplayNode
-
+	
+	@State private var layoutRefreshToggle = false
+	
 	init(evaluator: Evaluator,
 		 rootNode: any Node) {
 		self._viewModel = StateObject(wrappedValue: TreeVisualizerViewModel(rootNode: rootNode,
 																			evaluator: evaluator))
 		self.rootDisplayNode = DisplayNode(node: rootNode, isInitiallyExpanded: true)
 	}
-
+	
 	var body: some View {
 		ScrollView([.horizontal, .vertical]) {
-			VStack {
+			LazyVStack(alignment: .center, spacing: 0) {
 				RecursiveNodeView(displayNode: rootDisplayNode,
-								  viewModel: viewModel)
+								  viewModel: viewModel,
+								  layoutRefreshToggle: $layoutRefreshToggle)
 			}
-			.frame(maxHeight: .infinity, alignment: .center)
+			.id(layoutRefreshToggle)
 			.padding()
 		}
 		.navigationTitle("Expression Tree")
@@ -99,38 +102,41 @@ struct TreeVisualizerView: View {
 struct RecursiveNodeView: View {
 	@ObservedObject var displayNode: DisplayNode
 	@ObservedObject var viewModel: TreeVisualizerViewModel
-
+	@Binding var layoutRefreshToggle: Bool
+	
 	var body: some View {
 		VStack(alignment: .center, spacing: 0) {
 			NodeHeaderView(displayNode: displayNode,
-						   thumbnail: viewModel.renderedThumbnails[displayNode.id])
+						   thumbnail: viewModel.renderedThumbnails[displayNode.id],
+						   layoutRefreshToggle: $layoutRefreshToggle)
 			.fixedSize(horizontal: false, vertical: true)
-
+			
 			if displayNode.isExpanded && !displayNode.children.isEmpty {
 				Rectangle().fill(.secondary).frame(width: 2, height: 20)
-
+				
 				HStack(alignment: .top, spacing: 0) {
 					ForEach(0..<displayNode.children.count, id: \.self) { index in
 						let childNode = displayNode.children[index]
-
+						
 						VStack(spacing: 0) {
 							GeometryReader { geometry in
 								Path { path in
 									let startX = (index == 0) ? geometry.size.width / 2 : 0
 									let endX = (index == displayNode.children.count - 1) ? geometry.size.width / 2 : geometry.size.width
-
+									
 									path.move(to: CGPoint(x: startX, y: 1))
 									path.addLine(to: CGPoint(x: endX, y: 1))
-
+									
 									path.move(to: CGPoint(x: geometry.size.width / 2, y: 1))
 									path.addLine(to: CGPoint(x: geometry.size.width / 2, y: 20))
 								}
 								.stroke(Color.secondary, lineWidth: 2)
 							}
 							.frame(height: 20)
-
+							
 							RecursiveNodeView(displayNode: childNode,
-											  viewModel: viewModel)
+											  viewModel: viewModel,
+											  layoutRefreshToggle: $layoutRefreshToggle)
 						}
 					}
 				}
@@ -142,21 +148,22 @@ struct RecursiveNodeView: View {
 struct NodeHeaderView: View {
 	@ObservedObject var displayNode: DisplayNode
 	let thumbnail: CGImage?
-
+	@Binding var layoutRefreshToggle: Bool
+	
 	var body: some View {
 		VStack {
 			Image(systemName: "chevron.right")
 				.font(.caption)
 				.rotationEffect(.degrees(displayNode.isExpanded ? 90 : 0))
 				.opacity(displayNode.children.isEmpty ? 0 : 1)
-
+			
 			Text(displayNode.node.toString())
 				.font(.caption)
 				.lineLimit(nil)
 				.multilineTextAlignment(.leading)
-
+			
 			Spacer()
-
+			
 			Group {
 				if let thumbnail = thumbnail {
 					Image(decorative: thumbnail, scale: 1.0)
@@ -175,8 +182,8 @@ struct NodeHeaderView: View {
 		.onTapGesture {
 			withAnimation(.easeInOut(duration: 0.2)) {
 				displayNode.isExpanded.toggle()
+				layoutRefreshToggle.toggle()
 			}
 		}
 	}
 }
-
