@@ -82,8 +82,11 @@ struct TreeVisualizerView: View {
 
 	var body: some View {
 		ScrollView([.horizontal, .vertical]) {
-			RecursiveNodeView(displayNode: rootDisplayNode,
-							  viewModel: viewModel)
+			VStack {
+				RecursiveNodeView(displayNode: rootDisplayNode,
+								  viewModel: viewModel)
+			}
+			.frame(maxHeight: .infinity, alignment: .center)
 			.padding()
 		}
 		.navigationTitle("Expression Tree")
@@ -101,9 +104,9 @@ struct RecursiveNodeView: View {
 		VStack(alignment: .center, spacing: 0) {
 			NodeHeaderView(displayNode: displayNode,
 						   thumbnail: viewModel.renderedThumbnails[displayNode.id])
+			.fixedSize(horizontal: false, vertical: true)
 
 			if displayNode.isExpanded && !displayNode.children.isEmpty {
-				// Vertical line pointing down from the parent
 				Rectangle().fill(.secondary).frame(width: 2, height: 20)
 
 				HStack(alignment: .top, spacing: 0) {
@@ -111,27 +114,21 @@ struct RecursiveNodeView: View {
 						let childNode = displayNode.children[index]
 
 						VStack(spacing: 0) {
-							// This GeometryReader draws the horizontal and vertical connectors
-							// for each child.
 							GeometryReader { geometry in
 								Path { path in
-									// Determine start and end X for the horizontal line segment
 									let startX = (index == 0) ? geometry.size.width / 2 : 0
 									let endX = (index == displayNode.children.count - 1) ? geometry.size.width / 2 : geometry.size.width
 
-									// Horizontal line
 									path.move(to: CGPoint(x: startX, y: 1))
 									path.addLine(to: CGPoint(x: endX, y: 1))
 
-									// Vertical line connecting to the child
 									path.move(to: CGPoint(x: geometry.size.width / 2, y: 1))
 									path.addLine(to: CGPoint(x: geometry.size.width / 2, y: 20))
 								}
 								.stroke(Color.secondary, lineWidth: 2)
 							}
-							.frame(height: 20) // Space for the connectors
+							.frame(height: 20)
 
-							// Recursively create the view for the child node
 							RecursiveNodeView(displayNode: childNode,
 											  viewModel: viewModel)
 						}
@@ -148,22 +145,18 @@ struct NodeHeaderView: View {
 
 	var body: some View {
 		VStack {
-			// Disclosure triangle that rotates when expanded
 			Image(systemName: "chevron.right")
 				.font(.caption)
 				.rotationEffect(.degrees(displayNode.isExpanded ? 90 : 0))
-				.opacity(displayNode.children.isEmpty ? 0 : 1) // Hide for leaf nodes
+				.opacity(displayNode.children.isEmpty ? 0 : 1)
 
-			// The Text view with wrapping capabilities
 			Text(displayNode.node.toString())
 				.font(.caption)
 				.lineLimit(nil)
-				.fixedSize(horizontal: false, vertical: true)
 				.multilineTextAlignment(.leading)
 
 			Spacer()
 
-			// The thumbnail view
 			Group {
 				if let thumbnail = thumbnail {
 					Image(decorative: thumbnail, scale: 1.0)
@@ -178,9 +171,8 @@ struct NodeHeaderView: View {
 			.clipShape(RoundedRectangle(cornerRadius: 4))
 		}
 		.padding(.vertical, 4)
-		.contentShape(Rectangle()) // Makes the whole HStack tappable
+		.contentShape(Rectangle())
 		.onTapGesture {
-			// Toggles the expansion state.
 			withAnimation(.easeInOut(duration: 0.2)) {
 				displayNode.isExpanded.toggle()
 			}

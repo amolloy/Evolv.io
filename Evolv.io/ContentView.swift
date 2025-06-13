@@ -88,15 +88,13 @@ struct ImageRowView<C: RandomAccessCollection>: View where C.Element == any Node
 	let nodes: C
 
 	var body: some View {
-		ScrollView {
-			GridRow {
-				ForEach(Array(nodes.enumerated()), id: \.offset) { _, node in
-					VStack {
-						RenderedImageView(evaluator: Evaluator(size: CGSize(width: 400, height: 400)),
-										  expressionTree: node)
-						TreeVisualizerView(evaluator: treeEvalutator,
-									 rootNode: node)
-					}
+		GridRow {
+			ForEach(Array(nodes.enumerated()), id: \.offset) { _, node in
+				VStack {
+					RenderedImageView(evaluator: Evaluator(size: CGSize(width: 400, height: 400)),
+									  expressionTree: node)
+					TreeVisualizerView(evaluator: treeEvalutator,
+								 rootNode: node)
 				}
 			}
 		}
