@@ -5,7 +5,7 @@
 //  Created by Andy Molloy on 6/8/25.
 //
 
-public protocol Node: Identifiable {
+public protocol Node: Identifiable where ID == ObjectIdentifier {
 	static var name: String { get }
 	var children: [any Node] { get }
 
