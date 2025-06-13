@@ -94,7 +94,7 @@ struct ImageRowView<C: RandomAccessCollection>: View where C.Element == any Node
 					RenderedImageView(evaluator: Evaluator(size: CGSize(width: 400, height: 400)),
 									  expressionTree: node)
 					TreeVisualizerView(evaluator: treeEvalutator,
-								 rootNode: node)
+									   rootNode: node)
 				}
 			}
 		}
