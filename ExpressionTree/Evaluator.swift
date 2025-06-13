@@ -16,22 +16,22 @@ public final class Evaluator {
 
     private let context: EvaluationContext
 
-	internal var size: CGSize { get { context.size } }
+	public var size: CGSize { get { context.size } }
 
 	public init(size: CGSize) {
 		self.context = EvaluationContext(size: size)
     }
     
-    public func evaluate(node: Node) -> any ExpressionResult {
+	public func evaluate(node: any Node) -> any ExpressionResult {
         return node.evaluate(using: self)
     }
 
-    internal func result(for node: Node) -> (any ExpressionResult)? {
+	internal func result(for node: any Node) -> (any ExpressionResult)? {
         let classNode = node as AnyObject
         return cache[ObjectIdentifier(classNode)]
     }
 
-	internal func setResult(_ result: any ExpressionResult, for node: Node) {
+	internal func setResult(_ result: any ExpressionResult, for node: any Node) {
 		let classNode = node as AnyObject
         cache[ObjectIdentifier(classNode)] = result
     }

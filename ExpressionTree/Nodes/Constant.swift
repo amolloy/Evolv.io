@@ -13,7 +13,7 @@ public class Constant: Node {
 	public var children: [any Node] = []
 	public let value: ComponentType
 
-	required public init(_ children: [Node]) {
+	required public init(_ children: [any Node]) {
 		value = 0.0
 	}
 

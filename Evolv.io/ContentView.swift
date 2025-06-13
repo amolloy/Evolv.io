@@ -27,44 +27,44 @@ struct ContentView: View {
 	]
 
 	static let figure9 = [
-	"""
-	(round (log (+ y (color-grad (round (+ (abs (round 
-		(log (+ y (color-grad (round (+ y (log (invert y) 15.5)) 
-		x) 3.1 1.86 #(0.95 0.7 0.59) 1.35)) 0.19) x)) (log (invert
-		y) 15.5)) x) 3.1 1.9 #(0.95 0.7 0.35) 1.35)) 0.19) x)
-	"""
+ """
+ (round (log (+ y (color-grad (round (+ (abs (round 
+  (log (+ y (color-grad (round (+ y (log (invert y) 15.5)) 
+  x) 3.1 1.86 #(0.95 0.7 0.59) 1.35)) 0.19) x)) (log (invert
+  y) 15.5)) x) 3.1 1.9 #(0.95 0.7 0.35) 1.35)) 0.19) x)
+ """
 	]
 
 	static let figure10 = [
-	"""
-		(rotate-vector (log(+ y (color-grad (round(+ (abs (round (log #(0.01 0.67 0.86) 0.19)
-		x)) (hsv-to-rgb (bump (if x 10.7 y) #(0.94 0.01 0.4) 0.78 #(0.18 0.28 0.58) #(0.4 0.92
-		0.58) 10.6 0.23 0.91))) X) 3.1 1.93 #(0.95 0.7 0.35) 3.03)) -0.03) X #(0.76 0.08 0.24))
-	"""
+ """
+  (rotate-vector (log(+ y (color-grad (round(+ (abs (round (log #(0.01 0.67 0.86) 0.19)
+  x)) (hsv-to-rgb (bump (if x 10.7 y) #(0.94 0.01 0.4) 0.78 #(0.18 0.28 0.58) #(0.4 0.92
+  0.58) 10.6 0.23 0.91))) X) 3.1 1.93 #(0.95 0.7 0.35) 3.03)) -0.03) X #(0.76 0.08 0.24))
+ """
 	]
 
 	static let test = [
-		"x",
-		"(bump (+ (round x y) y) #(0.46 0.82 0.65) 0.02 #(0.1 0.06 0.1) #(0.99 0.06 0.41) 1.47 8.7 3.7)",
+		"(color-grad (round (+ y (log (invert y) 15.5)) x) 3.1 1.86 #(0.95 0.7 0.59) 1.35)",
 	]
 
-	let expressions = ContentView.test
+	let expressions = ContentView.figure9
+	let treeEvaluator = Evaluator(size: CGSize(width: 44, height: 44))
 
 	var body: some View {
 		Grid {
 			ForEach(Array(stride(from: 0, to: expressions.count, by: 3)), id: \.self) { row in
-				ImageRowView(expressions: expressions[(row)..<(min(row + 3, expressions.count))])
+				ImageRowView(
+					treeEvalutator:treeEvaluator,
+					nodes:expressions[(row)..<(min(row + 3, expressions.count))].map { node(for: $0) }
+				)
 			}
 		}
 		.padding()
 	}
-}
 
-struct ImageRowView<C: RandomAccessCollection>: View where C.Element == String, C.Index == Int {
-	let expressions: C
 	private let parser = Parser()
 
-	func node(for expression: String) -> Node {
+	func node(for expression: String) -> any Node {
 		do {
 			return try parser.parse(expression)
 		} catch {
@@ -81,15 +81,22 @@ struct ImageRowView<C: RandomAccessCollection>: View where C.Element == String, 
 			return Constant(0)
 		}
 	}
+}
+
+struct ImageRowView<C: RandomAccessCollection>: View where C.Element == any Node {
+	let treeEvalutator: Evaluator
+	let nodes: C
 
 	var body: some View {
-		GridRow {
-			ForEach(expressions, id:\.self) { expression in
-				let node = node(for: expression)
-				VStack {
-					RenderedImageView(size: CGSize(width: 900, height: 900),
-									  expressionTree: node)
-					NodeTreeView(node: node)
+		ScrollView {
+			GridRow {
+				ForEach(Array(nodes.enumerated()), id: \.offset) { _, node in
+					VStack {
+						RenderedImageView(evaluator: Evaluator(size: CGSize(width: 400, height: 400)),
+										  expressionTree: node)
+						NodeTreeView(evaluator: treeEvalutator,
+									 node: node)
+					}
 				}
 			}
 		}

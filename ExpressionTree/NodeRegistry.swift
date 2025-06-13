@@ -7,12 +7,12 @@
 
 
 public final class NodeRegistry {
-    public typealias NodeConstructor = ([Node]) throws -> Node
+	public typealias NodeConstructor = ([any Node]) throws -> any Node
 
     public let registry: [String: NodeConstructor]
 
     public init() {
-        let nodeTypes: [Node.Type] = [
+		let nodeTypes: [any Node.Type] = [
 			Abs.self,
 			Add.self,
 			And.self,
@@ -44,7 +44,7 @@ public final class NodeRegistry {
         self.registry = builtRegistry
     }
     
-    public func makeNode(name: String, children: [Node]) throws -> Node {
+	public func makeNode(name: String, children: [any Node]) throws -> any Node {
         guard let constructor = registry[name] else {
             throw ParseError.unknownFunction(name)
         }

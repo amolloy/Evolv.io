@@ -42,22 +42,17 @@ private struct ColorGradientResult: ExpressionResult {
     let centerSource: any ExpressionResult
     let phaseSource: any ExpressionResult
 
-    // Define the phase shifts for R, G, and B to create color separation.
-    // These values represent 0, 1/3, and 2/3 of a full cycle.
-    private static let phaseShifts = Value(0.0, 0.333, 0.666)
-
 	func value(at coord: Coordinate) -> Value {
-        let input = inputSource.value(at: coord).averageLuminance()
-        let offset = offsetSource.value(at: coord).averageLuminance()
-        let range = rangeSource.value(at: coord).averageLuminance()
-        let phase = phaseSource.value(at: coord).averageLuminance()
+		let input = inputSource.value(at: coord)
+		let offset = offsetSource.value(at: coord)
+		let range = rangeSource.value(at: coord)
+		let phase = phaseSource.value(at: coord)
+		let centerColor = centerSource.value(at: coord)
 
-        let centerColor = centerSource.value(at: coord)
-
-        let angle = (input + offset) * phase * 2.0 * .pi
-        let angles = Value(repeating: angle) + Self.phaseShifts * 2.0 * .pi
-        let cosVector = Value(cos(angles.x), cos(angles.y), cos(angles.z))
-        return centerColor + range * cosVector
+		let angle = (input + offset) * phase * 2.0 * .pi
+		let angles = angle * 2.0 * .pi
+		let cosVector = cos(angles)
+		return centerColor + range * cosVector
     }
 }
 

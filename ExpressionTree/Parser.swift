@@ -10,7 +10,7 @@ public final class Parser {
 
     public init() {}
 
-    public func parse(_ expression: String) throws -> Node {
+	public func parse(_ expression: String) throws -> any Node {
         var tokens = tokenize(expression)
         guard !tokens.isEmpty else {
             throw ParseError.unexpectedEndOfInput
@@ -32,7 +32,7 @@ public final class Parser {
 		}
 	}
 
-    private func parse(tokens: inout [String]) throws -> Node {
+	private func parse(tokens: inout [String]) throws -> any Node {
         guard let token = tokens.first else {
             throw ParseError.unexpectedEndOfInput
         }
@@ -51,11 +51,11 @@ public final class Parser {
         }
     }
     
-    private func parseFunctionCall(tokens: inout [String]) throws -> Node {
+	private func parseFunctionCall(tokens: inout [String]) throws -> any Node {
         guard let functionName = tokens.first else { throw ParseError.unexpectedEndOfInput }
         tokens.removeFirst()
         
-        var children: [Node] = []
+		var children: [any Node] = []
         while let nextToken = tokens.first, nextToken != ")" {
             children.append(try parse(tokens: &tokens))
         }
@@ -66,7 +66,7 @@ public final class Parser {
         return try registry.makeNode(name: functionName, children: children)
     }
 
-    private func parseConstantTriplet(tokens: inout [String]) throws -> Node {
+	private func parseConstantTriplet(tokens: inout [String]) throws -> any Node {
         var values: [Double] = []
         for _ in 0..<3 {
             guard let token = tokens.first, let value = Double(token) else {
@@ -82,7 +82,7 @@ public final class Parser {
 		return ConstantTriplet(Value(values[0], values[1], values[2]))
     }
 
-    private func makeTerminalNode(token: String) throws -> Node {
+	private func makeTerminalNode(token: String) throws -> any Node {
         if let value = Double(token) {
             // It's a bare number, so it's a ConstantNode.
             return Constant(value)

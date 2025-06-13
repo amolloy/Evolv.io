@@ -13,7 +13,7 @@ public class ConstantTriplet: Node {
 	public var children: [any Node] = []
 	public let value: Value
 
-	required public init(_ children: [Node]) {
+	required public init(_ children: [any Node]) {
 		value = Value(repeating: 0)
 	}
 

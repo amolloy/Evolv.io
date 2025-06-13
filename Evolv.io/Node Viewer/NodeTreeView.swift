@@ -9,8 +9,8 @@ import SwiftUI
 import ExpressionTree
 
 struct NodeTreeView: View {
-	let node: Node
-	private let thumbnailSize = 100.0
+	let evaluator: Evaluator
+	let node: any Node
 
 	var body: some View {
 		VStack(spacing: 0) {
@@ -21,7 +21,7 @@ struct NodeTreeView: View {
 					.padding(.vertical, 4)
 					.background(.background, in: Capsule())
 
-				RenderedImageView(size: CGSize(width: thumbnailSize, height: thumbnailSize),
+				RenderedImageView(evaluator: evaluator,
 								  expressionTree: node)
 			}
 			.padding()
@@ -33,7 +33,8 @@ struct NodeTreeView: View {
 
 				HStack(alignment: .top, spacing: 0) {
 					ForEach(0..<node.children.count, id: \.self) { index in
-						NodeTreeView(node: node.children[index])
+						NodeTreeView(evaluator: evaluator,
+									 node: node.children[index])
 					}
 				}
 			}

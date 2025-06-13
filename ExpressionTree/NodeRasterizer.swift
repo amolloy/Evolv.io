@@ -8,10 +8,9 @@
 import CoreImage
 
 public extension Node {
-	func rasterize(size: CGSize) -> CGImage? {
-		let width = Int(size.width)
-		let height = Int(size.height)
-		let evaluator = Evaluator(size: size)
+	func rasterize(evaluator: Evaluator) -> CGImage? {
+		let width = Int(evaluator.size.width)
+		let height = Int(evaluator.size.height)
 		let result = evaluator.evaluate(node: self)
 
 		var data = Array(repeating: Value(0, 0, 0), count: width * height)

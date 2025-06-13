@@ -5,11 +5,11 @@
 //  Created by Andy Molloy on 6/8/25.
 //
 
-public protocol Node {
+public protocol Node: Identifiable {
 	static var name: String { get }
-	var children: [Node] { get }
+	var children: [any Node] { get }
 
-	init(_ children: [Node]) throws
+	init(_ children: [any Node]) throws
 	
 	func evaluate(using evaluator: Evaluator) -> any ExpressionResult
 	func toString() -> String
