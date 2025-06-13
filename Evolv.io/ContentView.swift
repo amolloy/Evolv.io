@@ -8,9 +8,6 @@
 import SwiftUI
 import ExpressionTree
 
-let width = 900
-let height = 900
-
 struct ContentView: View {
 	static let parser = Parser()
 

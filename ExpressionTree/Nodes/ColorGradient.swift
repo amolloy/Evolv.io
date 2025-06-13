@@ -24,11 +24,11 @@ public final class ColorGradient: Node {
         let childResults = children.map { $0.evaluate(using: evaluator) }
 
         return ColorGradientResult(
-            inputSource:    childResults[0],
-            offsetSource:   childResults[1],
-            rangeSource:    childResults[2],
-            centerSource:   childResults[3],
-            phaseSource:    childResults[4]
+            e0:childResults[0],
+            e1:childResults[1],
+            e2:childResults[2],
+            e3:childResults[3],
+            e4:childResults[4]
         )
     }
 }
@@ -36,23 +36,20 @@ public final class ColorGradient: Node {
 
 /// The ExpressionResult for ColorGradNode that performs the palette calculation.
 private struct ColorGradientResult: ExpressionResult {
-    let inputSource: any ExpressionResult
-    let offsetSource: any ExpressionResult
-    let rangeSource: any ExpressionResult
-    let centerSource: any ExpressionResult
-    let phaseSource: any ExpressionResult
+    let e0: any ExpressionResult
+    let e1: any ExpressionResult
+    let e2: any ExpressionResult
+    let e3: any ExpressionResult
+    let e4: any ExpressionResult
 
 	func value(at coord: Coordinate) -> Value {
-		let input = inputSource.value(at: coord)
-		let offset = offsetSource.value(at: coord)
-		let range = rangeSource.value(at: coord)
-		let phase = phaseSource.value(at: coord)
-		let centerColor = centerSource.value(at: coord)
+		let e0v = e0.value(at: coord)
+		let e1v = e1.value(at: coord)
+		let e2v = e2.value(at: coord)
+		let e3v = e3.value(at: coord)
+		let e4v = e4.value(at: coord)
 
-		let angle = (input + offset) * phase * 2.0 * .pi
-		let angles = angle * 2.0 * .pi
-		let cosVector = cos(angles)
-		return centerColor + range * cosVector
+		return sin(e0v * e1v + e2v * e3v) * e4v
     }
 }
 

@@ -1,30 +1,47 @@
 //
-//  NodeRasterizer.swift
+//  NodeRenderer.swift
 //  Evolv.io
 //
-//  Created by Andy Molloy on 6/12/25.
+//  Created by Andy Molloy on 6/13/25.
 //
 
-import CoreImage
+import ExpressionTree
+import CoreGraphics
+import Foundation
 
-public extension Node {
-	func rasterize(evaluator: Evaluator) -> CGImage? {
+class NodeRenderer {
+	let node: any Node
+	let evaluator: Evaluator
+	var data: Array<Value>
+
+	init(node: any Node,
+		 evaluator: Evaluator) {
+		self.node = node
+		self.evaluator = evaluator
+		self.data = Array(repeating: Value(0, 0, 0), count: Int(evaluator.size.width * evaluator.size.height))
+	}
+
+	func render() async {
 		let width = Int(evaluator.size.width)
 		let height = Int(evaluator.size.height)
-		let result = evaluator.evaluate(node: self)
+		let result = evaluator.evaluate(node: node)
 
-		var data = Array(repeating: Value(0, 0, 0), count: width * height)
 		for y in 0..<height {
 			let yc = ComponentType(height - y) / ComponentType(height) * 2.0 - 1.0
 			for x in 0..<width {
 				let xc = ComponentType(x) / ComponentType(width) * 2.0 - 1.0
 
 				let pixel = result.value(at: Coordinate(x: xc,
-																 y: yc))
+														y: yc))
 
 				data[y * width + x] = pixel.sanitized()
 			}
 		}
+	}
+
+	func cgImage() -> CGImage? {
+		let width = Int(evaluator.size.width)
+		let height = Int(evaluator.size.height)
 
 		let pixelData: [UInt8] = data.flatMap { pixel in
 			let r = UInt8(clamping: Int(pixel.x * 255))

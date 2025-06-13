@@ -26,7 +26,7 @@ extension SIMD3 where Scalar == ComponentType {
 	/// - NaN values are replaced with 0.0.
 	/// - Positive infinity is replaced with 1.0.
 	/// - Negative infinity is replaced with -1.0.
-	func sanitized() -> SIMD3<ComponentType> {
+	public func sanitized() -> SIMD3<ComponentType> {
 		var newX = self.x
 		if newX.isNaN {
 			newX = 0.0

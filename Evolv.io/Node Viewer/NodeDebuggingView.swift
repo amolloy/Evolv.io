@@ -1,14 +1,14 @@
 //
-//  RenderedImageView.swift
+//  NodeDebuggingView.swift
 //  Evolv.io
 //
-//  Created by Andy Molloy on 6/8/25.
+//  Created by Andy Molloy on 6/13/25.
 //
 
 import SwiftUI
 import ExpressionTree
 
-struct RenderedImageView: View {
+struct NodeDebuggingView: View {
 	let evaluator: Evaluator
 	let expressionTree: any Node
 	@State private var image: CGImage?
