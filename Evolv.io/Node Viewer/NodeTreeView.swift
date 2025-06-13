@@ -98,15 +98,43 @@ struct RecursiveNodeView: View {
 	@ObservedObject var viewModel: TreeVisualizerViewModel
 
 	var body: some View {
-		VStack(alignment: .leading, spacing: 0) {
+		VStack(alignment: .center, spacing: 0) {
 			NodeHeaderView(displayNode: displayNode,
 						   thumbnail: viewModel.renderedThumbnails[displayNode.id])
 
 			if displayNode.isExpanded && !displayNode.children.isEmpty {
+				// Vertical line pointing down from the parent
+				Rectangle().fill(.secondary).frame(width: 2, height: 20)
+
 				HStack(alignment: .top, spacing: 0) {
-					ForEach(displayNode.children) { childNode in
-						RecursiveNodeView(displayNode: childNode,
-										  viewModel: viewModel)
+					ForEach(0..<displayNode.children.count, id: \.self) { index in
+						let childNode = displayNode.children[index]
+
+						VStack(spacing: 0) {
+							// This GeometryReader draws the horizontal and vertical connectors
+							// for each child.
+							GeometryReader { geometry in
+								Path { path in
+									// Determine start and end X for the horizontal line segment
+									let startX = (index == 0) ? geometry.size.width / 2 : 0
+									let endX = (index == displayNode.children.count - 1) ? geometry.size.width / 2 : geometry.size.width
+
+									// Horizontal line
+									path.move(to: CGPoint(x: startX, y: 1))
+									path.addLine(to: CGPoint(x: endX, y: 1))
+
+									// Vertical line connecting to the child
+									path.move(to: CGPoint(x: geometry.size.width / 2, y: 1))
+									path.addLine(to: CGPoint(x: geometry.size.width / 2, y: 20))
+								}
+								.stroke(Color.secondary, lineWidth: 2)
+							}
+							.frame(height: 20) // Space for the connectors
+
+							// Recursively create the view for the child node
+							RecursiveNodeView(displayNode: childNode,
+											  viewModel: viewModel)
+						}
 					}
 				}
 			}
@@ -119,7 +147,7 @@ struct NodeHeaderView: View {
 	let thumbnail: CGImage?
 
 	var body: some View {
-		HStack {
+		VStack {
 			// Disclosure triangle that rotates when expanded
 			Image(systemName: "chevron.right")
 				.font(.caption)
@@ -152,10 +180,11 @@ struct NodeHeaderView: View {
 		.padding(.vertical, 4)
 		.contentShape(Rectangle()) // Makes the whole HStack tappable
 		.onTapGesture {
-			// The missing piece! This toggles the expansion state.
+			// Toggles the expansion state.
 			withAnimation(.easeInOut(duration: 0.2)) {
 				displayNode.isExpanded.toggle()
 			}
 		}
 	}
 }
+
