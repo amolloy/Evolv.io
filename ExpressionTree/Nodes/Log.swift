@@ -44,8 +44,8 @@ class LogResult: ExpressionResult {
 	}
 
 	func value(at coord: Coordinate) -> Value {
-		let inputValue = e0.value(at: coord)
-		let inputBase = e1.value(at: coord)
+		let inputBase = e0.value(at: coord)
+		let inputValue = e1.value(at: coord)
 
 		var resultVector = Value.zero
 
