@@ -10,15 +10,16 @@ import CoreGraphics
 import Foundation
 import simd
 
-class NodeRenderer {
+@MainActor
+class NodeRenderer: ObservableObject {
 	let node: any Node
 	let evaluator: Evaluator
 	var data: Array<Value>
 	var maxValue: Value = Value(-.infinity, -.infinity, -.infinity)
 	var minValue: Value = Value(.infinity, .infinity, .infinity)
 
-	var displayMax: Value = Value.one
-	var displayMin: Value = Value.zero
+	@Published var displayMax: Value = Value.one
+	@Published var displayMin: Value = Value.zero
 
 	init(node: any Node,
 		 evaluator: Evaluator) {
@@ -53,7 +54,7 @@ class NodeRenderer {
 		let height = Int(evaluator.size.height)
 
 		let pixelData: [UInt8] = data.flatMap { pixel in
-			let normalized = (pixel - minValue) / (maxValue - minValue)
+			let normalized = (pixel - displayMin) / (displayMax - displayMin)
 			let clamped = clamp(normalized, min: Value.zero, max: Value.one)
 			let mapped = clamped * 255.0
 

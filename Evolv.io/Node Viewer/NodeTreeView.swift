@@ -26,7 +26,6 @@ struct TreeVisualizerView: View {
 	let evaluator: Evaluator
 	let rootNodes: [DisplayNode]
 
-	// --- CORRECTED: The state now holds a concrete DisplayNode ---
 	@State private var selectedNodeForDetail: DisplayNode?
 
 	init(evaluator: Evaluator, rootNode: any Node) {
@@ -36,21 +35,16 @@ struct TreeVisualizerView: View {
 
 	var body: some View {
 		List(rootNodes, children: \.children) { displayNode in
-			// --- Step 2: Make the row tappable ---
 			Button(action: {
-				// When tapped, set the state to the DisplayNode for this row.
 				selectedNodeForDetail = displayNode
 			}) {
 				NodeRowView(evaluator: evaluator,
 							node: displayNode.node)
 			}
-			.buttonStyle(.plain) // Use plain style to avoid default button chrome
+			.buttonStyle(.plain)
 		}
 		.navigationTitle("Expression Tree")
-		// --- Step 3: Add the .sheet modifier ---
-		// The sheet now receives a DisplayNode, which is Identifiable.
 		.sheet(item: $selectedNodeForDetail) { displayNodeToShow in
-			// We pass the underlying 'node' property to the detail view.
 			DetailImageView(node: displayNodeToShow.node)
 		}
 	}
@@ -75,7 +69,6 @@ struct NodeRowView: View {
 
 			Spacer()
 
-			// The thumbnail view, using a smaller evaluator
 			RenderedImageView(evaluator: Evaluator(size: CGSize(width: 44, height: 44)),
 							  expressionTree: node)
 		}
@@ -83,13 +76,9 @@ struct NodeRowView: View {
 	}
 }
 
-
-// --- Step 4: Create the View for the Modal Sheet ---
-
 struct DetailImageView: View {
 	let node: any Node
 
-	// We need access to the dismiss action provided by the environment.
 	@Environment(\.dismiss) private var dismiss
 
 	var body: some View {
@@ -101,8 +90,7 @@ struct DetailImageView: View {
 				.font(.caption.monospaced())
 				.padding(.horizontal)
 
-			// Render a new, larger image.
-			RenderedImageView(
+			NodeDebuggingView(
 				evaluator: Evaluator(size: CGSize(width: 512, height: 512)),
 				expressionTree: node
 			)
@@ -110,13 +98,12 @@ struct DetailImageView: View {
 			.shadow(radius: 10)
 
 			Button("Done") {
-				dismiss() // Call the dismiss action to close the sheet.
+				dismiss()
 			}
-			.keyboardShortcut(.defaultAction) // Allows hitting Enter to close
+			.keyboardShortcut(.defaultAction)
 
 		}
 		.padding()
-		// On macOS, it's good practice to give sheets a default size.
 		.frame(minWidth: 600, minHeight: 700)
 	}
 }
