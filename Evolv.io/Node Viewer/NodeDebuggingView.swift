@@ -26,6 +26,14 @@ struct NodeDebuggingView: View {
 					.aspectRatio(1, contentMode: .fit)
 					.clipShape(RoundedRectangle(cornerRadius: 12))
 					.shadow(radius: 5)
+					.contextMenu {
+						// --- Step 2: Add a "Copy" Button ---
+						Button {
+							copyImageToPasteboard(image)
+						} label: {
+							Label("Copy Image", systemImage: "doc.on.doc")
+						}
+					}
 				VStack {
 					RangeSliderView(label: "Red",
 									value: redBinding(),
@@ -59,6 +67,28 @@ struct NodeDebuggingView: View {
 		image = nodeRenderer.cgImage()
 	}
 
+	private func copyImageToPasteboard(_ image: CGImage) {
+#if canImport(AppKit)
+		guard let pngData = image.pngData() else {
+			print("Failed to convert CGImage to PNG data.")
+			return
+		}
+
+		// 1. Get the general system pasteboard.
+		let pasteboard = NSPasteboard.general
+
+		// 2. Clear its previous contents.
+		pasteboard.clearContents()
+
+		// 3. Write the new PNG data to the pasteboard.
+		if pasteboard.setData(pngData, forType: .png) {
+			print("Image copied to pasteboard.")
+		} else {
+			print("Failed to write image to pasteboard.")
+		}
+#endif
+	}
+	
 	private func redBinding() -> Binding<ClosedRange<ComponentType>> {
 		Binding {
 			nodeRenderer.displayMin.x...nodeRenderer.displayMax.x
@@ -84,5 +114,15 @@ struct NodeDebuggingView: View {
 			nodeRenderer.displayMin.z = newRange.lowerBound
 			nodeRenderer.displayMax.z = newRange.upperBound
 		}
+	}
+}
+
+fileprivate extension CGImage {
+	func pngData() -> Data? {
+		guard let mutableData = CFDataCreateMutable(nil, 0) else { return nil }
+		guard let destination = CGImageDestinationCreateWithData(mutableData, "public.png" as CFString, 1, nil) else { return nil }
+		CGImageDestinationAddImage(destination, self, nil)
+		guard CGImageDestinationFinalize(destination) else { return nil }
+		return mutableData as Data
 	}
 }

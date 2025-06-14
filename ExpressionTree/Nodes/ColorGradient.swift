@@ -30,8 +30,9 @@ public final class ColorGradient: CachedNode {
 		return LightMapResult(source: evaluators[0],
 							  dirX: evaluators[1],
 							  dirY: evaluators[2],
-							  delta: evaluators[3],
+							  delta: ConstantResult(0.005),
 							  heightFactor: evaluators[4],
-							  lightZ: ConstantResult(0.005))
+							  lightZ: ConstantResult(0.005),
+							  color: evaluators[3])
 	}
 }
