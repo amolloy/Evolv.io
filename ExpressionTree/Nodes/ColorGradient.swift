@@ -35,7 +35,7 @@ class ColorGradientResult: ExpressionResult {
 	let e4: ExpressionResult
 
 	private let delta = ComponentType(0.005)
-	private let heightFactor = ComponentType(200.0)
+	private let heightFactor = ComponentType(5.0)
 	private let lightZ = ComponentType(0.5)
 
 	init(_ es: [ExpressionResult]) {
@@ -51,19 +51,10 @@ class ColorGradientResult: ExpressionResult {
 		let c1 = e3.value(at: coord)
 		let c2 = e4.value(at: coord)
 
-		let source = e0
 		let lightDirXSource = e1.value(at: coord)
 		let lightDirYSource = e2.value(at: coord)
 
-		let height_x1 = source.value(at: coord + Coordinate(delta, 0)).averageLuminance()
-		let height_x2 = source.value(at: coord - Coordinate(delta, 0)).averageLuminance()
-		let Gx = height_x1 - height_x2
-
-		let height_y1 = source.value(at: coord + Coordinate(0, delta)).averageLuminance()
-		let height_y2 = source.value(at: coord - Coordinate(0, delta)).averageLuminance()
-		let Gy = height_y1 - height_y2
-
-		let surfaceNormal = Value(-Gx, -Gy, 1.0 / heightFactor)
+		let surfaceNormal = e0.value(at: coord)
 
 		var lightDx = lightDirXSource.averageLuminance()
 		var lightDy = lightDirYSource.averageLuminance()
