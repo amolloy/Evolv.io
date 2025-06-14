@@ -83,13 +83,6 @@ class GradientDirectionResult: ExpressionResult {
 		let dotProduct = dot(normal_normalized, light_normalized)
 		let finalValue = (dotProduct + 1.0) * 0.5
 
-		return Value(repeating: finalValue)	}
-}
-
-public func simd_normalize(safe vector: Value) -> Value? {
-	let length = simd_length(vector)
-	if length < 1e-9 { // Use a small epsilon for floating point comparison
-		return nil
+		return Value(repeating: finalValue)
 	}
-	return vector / length
 }

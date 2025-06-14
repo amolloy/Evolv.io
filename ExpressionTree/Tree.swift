@@ -19,6 +19,14 @@ extension Value {
 	}
 }
 
+public func simd_normalize(safe vector: Value) -> Value? {
+	let length = simd_length(vector)
+	if length < 1e-9 { // Use a small epsilon for floating point comparison
+		return nil
+	}
+	return vector / length
+}
+
 internal let epsilon: ComponentType = 1e-9
 
 extension SIMD3 where Scalar == ComponentType {
