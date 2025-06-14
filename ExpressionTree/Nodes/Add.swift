@@ -5,7 +5,7 @@
 //  Created by Andy Molloy on 6/12/25.
 //
 
-public class Add: Node {
+public class Add: CachedNode {
 	public static var name: String {
 		return "+"
 	}
@@ -17,17 +17,9 @@ public class Add: Node {
 		self.children = children
 	}
 
-	public func evaluate(using evaluator: Evaluator) -> any ExpressionResult {
-		if let cachedResult = evaluator.result(for: self) {
-			return cachedResult
-		}
-
+	public func _evaluate(using evaluator: Evaluator) -> any ExpressionResult {
 		assert(children.count == 2)
-		let result = AddResult(children.map { $0.evaluate(using: evaluator) })
-
-		evaluator.setResult(result, for: self)
-
-		return result
+		return AddResult(children.map { $0.evaluate(using: evaluator) })
 	}
 }
 

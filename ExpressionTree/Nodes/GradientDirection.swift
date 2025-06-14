@@ -8,7 +8,7 @@
 
 import simd
 
-public class GradientDirection: Node {
+public class GradientDirection: CachedNode {
 	public static var name: String {
 		return "grad-direction"
 	}
@@ -24,23 +24,15 @@ public class GradientDirection: Node {
 		self.children = children
 	}
 
-	public func evaluate(using evaluator: Evaluator) -> any ExpressionResult {
-		if let cachedResult = evaluator.result(for: self) {
-			return cachedResult
-		}
-
+	public func _evaluate(using evaluator: Evaluator) -> any ExpressionResult {
 		assert(children.count == 3)
 		let evaluators = children.map { $0.evaluate(using: evaluator) }
 
-		let result = LightMapResult(source: evaluators[0],
-									dirX: evaluators[1],
-									dirY: evaluators[2],
-									delta: ConstantResult(delta),
-									heightFactor: ConstantResult(heightFactor),
-									lightZ: ConstantResult(lightZ))
-
-		evaluator.setResult(result, for: self)
-
-		return result
+		return LightMapResult(source: evaluators[0],
+							  dirX: evaluators[1],
+							  dirY: evaluators[2],
+							  delta: ConstantResult(delta),
+							  heightFactor: ConstantResult(heightFactor),
+							  lightZ: ConstantResult(lightZ))
 	}
 }

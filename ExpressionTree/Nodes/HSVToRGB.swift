@@ -7,7 +7,7 @@
 
 import simd
 
-public class HSVToRGB: Node {
+public class HSVToRGB: CachedNode {
 	public static var name: String {
 		return "hsv-to-rgb"
 	}
@@ -19,17 +19,9 @@ public class HSVToRGB: Node {
 		self.children = children
 	}
 
-	public func evaluate(using evaluator: Evaluator) -> any ExpressionResult {
-		if let cachedResult = evaluator.result(for: self) {
-			return cachedResult
-		}
-
+	public func _evaluate(using evaluator: Evaluator) -> any ExpressionResult {
 		assert(children.count == 1)
-		let result = HSVToRGBResult(children[0].evaluate(using: evaluator))
-
-		evaluator.setResult(result, for: self)
-
-		return result
+		return HSVToRGBResult(children[0].evaluate(using: evaluator))
 	}
 }
 

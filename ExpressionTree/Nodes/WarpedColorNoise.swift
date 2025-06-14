@@ -7,7 +7,7 @@
 
 import simd
 
-public class WarpedColorNoise: Node {
+public class WarpedColorNoise: CachedNode {
 	public static var name: String {
 		return "warped-color-noise"
 	}
@@ -19,17 +19,9 @@ public class WarpedColorNoise: Node {
 		self.children = children
 	}
 
-	public func evaluate(using evaluator: Evaluator) -> any ExpressionResult {
-		if let cachedResult = evaluator.result(for: self) {
-			return cachedResult
-		}
-
+	public func _evaluate(using evaluator: Evaluator) -> any ExpressionResult {
 		assert(children.count == 4)
-		let result = WarperColorNoiseResult(children.map { $0.evaluate(using: evaluator) })
-
-		evaluator.setResult(result, for: self)
-
-		return result
+		return WarperColorNoiseResult(children.map { $0.evaluate(using: evaluator) })
 	}
 }
 

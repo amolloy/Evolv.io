@@ -54,7 +54,7 @@ struct ContentView: View {
 """,
 	]
 
-	let expressions = ContentView.sampleGridExpressions
+	let expressions = ContentView.figure10
 	let treeEvaluator = Evaluator(size: CGSize(width: 44, height: 44))
 
 	var body: some View {

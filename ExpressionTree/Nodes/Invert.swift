@@ -7,7 +7,7 @@
 
 import simd
 
-public class Invert: Node {
+public class Invert: CachedNode {
 	public static var name: String {
 		return "invert"
 	}
@@ -19,17 +19,9 @@ public class Invert: Node {
 		self.children = children
 	}
 
-	public func evaluate(using evaluator: Evaluator) -> any ExpressionResult {
-		if let cachedResult = evaluator.result(for: self) {
-			return cachedResult
-		}
-
+	public func _evaluate(using evaluator: Evaluator) -> any ExpressionResult {
 		assert(children.count == 1)
-		let result = InvertResult(children[0].evaluate(using: evaluator))
-
-		evaluator.setResult(result, for: self)
-
-		return result
+		return InvertResult(children[0].evaluate(using: evaluator))
 	}
 }
 

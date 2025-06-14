@@ -5,7 +5,7 @@
 //  Created by Andy Molloy on 6/12/25.
 //
 
-public class If: Node {
+public class If: CachedNode {
 	public static var name: String {
 		return "if"
 	}
@@ -17,17 +17,9 @@ public class If: Node {
 		self.children = children
 	}
 
-	public func evaluate(using evaluator: Evaluator) -> any ExpressionResult {
-		if let cachedResult = evaluator.result(for: self) {
-			return cachedResult
-		}
-
+	public func _evaluate(using evaluator: Evaluator) -> any ExpressionResult {
 		assert(children.count == 3)
-		let result = IfResult( children.map { $0.evaluate(using: evaluator) } )
-
-		evaluator.setResult(result, for: self)
-
-		return result
+		return IfResult( children.map { $0.evaluate(using: evaluator) } )
 	}
 }
 

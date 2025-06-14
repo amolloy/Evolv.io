@@ -8,7 +8,7 @@
 import Foundation
 import simd
 
-public final class RotateVector: Node {
+public final class RotateVector: CachedNode {
 	public static var name: String {
 		return "rotate-vector"
 	}
@@ -20,7 +20,7 @@ public final class RotateVector: Node {
 		self.children = children
 	}
 
-	public func evaluate(using evaluator: Evaluator) -> any ExpressionResult {
+	public func _evaluate(using evaluator: Evaluator) -> any ExpressionResult {
 		let childResults = children.map { $0.evaluate(using: evaluator) }
 
 		return RotateVectorResult(childResults)

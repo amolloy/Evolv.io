@@ -7,7 +7,7 @@
 
 import simd
 
-public class Log: Node {
+public class Log: CachedNode {
 	public static var name: String {
 		return "log"
 	}
@@ -19,17 +19,9 @@ public class Log: Node {
 		self.children = children
 	}
 
-	public func evaluate(using evaluator: Evaluator) -> any ExpressionResult {
-		if let cachedResult = evaluator.result(for: self) {
-			return cachedResult
-		}
-
+	public func _evaluate(using evaluator: Evaluator) -> any ExpressionResult {
 		assert(children.count == 2)
-		let result = LogResult(children.map { $0.evaluate(using: evaluator) })
-
-		evaluator.setResult(result, for: self)
-
-		return result
+		return LogResult(children.map { $0.evaluate(using: evaluator) })
 	}
 }
 

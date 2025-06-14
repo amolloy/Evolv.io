@@ -7,7 +7,7 @@
 
 import simd
 
-public class Round: Node {
+public class Round: CachedNode {
 	public static var name: String {
 		return "round"
 	}
@@ -19,17 +19,9 @@ public class Round: Node {
 		self.children = children
 	}
 	
-	public func evaluate(using evaluator: Evaluator) -> any ExpressionResult {
-		if let cachedResult = evaluator.result(for: self) {
-			return cachedResult
-		}
-		
+	public func _evaluate(using evaluator: Evaluator) -> any ExpressionResult {
 		assert(children.count == 2)
-		let result = RoundResult(children.map { $0.evaluate(using: evaluator) })
-		
-		evaluator.setResult(result, for: self)
-		
-		return result
+		return RoundResult(children.map { $0.evaluate(using: evaluator) })
 	}
 }
 

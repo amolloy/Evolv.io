@@ -9,7 +9,7 @@ import simd
 
 // TODO THIS IS NOT DONNNNEEEE
 
-public class Bump: Node {
+public class Bump: CachedNode {
 	public static var name: String {
 		return "bump"
 	}
@@ -21,28 +21,14 @@ public class Bump: Node {
 		self.children = children
 	}
 
-	/*
-	private let delta = ComponentType(0.005)
-	private let heightFactor = ComponentType(200.0)
-	private let lightZ = ComponentType(0.5)
-	 */
-
-	public func evaluate(using evaluator: Evaluator) -> any ExpressionResult {
-		if let cachedResult = evaluator.result(for: self) {
-			return cachedResult
-		}
-
+	public func _evaluate(using evaluator: Evaluator) -> any ExpressionResult {
 		assert(children.count == 8)
 		let evaluators = children.map { $0.evaluate(using: evaluator) }
-		let result = LightMapResult(source: evaluators[0],
-									dirX: evaluators[1],
-									dirY: evaluators[2],
-									delta: evaluators[3],
-									heightFactor: evaluators[4],
-									lightZ: evaluators[5])
-
-		evaluator.setResult(result, for: self)
-
-		return result
+		return LightMapResult(source: evaluators[0],
+							  dirX: evaluators[1],
+							  dirY: evaluators[2],
+							  delta: evaluators[3],
+							  heightFactor: evaluators[4],
+							  lightZ: evaluators[5])
 	}
 }
