@@ -5,6 +5,8 @@
 //  Created by Andy Molloy on 6/12/25.
 //
 
+import simd
+
 public class Invert: Node {
 	public static var name: String {
 		return "invert"
@@ -39,6 +41,6 @@ class InvertResult: ExpressionResult {
 	}
 
 	func value(at coord: Coordinate) -> Value {
-		return -e.value(at: coord)
+		return Value.one / (0.0001 + abs(e.value(at: coord)))
 	}
 }

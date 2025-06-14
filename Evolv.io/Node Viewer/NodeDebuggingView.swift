@@ -26,27 +26,25 @@ struct NodeDebuggingView: View {
 					.aspectRatio(1, contentMode: .fit)
 					.clipShape(RoundedRectangle(cornerRadius: 12))
 					.shadow(radius: 5)
+				VStack {
+					RangeSliderView(label: "Red",
+									value: redBinding(),
+									in: nodeRenderer.minValue.x...nodeRenderer.maxValue.x)
+
+					RangeSliderView(label: "Green",
+									value: greenBinding(),
+									in: nodeRenderer.minValue.y...nodeRenderer.maxValue.y)
+
+					RangeSliderView(label: "Blue",
+									value: blueBinding(),
+									in: nodeRenderer.minValue.z...nodeRenderer.maxValue.z)
+				}
+				.padding()
+				.background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16))
 			} else {
 				ProgressView("Rendering...")
 					.frame(maxWidth: .infinity, maxHeight: .infinity)
 			}
-
-			VStack {
-				RangeSliderView(label: "Red",
-								value: redBinding(),
-								in: -2...2)
-
-				RangeSliderView(label: "Green",
-								value: greenBinding(),
-								in: -2...2)
-
-				RangeSliderView(label: "Blue",
-								value: blueBinding(),
-								in: -2...2)
-			}
-			.padding()
-			.background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16))
-
 		}
 		.padding()
 		.task {

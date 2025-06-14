@@ -89,6 +89,7 @@ struct DetailImageView: View {
 			Text(node.toString())
 				.font(.caption.monospaced())
 				.padding(.horizontal)
+				.textSelection(.enabled)
 
 			NodeDebuggingView(
 				evaluator: Evaluator(size: CGSize(width: 512, height: 512)),

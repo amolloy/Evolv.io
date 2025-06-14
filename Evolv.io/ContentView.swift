@@ -41,10 +41,20 @@ struct ContentView: View {
 	]
 
 	static let test = [
-		"(color-grad (round (+ y (log (invert y) 15.5)) x) 3.1 1.86 #(0.95 0.7 0.59) 1.35)",
+"""
+(color-grad x 3.1 1.93 #(0.95 0.7 0.35) 3.03))
+"""
 	]
 
-	let expressions = ContentView.figure9
+	static let test2 = [
+"""
+(color-grad (round(+ (abs (round (log #(0.01 0.67 0.86) 0.19)
+  x)) (hsv-to-rgb (bump (if x 10.7 y) #(0.94 0.01 0.4) 0.78 #(0.18 0.28 0.58) #(0.4 0.92
+  0.58) 10.6 0.23 0.91))) X) 3.1 1.93 #(0.95 0.7 0.35) 3.03)
+""",
+	]
+
+	let expressions = ContentView.figure10
 	let treeEvaluator = Evaluator(size: CGSize(width: 44, height: 44))
 
 	var body: some View {

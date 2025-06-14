@@ -44,26 +44,21 @@ class LogResult: ExpressionResult {
 	}
 
 	func value(at coord: Coordinate) -> Value {
-		let inputBase = e0.value(at: coord)
-		let inputValue = e1.value(at: coord)
+		let inputValue = e0.value(at: coord)
+		let inputBase = e1.value(at: coord)
 
 		var resultVector = Value.zero
 
 		for i in 0..<3 {
-			let safeValue = max(epsilon, inputValue[i])
+			let numerator = log(abs(inputValue[i]))
+			let denominator = log(abs(inputBase[i]))
 
-			var safeBase = max(epsilon, inputBase[i])
-			if abs(safeBase - 1.0) < epsilon {
-				safeBase = 1.0 + epsilon // Nudge it away from 1.0
-			}
+			resultVector[i] = numerator / denominator
 
-			let numerator = log(safeValue)
-			let denominator = log(safeBase)
-
-			if abs(denominator) < epsilon {
-				resultVector[i] = 0.0
-			} else {
-				resultVector[i] = numerator / denominator
+			if resultVector[i].isNaN {
+				resultVector[i] = 0
+			} else if resultVector[i].isInfinite {
+				resultVector[i] = 100000
 			}
 		}
 
