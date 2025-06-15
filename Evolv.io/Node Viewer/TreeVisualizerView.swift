@@ -38,8 +38,8 @@ struct TreeVisualizerView: View {
 			Button(action: {
 				selectedNodeForDetail = displayNode
 			}) {
-				NodeRowView(evaluator: evaluator,
-							node: displayNode.node)
+				NodeRowView(nodeRenderer: NodeRenderer(node: displayNode.node,
+													   evaluator: evaluator))
 			}
 			.buttonStyle(.plain)
 		}
@@ -51,26 +51,24 @@ struct TreeVisualizerView: View {
 }
 
 struct NodeRowView: View {
-	let evaluator: Evaluator
-	let node: any Node
+	let nodeRenderer: NodeRenderer
 
 	var body: some View {
 		HStack {
-			Text(type(of: node).name)
+			Text(type(of: nodeRenderer.node).name)
 				.font(.caption.bold())
 				.padding(.horizontal, 8)
 				.padding(.vertical, 4)
 				.background(Color.blue.opacity(0.2), in: Capsule())
 
-			Text(node.toString())
+			Text(nodeRenderer.node.toString())
 				.font(.caption.monospaced())
 				.lineLimit(1)
 				.truncationMode(.middle)
 
 			Spacer()
 
-			RenderedImageView(evaluator: Evaluator(size: CGSize(width: 44, height: 44)),
-							  rootNode: node)
+			RenderedImageView(nodeRenderer: nodeRenderer)
 		}
 		.padding(.vertical, 2)
 	}

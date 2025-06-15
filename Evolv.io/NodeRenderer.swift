@@ -9,6 +9,7 @@ import ExpressionTree
 import CoreGraphics
 import Foundation
 import simd
+import SwiftUI
 
 @MainActor
 class NodeRenderer: ObservableObject {
@@ -92,5 +93,32 @@ class NodeRenderer: ObservableObject {
 			shouldInterpolate: true,
 			intent: .defaultIntent
 		)
+	}
+
+	func copyImageToPasteboard() {
+#if canImport(AppKit)
+		guard let pngData = self.cgImage()?.pngData() else {
+			print("Failed to convert CGImage to PNG data.")
+			return
+		}
+
+		let pasteboard = NSPasteboard.general
+		pasteboard.clearContents()
+		if pasteboard.setData(pngData, forType: .png) {
+			print("Image copied to pasteboard.")
+		} else {
+			print("Failed to write image to pasteboard.")
+		}
+#endif
+	}
+}
+
+fileprivate extension CGImage {
+	func pngData() -> Data? {
+		guard let mutableData = CFDataCreateMutable(nil, 0) else { return nil }
+		guard let destination = CGImageDestinationCreateWithData(mutableData, "public.png" as CFString, 1, nil) else { return nil }
+		CGImageDestinationAddImage(destination, self, nil)
+		guard CGImageDestinationFinalize(destination) else { return nil }
+		return mutableData as Data
 	}
 }

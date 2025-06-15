@@ -9,23 +9,21 @@ import SwiftUI
 import ExpressionTree
 
 struct RenderedImageView: View {
-	let evaluator: Evaluator
-	let rootNode: any Node
+	let nodeRenderer: NodeRenderer
 	@State private var image: CGImage?
 
 	var body: some View {
 		Group {
 			if let image = image {
 				Image(decorative: image, scale: 1.0, orientation: .up)
-					.frame(width: evaluator.size.width, height: evaluator.size.height)
+					.frame(width: nodeRenderer.evaluator.size.width,
+						   height: nodeRenderer.evaluator.size.height)
 			} else {
 				ProgressView("Rendering...")
 			}
 		}
 		.task {
 			image = nil
-			let nodeRenderer = NodeRenderer(node: rootNode,
-											evaluator: evaluator)
 			await nodeRenderer.render()
 			image = nodeRenderer.cgImage()
 		}

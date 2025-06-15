@@ -44,7 +44,9 @@ struct NodeDebuggingView: View {
 							}
 						}
 						.contextMenu {
-							Button("Copy Image") { copyImageToPasteboard(image) }
+							Button("Copy Image") {
+								nodeRenderer.copyImageToPasteboard()
+							}
 						}
 						.clipShape(RoundedRectangle(cornerRadius: 12))
 						.shadow(radius: 5)
@@ -92,23 +94,6 @@ struct NodeDebuggingView: View {
 
 	private func updateImage() {
 		image = nodeRenderer.cgImage()
-	}
-
-	private func copyImageToPasteboard(_ image: CGImage) {
-#if canImport(AppKit)
-		guard let pngData = image.pngData() else {
-			print("Failed to convert CGImage to PNG data.")
-			return
-		}
-
-		let pasteboard = NSPasteboard.general
-		pasteboard.clearContents()
-		if pasteboard.setData(pngData, forType: .png) {
-			print("Image copied to pasteboard.")
-		} else {
-			print("Failed to write image to pasteboard.")
-		}
-#endif
 	}
 
 	private func redBinding() -> Binding<ClosedRange<ComponentType>> {
@@ -195,14 +180,5 @@ struct ArrowShape: Shape {
 		path.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY))
 		path.closeSubpath()
 		return path
-	}
-}
-fileprivate extension CGImage {
-	func pngData() -> Data? {
-		guard let mutableData = CFDataCreateMutable(nil, 0) else { return nil }
-		guard let destination = CGImageDestinationCreateWithData(mutableData, "public.png" as CFString, 1, nil) else { return nil }
-		CGImageDestinationAddImage(destination, self, nil)
-		guard CGImageDestinationFinalize(destination) else { return nil }
-		return mutableData as Data
 	}
 }
