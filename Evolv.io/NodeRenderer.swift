@@ -14,6 +14,7 @@ import simd
 class NodeRenderer: ObservableObject {
 	let node: any Node
 	let evaluator: Evaluator
+	let scale: ComponentType
 	var data: Array<Value>
 	var maxValue: Value = Value(-.infinity, -.infinity, -.infinity)
 	var minValue: Value = Value(.infinity, .infinity, .infinity)
@@ -22,9 +23,11 @@ class NodeRenderer: ObservableObject {
 	@Published var displayMin: Value = Value.zero
 
 	init(node: any Node,
-		 evaluator: Evaluator) {
+		 evaluator: Evaluator,
+		 scale: ComponentType = 1) {
 		self.node = node
 		self.evaluator = evaluator
+		self.scale = scale
 		self.data = Array(repeating: Value(0, 0, 0), count: Int(evaluator.size.width * evaluator.size.height))
 	}
 
@@ -33,10 +36,13 @@ class NodeRenderer: ObservableObject {
 		let height = Int(evaluator.size.height)
 		let result = evaluator.evaluate(node: node)
 
+		let scaleFactor = 2.0 * scale
+		let scaleOffset = scaleFactor / 2.0
+
 		for y in 0..<height {
-			let yc = ComponentType(height - y) / ComponentType(height) * 2.0 - 1.0
+			let yc = ComponentType(height - y) / ComponentType(height) * scaleFactor - scaleOffset
 			for x in 0..<width {
-				let xc = ComponentType(x) / ComponentType(width) * 2.0 - 1.0
+				let xc = ComponentType(x) / ComponentType(width) * scaleFactor - scaleOffset
 
 				let pixel = result.value(at: Coordinate(x: xc,
 														y: yc))

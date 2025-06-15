@@ -10,7 +10,7 @@ import ExpressionTree
 
 struct RenderedImageView: View {
 	let evaluator: Evaluator
-	let expressionTree: any Node
+	let rootNode: any Node
 	@State private var image: CGImage?
 
 	var body: some View {
@@ -23,7 +23,8 @@ struct RenderedImageView: View {
 			}
 		}
 		.task {
-			let nodeRenderer = NodeRenderer(node: expressionTree,
+			image = nil
+			let nodeRenderer = NodeRenderer(node: rootNode,
 											evaluator: evaluator)
 			await nodeRenderer.render()
 			image = nodeRenderer.cgImage()

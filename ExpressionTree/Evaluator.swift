@@ -17,6 +17,9 @@ public final class Evaluator {
     private let context: EvaluationContext
 
 	public var size: CGSize { get { context.size } }
+	public func pixelToDotSize(_ s: Int) -> ComponentType {
+		return ComponentType(s) / context.size.width
+	}
 
 	public init(size: CGSize) {
 		self.context = EvaluationContext(size: size)

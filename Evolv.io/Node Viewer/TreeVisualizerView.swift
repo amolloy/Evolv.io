@@ -1,5 +1,5 @@
 //
-//  NodeTreeView.swift
+//  TreeVisualizerView.swift
 //  Evolv.io
 //
 //  Created by Andy Molloy on 6/12/25.
@@ -70,7 +70,7 @@ struct NodeRowView: View {
 			Spacer()
 
 			RenderedImageView(evaluator: Evaluator(size: CGSize(width: 44, height: 44)),
-							  expressionTree: node)
+							  rootNode: node)
 		}
 		.padding(.vertical, 2)
 	}
