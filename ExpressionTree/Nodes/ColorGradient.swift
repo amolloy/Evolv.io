@@ -25,14 +25,21 @@ public final class ColorGradient: CachedNode {
 	}
 
 	public func _evaluate(using evaluator: Evaluator) -> any ExpressionResult {
-		let evaluators = children.map { $0.evaluate(using: evaluator) }
+		let arguments = [
+			children[0],
+			children[1],
+			children[2],
+			children[3],
+			Mult([Constant(100), children[4]]),
+		]
+		let evaluators = arguments.map { $0.evaluate(using: evaluator) }
 
 		return LightMapResult(source: evaluators[0],
 							  dirX: evaluators[1],
 							  dirY: evaluators[2],
-							  delta: ConstantResult(0.005),
-							  heightFactor: evaluators[4],
-							  lightZ: ConstantResult(0.005),
-							  color: ConstantResult(1))
+							  delta: ConstantResult(evaluator.pixelToDotSize(1)),
+							  heightFactor: evaluators[4], // ConstantResult(200.0),
+							  lightZ: ConstantResult(5),
+							  color2: evaluators[3])
 	}
 }

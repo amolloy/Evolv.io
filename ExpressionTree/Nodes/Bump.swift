@@ -7,8 +7,6 @@
 
 import simd
 
-// TODO THIS IS NOT DONNNNEEEE
-
 public class Bump: CachedNode {
 	public static var name: String {
 		return "bump"
@@ -27,8 +25,10 @@ public class Bump: CachedNode {
 		return LightMapResult(source: evaluators[0],
 							  dirX: evaluators[1],
 							  dirY: evaluators[2],
-							  delta: evaluators[3],
-							  heightFactor: evaluators[4],
-							  lightZ: evaluators[5])
+							  delta: evaluators[7],
+							  heightFactor: evaluators[6],
+							  lightZ: evaluators[5],
+							  color1: evaluators[3],
+							  color2: evaluators[4])
 	}
 }
