@@ -13,7 +13,7 @@ struct NodeDebuggingView: View {
 	@State private var image: CGImage?
 
 	@State private var hoverLocation: CGPoint?
-	@State private var debugInfo: [String: Double] = [:]
+	@State private var debugInfo: [String: String] = [:]
 
 	init(evaluator: Evaluator, expressionTree: any Node) {
 		self._nodeRenderer = StateObject(wrappedValue: NodeRenderer(node: expressionTree,
@@ -140,7 +140,7 @@ struct NodeDebuggingView: View {
 }
 
 struct DebugPopoverView: View {
-	let debugInfo: [String: Double]
+	let debugInfo: [String: String]
 	let hoverLocation: CGPoint
 	let containerSize: CGSize
 
@@ -152,7 +152,7 @@ struct DebugPopoverView: View {
 		ZStack(alignment: isPlacedBelow ? .top : .bottom) {
 			VStack(alignment: .leading) {
 				ForEach(debugInfo.sorted(by: { $0.key < $1.key }), id: \.key) { key, value in
-					Text("\(key): \(String(format: "%.4f", value))")
+					Text("\(key): \(value)")
 						.font(.caption.monospacedDigit())
 				}
 			}

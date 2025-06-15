@@ -29,6 +29,12 @@ public func simd_normalize(safe vector: Value) -> Value? {
 
 internal let epsilon: ComponentType = 1e-9
 
+extension SIMD2 where Scalar == ComponentType {
+	func toDebugString() -> String {
+		return "(\(String(format: "%.4f", x)), \(String(format: "%.4f", y)))"
+	}
+}
+
 extension SIMD3 where Scalar == ComponentType {
 	/// Returns a new vector by replacing any non-finite values (NaN, infinity).
 	/// - NaN values are replaced with 0.0.
@@ -57,5 +63,9 @@ extension SIMD3 where Scalar == ComponentType {
 		}
 
 		return SIMD3<Double>(newX, newY, newZ)
+	}
+
+	func toDebugString() -> String {
+		return "(\(String(format: "%.4f", x)), \(String(format: "%.4f", y)), \(String(format: "%.4f", z))"
 	}
 }

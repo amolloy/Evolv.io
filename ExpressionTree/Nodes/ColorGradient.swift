@@ -33,6 +33,6 @@ public final class ColorGradient: CachedNode {
 							  delta: ConstantResult(0.005),
 							  heightFactor: evaluators[4],
 							  lightZ: ConstantResult(0.005),
-							  color: evaluators[3])
+							  color: ConstantResult(1))
 	}
 }

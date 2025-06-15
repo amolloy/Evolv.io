@@ -24,23 +24,24 @@ public class Log: CachedNode {
 		return LogResult(children.map { $0.evaluate(using: evaluator) })
 	}
 
-	public func debugValues(using evaluator: Evaluator, at coord: Coordinate) -> [String: Double] {
+	public func debugValues(using evaluator: Evaluator, at coord: Coordinate) -> [String: String] {
 		let vals = children.map { $0.evaluate(using: evaluator) }
 		let inputValue = vals[0].value(at: coord)
 		let inputBase = vals[1].value(at: coord)
 
-		var debugVals = [String: Double]()
+		var debugVals = [String: String]()
 
-		for i in 0..<3 {
-			let numerator = log(abs(inputValue[i]))
-			let denominator = log(abs(inputBase[i]))
+		let numerator = log(abs(inputValue))
+		let denominator = log(abs(inputBase))
 
-			let result = numerator / denominator
+		let result = numerator / denominator
 
-			debugVals["numerator[\(i)]"] = numerator
-			debugVals["denominator[\(i)]"] = denominator
-			debugVals["result[\(i)]"] = result
-		}
+		debugVals["coords"] = "\(coord.toDebugString())"
+		debugVals["inputValue"] = "\(inputValue.toDebugString())"
+		debugVals["inputBase"] = "\(inputBase.toDebugString())"
+		debugVals["numerator"] = "\(numerator.toDebugString())"
+		debugVals["denominator"] = "\(denominator.toDebugString())"
+		debugVals["result"] = "\(result.toDebugString())"
 
 		return debugVals
 	}

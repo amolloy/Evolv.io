@@ -15,7 +15,7 @@ public protocol Node: Identifiable where ID == ObjectIdentifier {
 	func toString() -> String
 
 	func debugValues(using evaluator: Evaluator,
-					 at coord: Coordinate) -> [String: Double]
+					 at coord: Coordinate) -> [String: String]
 }
 
 public extension Node {
@@ -40,7 +40,7 @@ public extension Node {
 
 public extension Node {
 	func debugValues(using evaluator: Evaluator,
-					 at coord: Coordinate) -> [String: Double] {
+					 at coord: Coordinate) -> [String: String] {
 		return [:]  // default: nothing to show
 	}
 }
