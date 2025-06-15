@@ -23,6 +23,27 @@ public class Log: CachedNode {
 		assert(children.count == 2)
 		return LogResult(children.map { $0.evaluate(using: evaluator) })
 	}
+
+	public func debugValues(using evaluator: Evaluator, at coord: Coordinate) -> [String: Double] {
+		let vals = children.map { $0.evaluate(using: evaluator) }
+		let inputValue = vals[0].value(at: coord)
+		let inputBase = vals[1].value(at: coord)
+
+		var debugVals = [String: Double]()
+
+		for i in 0..<3 {
+			let numerator = log(abs(inputValue[i]))
+			let denominator = log(abs(inputBase[i]))
+
+			let result = numerator / denominator
+
+			debugVals["numerator[\(i)]"] = numerator
+			debugVals["denominator[\(i)]"] = denominator
+			debugVals["result[\(i)]"] = result
+		}
+
+		return debugVals
+	}
 }
 
 class LogResult: ExpressionResult {
@@ -50,7 +71,7 @@ class LogResult: ExpressionResult {
 			if resultVector[i].isNaN {
 				resultVector[i] = 0
 			} else if resultVector[i].isInfinite {
-				resultVector[i] = 100000
+				resultVector[i] = 1000
 			}
 		}
 

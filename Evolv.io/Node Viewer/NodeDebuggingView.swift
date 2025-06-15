@@ -12,6 +12,9 @@ struct NodeDebuggingView: View {
 	@StateObject private var nodeRenderer: NodeRenderer
 	@State private var image: CGImage?
 
+	@State private var hoverLocation: CGPoint?
+	@State private var debugInfo: [String: Double] = [:]
+
 	init(evaluator: Evaluator, expressionTree: any Node) {
 		self._nodeRenderer = StateObject(wrappedValue: NodeRenderer(node: expressionTree,
 																	evaluator: evaluator))
@@ -20,20 +23,35 @@ struct NodeDebuggingView: View {
 	var body: some View {
 		VStack(spacing: 20) {
 			if let image = image {
-				Image(decorative: image, scale: 1.0, orientation: .up)
-					.resizable()
-					.interpolation(.none)
-					.aspectRatio(1, contentMode: .fit)
-					.clipShape(RoundedRectangle(cornerRadius: 12))
-					.shadow(radius: 5)
-					.contextMenu {
-						// --- Step 2: Add a "Copy" Button ---
-						Button {
-							copyImageToPasteboard(image)
-						} label: {
-							Label("Copy Image", systemImage: "doc.on.doc")
+				GeometryReader { imageGeometry in
+					Image(decorative: image, scale: 1.0, orientation: .up)
+						.interpolation(.none)
+						.contentShape(Rectangle())
+						.gesture(
+							DragGesture(minimumDistance: 0)
+								.onChanged { value in
+									updateDebugInfo(for: value.location, in: imageGeometry.size)
+								}
+						)
+						.overlay {
+							if let hoverLocation = hoverLocation, !debugInfo.isEmpty {
+								DebugPopoverView(
+									debugInfo: debugInfo,
+									hoverLocation: hoverLocation,
+									containerSize: imageGeometry.size
+								)
+								.gesture(DragGesture().onEnded { _ in self.hoverLocation = nil })
+							}
 						}
-					}
+						.contextMenu {
+							Button("Copy Image") { copyImageToPasteboard(image) }
+						}
+						.clipShape(RoundedRectangle(cornerRadius: 12))
+						.shadow(radius: 5)
+				}
+				.aspectRatio(1, contentMode: .fit) // Constrain the GeometryReader to the image's aspect ratio
+
+				// The range sliders Vstack
 				VStack {
 					RangeSliderView(label: "Red",
 									value: redBinding(),
@@ -49,6 +67,7 @@ struct NodeDebuggingView: View {
 				}
 				.padding()
 				.background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16))
+
 			} else {
 				ProgressView("Rendering...")
 					.frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -63,6 +82,14 @@ struct NodeDebuggingView: View {
 		.onChange(of: nodeRenderer.displayMax) { _, _ in updateImage() }
 	}
 
+	private func updateDebugInfo(for location: CGPoint, in size: CGSize) {
+		self.hoverLocation = location
+		let imageX = (location.x / size.width) * 2 - 1
+		let imageY = (location.y / size.height) * 2 - 1
+		let coord = Coordinate(x: imageX, y: imageY)
+		self.debugInfo = nodeRenderer.node.debugValues(using: nodeRenderer.evaluator, at: coord)
+	}
+
 	private func updateImage() {
 		image = nodeRenderer.cgImage()
 	}
@@ -74,13 +101,8 @@ struct NodeDebuggingView: View {
 			return
 		}
 
-		// 1. Get the general system pasteboard.
 		let pasteboard = NSPasteboard.general
-
-		// 2. Clear its previous contents.
 		pasteboard.clearContents()
-
-		// 3. Write the new PNG data to the pasteboard.
 		if pasteboard.setData(pngData, forType: .png) {
 			print("Image copied to pasteboard.")
 		} else {
@@ -88,7 +110,7 @@ struct NodeDebuggingView: View {
 		}
 #endif
 	}
-	
+
 	private func redBinding() -> Binding<ClosedRange<ComponentType>> {
 		Binding {
 			nodeRenderer.displayMin.x...nodeRenderer.displayMax.x
@@ -117,6 +139,64 @@ struct NodeDebuggingView: View {
 	}
 }
 
+struct DebugPopoverView: View {
+	let debugInfo: [String: Double]
+	let hoverLocation: CGPoint
+	let containerSize: CGSize
+
+	@State private var popoverSize: CGSize = .zero
+
+	var body: some View {
+		let isPlacedBelow = hoverLocation.y < (containerSize.height * 0.66)
+
+		ZStack(alignment: isPlacedBelow ? .top : .bottom) {
+			VStack(alignment: .leading) {
+				ForEach(debugInfo.sorted(by: { $0.key < $1.key }), id: \.key) { key, value in
+					Text("\(key): \(String(format: "%.4f", value))")
+						.font(.caption.monospacedDigit())
+				}
+			}
+			.padding(8)
+			.background(
+				GeometryReader { geo in
+					Color.clear
+						.onAppear {
+							popoverSize = geo.size
+						}
+				}
+			)
+			.background(Color(.systemGray))
+			.clipShape(RoundedRectangle(cornerRadius: 8))
+			.overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(.gray.opacity(0.2)))
+			.shadow(radius: 5)
+
+			ArrowShape()
+				.fill(Color(.systemGray))
+				.frame(width: 20, height: 10)
+				.rotationEffect(.degrees(isPlacedBelow ? 0 : 180))
+				.offset(y: isPlacedBelow ? -5 : 5)
+		}
+		.fixedSize()
+		.position(
+			x: hoverLocation.x,
+			y: isPlacedBelow
+			? hoverLocation.y + (popoverSize.height / 2 + 10)
+			: hoverLocation.y - (popoverSize.height / 2 + 10)
+		)
+		.transition(.opacity.animation(.easeInOut(duration: 0.1)))
+	}
+}
+
+struct ArrowShape: Shape {
+	func path(in rect: CGRect) -> Path {
+		var path = Path()
+		path.move(to: CGPoint(x: rect.midX, y: rect.minY))
+		path.addLine(to: CGPoint(x: rect.minX, y: rect.maxY))
+		path.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY))
+		path.closeSubpath()
+		return path
+	}
+}
 fileprivate extension CGImage {
 	func pngData() -> Data? {
 		guard let mutableData = CFDataCreateMutable(nil, 0) else { return nil }
