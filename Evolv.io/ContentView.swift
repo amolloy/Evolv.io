@@ -24,6 +24,8 @@ struct ContentView: View {
    (bump (if x 10.7 y) #(0.94 0.01 0.4) 0.78 #(0.18 0.28 0.58) #(0.4 0.92
    0.58) 10.6 0.23 0.91)
    """,
+		"Test 3": "(log (invert y) 15.5)",
+		"Test 4": "(warped-color-noise (warped-bw-noise (dissolve x 2.53 y) 0 0.09 12.0) (invert 0) 0.05 -2.06)",
 		"x": "x",
 		"y": "y",
 		"(abs x)": "(abs x)",

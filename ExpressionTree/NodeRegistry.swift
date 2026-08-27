@@ -17,6 +17,7 @@ public final class NodeRegistry {
 			Add.self,
 			And.self,
 			Bump.self,
+			Dissolve.self,
 			Div.self,
 			BWNoise.self,
 			ColorGradient.self,
@@ -34,6 +35,7 @@ public final class NodeRegistry {
 			Round.self,
 			VariableX.self,
 			VariableY.self,
+			WarpedBWNoise.self,
 			WarpedColorNoise.self,
 		]
 

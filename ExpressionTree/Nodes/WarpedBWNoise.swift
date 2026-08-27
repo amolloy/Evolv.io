@@ -1,23 +1,15 @@
 //
-//  WarpedColorNoise 2.swift
+//  WarpedBWNoise.swift
 //  Evolv.io
 //
-//  Created by Andy Molloy (temp) on 8/27/26.
-//
-
-
-//
-//  WarpedColorNoise.swift
-//  Evolv.io
-//
-//  Created by Andy Molloy on 6/9/25.
+//  Created by Andy Molloy on 8/27/26.
 //
 
 import simd
 
-public class WarpedColorNoise: CachedNode {
+public class WarpedBWNoise: CachedNode {
 	public static var name: String {
-		return "warped-color-noise"
+		return "warped-bw-noise"
 	}
 
 	public var children: [any Node]
@@ -29,11 +21,11 @@ public class WarpedColorNoise: CachedNode {
 
 	public func _evaluate(using evaluator: Evaluator) -> any ExpressionResult {
 		assert(children.count == 4)
-		return WarperColorNoiseResult(children.map { $0.evaluate(using: evaluator) })
+		return WarperBWNoiseResult(children.map { $0.evaluate(using: evaluator) })
 	}
 }
 
-class WarperColorNoiseResult: ExpressionResult {
+class WarperBWNoiseResult: ExpressionResult {
 	let e0: ExpressionResult
 	let e1: ExpressionResult
 	let e2: ExpressionResult
@@ -58,7 +50,7 @@ class WarperColorNoiseResult: ExpressionResult {
 		for i in 0..<3 {
 			let sampleCoord = Coordinate(u[i], v[i])
 			let scaled = sampleCoord * Coordinate(repeating: v0[i])
-			result[i] = Perlin.noise(at: scaled, offset: Int(v1[i]) + i)
+			result[i] = Perlin.noise(at: scaled, offset: Int(v1[i]))
 		}
 
 		return result
