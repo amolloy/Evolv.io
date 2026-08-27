@@ -33,6 +33,6 @@ class InvertResult: ExpressionResult {
 	}
 
 	func value(at coord: Coordinate) -> Value {
-		return Value.one / (0.0001 + abs(e.value(at: coord)))
+		return Value.one - e.value(at: coord)
 	}
 }
