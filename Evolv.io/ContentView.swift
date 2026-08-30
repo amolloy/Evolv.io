@@ -12,20 +12,6 @@ struct ContentView: View {
 	static let parser = Parser()
 
 	static let sampleExpressions = [
-		"(color-grad x 3.1 1.93 #(0.95 0.7 0.35) 3.03))": "(color-grad x 3.1 1.93 #(0.95 0.7 0.35) 3.03))",
-		"Test 1":
-   """
-   (color-grad (round(+ (abs (round (log #(0.01 0.67 0.86) 0.19)
-   x)) (hsv-to-rgb (bump (if x 10.7 y) #(0.94 0.01 0.4) 0.78 #(0.18 0.28 0.58) #(0.4 0.92
-   0.58) 10.6 0.23 0.91))) X) 3.1 1.93 #(0.95 0.7 0.35) 3.03)
-   """,
-		"Test 2":
-   """
-   (bump (if x 10.7 y) #(0.94 0.01 0.4) 0.78 #(0.18 0.28 0.58) #(0.4 0.92
-   0.58) 10.6 0.23 0.91)
-   """,
-		"Test 3": "(log (invert y) 15.5)",
-		"Test 4": "(warped-color-noise (warped-bw-noise (dissolve x 2.53 y) 0 0.09 12.0) (invert 0) 0.05 -2.06)",
 		"x": "x",
 		"y": "y",
 		"(abs x)": "(abs x)",
@@ -35,22 +21,30 @@ struct ContentView: View {
 		"(color-noise .1 2)": "(color-noise .1 2)",
 		"(grad-direction (bw-noise .15 2) .0 .0)": "(grad-direction (bw-noise .15 2) .0 .0)",
 		"(warped-color-noise (* X .2) Y .1 2)": "(warped-color-noise (* X .2) Y .1 2)",
+		"Figure 6":
+		   """
+		   (dissolve (cos (and 0.25 #(0.43 0.73 0.74))) 
+		   (log (+ (warped-bw-noise (min z 11.1) (log (rotate-vector (+ 
+		   (warped-bw-noise (cos x) (dissolve (cos (and 0.25 
+		   #(0.43 0.73 0.74))) (log (+ (warped-bw-noise (max (min z 8.26) 
+		   (/ -0.5 #(0.82 0.39 0.19))) (log (+ (warped-bw-noise 
+		   (cos x) z -0.04 0.89) #(0.82 0.39 0.19)) 
+		   #(0.15 0.34 0.50)) -0.04 -3.0) y) #(0.15 0.34 0.50)) y) -0.04 -3.0)
+		   x) z y) #(0.15 0.34 0.5)) -0.02 -1.79) -0.4) #(-0.09 0.34 0.55))
+		   -0.7) 
+		   """,
 		"Figure 9":
 		   """
-		   (round (log (+ y (color-grad (round (+ (abs (round 
-		   (log (+ y (color-grad (round (+ y (log (invert y) 15.5)) 
+		   (round (log (+ y (color-grad (round (+ (abs (round
+		   (log (+ y (color-grad (round (+ y (log (invert y) 15.5))
 		   x) 3.1 1.86 #(0.95 0.7 0.59) 1.35)) 0.19) x)) (log (invert
 		   y) 15.5)) x) 3.1 1.9 #(0.95 0.7 0.35) 1.35)) 0.19) x)
 		   """,
-		"Figure 9 (sub)":
-			"""
-			(+ y (color-grad (round (+ (abs (round (log (+ y (color-grad (round (+ y (log (invert y) 15.5)) x) 3.1 1.86 #(0.95 0.7 0.59) 1.35)) 0.19) x)) (log (invert y) 15.5)) x) 3.1 1.9 #(0.95 0.7 0.35) 1.35))
-			""",
 		"Figure 10":
 		   """
-		   (rotate-vector (log(+ y (color-grad (round(+ (abs (round (log #(0.01 0.67 0.86) 0.19)
+		   (rotate-vector (log(+ y (* 3 (color-grad (round(+ (abs (round (log #(0.01 0.67 0.86) 0.19)
 		   x)) (hsv-to-rgb (bump (if x 10.7 y) #(0.94 0.01 0.4) 0.78 #(0.18 0.28 0.58) #(0.4 0.92
-		   0.58) 10.6 0.23 0.91))) X) 3.1 1.93 #(0.95 0.7 0.35) 3.03)) -0.03) X #(0.76 0.08 0.24))
+		   0.58) 10.6 0.23 0.91))) X) 3.1 1.93 #(0.95 0.7 0.35) 3.03))) -0.03) X #(0.76 0.08 0.24))
 		   """,
 	]
 
