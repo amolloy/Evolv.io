@@ -29,17 +29,22 @@ public final class ColorGradient: CachedNode {
 
 		// source/p1/p2 line up 1:1 with grad-direction's source/dirX/dirY, and
 		// grad-direction is a verified match for Sims' own algorithm (he
-		// publishes its output directly as figure 4h), so its fixed delta,
-		// heightFactor, and lightZ are reused here as-is rather than guessed
-		// at again. `color` fills the colorization grad-direction has no
-		// room for. That leaves p3 as the one truly new argument -- applied
-		// here as a contrast/gamma exponent on the final lit color, since
-		// grad-direction's 3-argument signature has no structural room left
-		// for it to mean anything else.
+		// publishes its output directly as figure 4h), so its heightFactor
+		// and lightZ are reused here as-is rather than guessed at again.
+		// delta is wider than grad-direction's 0.005: color-grad is always
+		// fed round's output, a true step function, so the width of the
+		// resulting dark band is roughly 2*delta in coordinate space --
+		// 0.005 produced 1-2px bands, but Sims' reference figures show bands
+		// tens of pixels wide with a colored fringe at the edges, matched by
+		// 0.02 at our render resolution. `color` fills the colorization
+		// grad-direction has no room for. That leaves p3 as the one truly
+		// new argument -- applied here as a contrast/gamma exponent on the
+		// final lit color, since grad-direction's 3-argument signature has
+		// no structural room left for it to mean anything else.
 		let lightMap = LightMapResult(source: evaluators[0],
 									  dirX: evaluators[1],
 									  dirY: evaluators[2],
-									  delta: ConstantResult(0.005),
+									  delta: ConstantResult(0.02),
 									  heightFactor: ConstantResult(200.0),
 									  lightZ: ConstantResult(0.5),
 									  color2: evaluators[3])
