@@ -25,21 +25,46 @@ public final class ColorGradient: CachedNode {
 	}
 
 	public func _evaluate(using evaluator: Evaluator) -> any ExpressionResult {
-		let arguments = [
-			children[0],
-			children[1],
-			children[2],
-			children[3],
-			Mult([Constant(100), children[4]]),
-		]
-		let evaluators = arguments.map { $0.evaluate(using: evaluator) }
+		let evaluators = children.map { $0.evaluate(using: evaluator) }
 
-		return LightMapResult(source: evaluators[0],
-							  dirX: evaluators[1],
-							  dirY: evaluators[2],
-							  delta: ConstantResult(evaluator.pixelToDotSize(1)),
-							  heightFactor: evaluators[4], // ConstantResult(200.0),
-							  lightZ: ConstantResult(5),
-							  color2: evaluators[3])
+		// source/p1/p2 line up 1:1 with grad-direction's source/dirX/dirY, and
+		// grad-direction is a verified match for Sims' own algorithm (he
+		// publishes its output directly as figure 4h), so its fixed delta,
+		// heightFactor, and lightZ are reused here as-is rather than guessed
+		// at again. `color` fills the colorization grad-direction has no
+		// room for. That leaves p3 as the one truly new argument -- applied
+		// here as a contrast/gamma exponent on the final lit color, since
+		// grad-direction's 3-argument signature has no structural room left
+		// for it to mean anything else.
+		let lightMap = LightMapResult(source: evaluators[0],
+									  dirX: evaluators[1],
+									  dirY: evaluators[2],
+									  delta: ConstantResult(0.005),
+									  heightFactor: ConstantResult(200.0),
+									  lightZ: ConstantResult(0.5),
+									  color2: evaluators[3])
+
+		return ColorGradResult(lightMap: lightMap, exponent: evaluators[4])
+	}
+}
+
+class ColorGradResult: ExpressionResult {
+	let lightMap: ExpressionResult
+	let exponent: ExpressionResult
+
+	init(lightMap: ExpressionResult, exponent: ExpressionResult) {
+		self.lightMap = lightMap
+		self.exponent = exponent
+	}
+
+	func value(at coord: Coordinate) -> Value {
+		let base = lightMap.value(at: coord)
+		let p3Val = exponent.value(at: coord).averageLuminance()
+
+		var result = Value.zero
+		for i in 0..<3 {
+			result[i] = pow(abs(base[i]), p3Val)
+		}
+		return result
 	}
 }
