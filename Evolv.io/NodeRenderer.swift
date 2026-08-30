@@ -40,18 +40,29 @@ class NodeRenderer: ObservableObject {
 		let scaleFactor = 2.0 * scale
 		let scaleOffset = scaleFactor / 2.0
 
+		let supersample = 4
+		let dx = scaleFactor / ComponentType(width)
+		let dy = scaleFactor / ComponentType(height)
+
 		for y in 0..<height {
 			let yc = ComponentType(height - y) / ComponentType(height) * scaleFactor - scaleOffset
 			for x in 0..<width {
 				let xc = ComponentType(x) / ComponentType(width) * scaleFactor - scaleOffset
 
-				let pixel = result.value(at: Coordinate(x: xc,
-														y: yc))
+				var accumulated = Value.zero
+				for sy in 0..<supersample {
+					let subYc = yc + (ComponentType(sy) + 0.5) / ComponentType(supersample) * dy - dy / 2.0
+					for sx in 0..<supersample {
+						let subXc = xc + (ComponentType(sx) + 0.5) / ComponentType(supersample) * dx - dx / 2.0
+						accumulated += result.value(at: Coordinate(x: subXc, y: subYc)).sanitized()
+					}
+				}
+				let pixel = accumulated / ComponentType(supersample * supersample)
 
 				maxValue = max(pixel, maxValue)
 				minValue = min(pixel, minValue)
 
-				data[y * width + x] = pixel.sanitized()
+				data[y * width + x] = pixel
 			}
 		}
 	}
@@ -113,7 +124,7 @@ class NodeRenderer: ObservableObject {
 	}
 }
 
-fileprivate extension CGImage {
+extension CGImage {
 	func pngData() -> Data? {
 		guard let mutableData = CFDataCreateMutable(nil, 0) else { return nil }
 		guard let destination = CGImageDestinationCreateWithData(mutableData, "public.png" as CFString, 1, nil) else { return nil }
