@@ -56,13 +56,8 @@ class LightMapResult: ExpressionResult {
 
 		let surfaceNormal = Value(-Gx, -Gy, 1.0 / heightFactor)
 
-		var lightDx = lightDirXSource.averageLuminance()
-		var lightDy = lightDirYSource.averageLuminance()
-
-		if lightDx < 0.0006 && lightDy < 0.0006 {
-			lightDx = -0.5
-			lightDy = 0.5
-		}
+		let lightDx = lightDirXSource.averageLuminance()
+		let lightDy = lightDirYSource.averageLuminance()
 
 		let lightDirection = Value(lightDx, lightDy, lightZ)
 
