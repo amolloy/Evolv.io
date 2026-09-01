@@ -44,9 +44,9 @@ public final class ColorGradient: CachedNode {
 		let lightMap = LightMapResult(source: evaluators[0],
 									  dirX: evaluators[1],
 									  dirY: evaluators[2],
-									  delta: ConstantResult(0.02),
-									  heightFactor: ConstantResult(200.0),
-									  lightZ: ConstantResult(0.5),
+									  delta: ConstantResult(0.025),
+									  heightFactor: ConstantResult(3),
+									  lightZ: ConstantResult(0.04),
 									  color2: evaluators[3],
 									  clamp: false)
 
