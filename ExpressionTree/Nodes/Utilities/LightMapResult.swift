@@ -16,6 +16,7 @@ class LightMapResult: ExpressionResult {
 	let lightZ: ExpressionResult
 	let color1: ExpressionResult
 	let color2: ExpressionResult
+	let clamp: Bool
 
 	init(source: ExpressionResult,
 		 dirX: ExpressionResult,
@@ -24,7 +25,8 @@ class LightMapResult: ExpressionResult {
 		 heightFactor: ExpressionResult,
 		 lightZ: ExpressionResult,
 		 color1: ExpressionResult = ConstantResult(0.0),
-		 color2: ExpressionResult = ConstantResult(1.0)) {
+		 color2: ExpressionResult = ConstantResult(1.0),
+		 clamp: Bool) {
 		self.source = source
 		self.dirX = dirX
 		self.dirY = dirY
@@ -33,6 +35,7 @@ class LightMapResult: ExpressionResult {
 		self.lightZ = lightZ
 		self.color1 = color1
 		self.color2 = color2
+		self.clamp = clamp
 	}
 
 	func value(at coord: Coordinate) -> Value {
@@ -68,12 +71,14 @@ class LightMapResult: ExpressionResult {
 			return Value(repeating: 0.5)
 		}
 
-		let dotProduct = dot(normal_normalized, light_normalized)
-		let finalValue = simd_clamp((dotProduct + 1.0) * 0.5, 0.0, 1.0)
+		var t = dot(normal_normalized, light_normalized)
+		if clamp {
+			t = simd_clamp((t + 1.0) * 0.5, 0.0, 1.0)
+		}
 
 		let colorVal1 = color1.value(at: coord)
 		let colorVal2 = color2.value(at: coord)
 
-		return mix(colorVal1, colorVal2, t: finalValue)
+		return mix(colorVal1, colorVal2, t: t)
 	}
 }

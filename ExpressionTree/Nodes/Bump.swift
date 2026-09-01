@@ -29,6 +29,7 @@ public class Bump: CachedNode {
 							  heightFactor: evaluators[6],
 							  lightZ: evaluators[5],
 							  color1: evaluators[3],
-							  color2: evaluators[4])
+							  color2: evaluators[4],
+							  clamp: true)
 	}
 }

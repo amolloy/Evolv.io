@@ -33,6 +33,7 @@ public class GradientDirection: CachedNode {
 							  dirY: evaluators[2],
 							  delta: ConstantResult(delta),
 							  heightFactor: ConstantResult(heightFactor),
-							  lightZ: ConstantResult(lightZ))
+							  lightZ: ConstantResult(lightZ),
+							  clamp: true)
 	}
 }
