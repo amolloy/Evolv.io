@@ -11,6 +11,14 @@ import Foundation
 import simd
 import SwiftUI
 
+extension UserDefaults {
+	static let supersamplingEnabledKey = "supersamplingEnabled"
+
+	var isSupersamplingEnabled: Bool {
+		object(forKey: Self.supersamplingEnabledKey) as? Bool ?? true
+	}
+}
+
 @MainActor
 class NodeRenderer: ObservableObject {
 	let node: any Node
@@ -40,7 +48,7 @@ class NodeRenderer: ObservableObject {
 		let scaleFactor = 2.0 * scale
 		let scaleOffset = scaleFactor / 2.0
 
-		let supersample = 4
+		let supersample = UserDefaults.standard.isSupersamplingEnabled ? 4 : 1
 		let dx = scaleFactor / ComponentType(width)
 		let dy = scaleFactor / ComponentType(height)
 
