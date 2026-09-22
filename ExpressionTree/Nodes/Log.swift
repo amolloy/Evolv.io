@@ -71,8 +71,6 @@ class LogResult: ExpressionResult {
 
 			if resultVector[i].isNaN {
 				resultVector[i] = 0
-			} else if resultVector[i].isInfinite {
-				resultVector[i] = 1000
 			}
 		}
 
