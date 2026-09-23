@@ -23,6 +23,17 @@ public class BWNoise: CachedNode {
 		assert(children.count == 2)
 		return BWNoiseResult(children.map { $0.evaluate(using: evaluator) })
 	}
+
+	public func _emitMSL(into context: MSLCodegenContext) -> String {
+		assert(children.count == 2)
+		context.require(.perlinTable)
+		let e0 = children[0].codegenMSL(into: context)
+		let e1 = children[1].codegenMSL(into: context)
+		let v0 = context.declare("\(e0.variableName) * 50.0")
+		return "float3(perlinNoise(coord * \(v0.variableName).x, int(\(e1.variableName).x)), " +
+			   "perlinNoise(coord * \(v0.variableName).y, int(\(e1.variableName).y)), " +
+			   "perlinNoise(coord * \(v0.variableName).z, int(\(e1.variableName).z)))"
+	}
 }
 
 class BWNoiseResult: ExpressionResult {

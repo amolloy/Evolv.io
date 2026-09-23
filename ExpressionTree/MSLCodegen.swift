@@ -73,6 +73,58 @@ public final class MSLCodegenContext {
 	}
 }
 
+/// The Perlin noise helper functions and permutation-table declaration,
+/// prepended to generated kernel source whenever any node requires
+/// `.perlinTable`. Reuses the existing Swift-side `Perlin.permutation`
+/// table directly (formatted as an MSL literal array) so noise stays
+/// byte-identical to today's CPU path during Phase A of the Metal codegen
+/// migration -- only the fade/lerp/grad math itself runs at float32
+/// instead of float64, not the table values.
+func mslPerlinPreamble() -> String {
+	let tableValues = Perlin.permutation.map { String($0) }.joined(separator: ", ")
+	return """
+	constant int kPerlinTable[512] = { \(tableValues) };
+
+	inline float perlinFade(float t) {
+		return t * t * t * (t * (t * 6.0 - 15.0) + 10.0);
+	}
+
+	inline float perlinLerp(float t, float a, float b) {
+		return a + t * (b - a);
+	}
+
+	inline float perlinGrad(int hash, float x, float y) {
+		int h = hash & 7;
+		float u = h < 4 ? x : y;
+		float v = h < 4 ? y : x;
+		return ((h & 1) == 0 ? u : -u) + ((h & 2) == 0 ? v : -v);
+	}
+
+	inline float perlinNoise(float2 coord, int inOffset) {
+		int offset = inOffset & 255;
+
+		float2 cell = floor(coord);
+		int xi = int(cell.x) & 255;
+		int yi = int(cell.y) & 255;
+
+		float2 frac = coord - cell;
+
+		float u = perlinFade(frac.x);
+		float v = perlinFade(frac.y);
+
+		int aa = kPerlinTable[(kPerlinTable[(xi + offset) & 255] + yi) & 255];
+		int ab = kPerlinTable[(kPerlinTable[(xi + offset) & 255] + yi + 1) & 255];
+		int ba = kPerlinTable[(kPerlinTable[(xi + 1 + offset) & 255] + yi) & 255];
+		int bb = kPerlinTable[(kPerlinTable[(xi + 1 + offset) & 255] + yi + 1) & 255];
+
+		float x1 = perlinLerp(u, perlinGrad(aa, frac.x, frac.y), perlinGrad(ba, frac.x - 1.0, frac.y));
+		float x2 = perlinLerp(u, perlinGrad(ab, frac.x, frac.y - 1.0), perlinGrad(bb, frac.x - 1.0, frac.y - 1.0));
+
+		return (perlinLerp(v, x1, x2) + 1.0) / 2.0;
+	}
+	"""
+}
+
 /// Formats a CPU-side `ComponentType` (Double) as an MSL float literal.
 /// GPU math is float32 throughout (see the plan's precision-policy note), so
 /// this doesn't need to preserve full Double precision -- just enough for

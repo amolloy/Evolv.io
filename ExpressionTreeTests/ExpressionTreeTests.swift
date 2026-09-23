@@ -40,13 +40,13 @@ struct MetalCodegenParityTests {
     /// plain arithmetic. Trees containing `and` (bit-pattern width changes
     /// from 64-bit to 32-bit, a real semantic difference, not just rounding)
     /// should pass a looser tolerance explicitly instead of tightening this.
-    private func assertParity(_ node: any Node, tolerance: Double = 1e-4) throws {
+    private func assertParity(_ node: any Node, tolerance: Double = 1e-4, coordinates: [Coordinate] = MetalCodegenParityTests.sampleCoordinates) throws {
         let evaluator = Evaluator(size: CGSize(width: 64, height: 64))
         let swiftResult = node.evaluate(using: evaluator)
-        let swiftValues = Self.sampleCoordinates.map { swiftResult.value(at: $0) }
+        let swiftValues = coordinates.map { swiftResult.value(at: $0) }
 
         let metalEvaluator = try MSLTreeEvaluator()
-        let metalValues = try metalEvaluator.evaluate(node: node, at: Self.sampleCoordinates)
+        let metalValues = try metalEvaluator.evaluate(node: node, at: coordinates)
 
         #expect(swiftValues.count == metalValues.count)
         for (i, pair) in zip(swiftValues, metalValues).enumerated() {
@@ -62,10 +62,23 @@ struct MetalCodegenParityTests {
                 if s.isInfinite && m.isInfinite && (s > 0) == (m > 0) { continue }
                 let diff = abs(s - m)
                 #expect(diff < tolerance,
-                        "coordinate \(i) (\(Self.sampleCoordinates[i])) component \(c): swift=\(s) metal=\(m) diff=\(diff)")
+                        "coordinate \(i) (\(coordinates[i])) component \(c): swift=\(s) metal=\(m) diff=\(diff)")
             }
         }
     }
+
+    /// Coordinates chosen to land solidly mid-cell after the *50 scaling
+    /// every noise node applies, rather than near an integer boundary --
+    /// `sampleCoordinates`'s "nice" fractions (0.3, -0.5, ...) times 50 land
+    /// suspiciously close to exact integers, where a float32-vs-float64
+    /// rounding difference could floor() into a different permutation-table
+    /// cell entirely (a large, qualitative difference, not a small one).
+    private static let noiseSafeCoordinates: [Coordinate] = [
+        Coordinate(x: 0.137, y: -0.263),
+        Coordinate(x: 0.481, y: -0.829),
+        Coordinate(x: -0.055, y: 0.612),
+        Coordinate(x: 0.947, y: 0.318),
+    ]
 
     @Test func constantParity() throws {
         try assertParity(Constant(0.375))
@@ -149,5 +162,21 @@ struct MetalCodegenParityTests {
     /// tolerance rather than by tightening the default.
     @Test func andParity() throws {
         try assertParity(And([ConstantTriplet(Value(0.75, -0.25, 3.5)), ConstantTriplet(Value(0.5, 0.5, 0.5))]), tolerance: 2.0)
+    }
+
+    @Test func bwNoiseParity() throws {
+        try assertParity(BWNoise([Constant(0.2), Constant(2)]), tolerance: 1e-3, coordinates: Self.noiseSafeCoordinates)
+    }
+
+    @Test func colorNoiseParity() throws {
+        try assertParity(ColorNoise([Constant(0.1), Constant(2)]), tolerance: 1e-3, coordinates: Self.noiseSafeCoordinates)
+    }
+
+    @Test func warpedBWNoiseParity() throws {
+        try assertParity(WarpedBWNoise([VariableX(), VariableY(), Constant(0.04), Constant(3)]), tolerance: 1e-3, coordinates: Self.noiseSafeCoordinates)
+    }
+
+    @Test func warpedColorNoiseParity() throws {
+        try assertParity(WarpedColorNoise([Mult([VariableX(), Constant(0.2)]), VariableY(), Constant(0.1), Constant(2)]), tolerance: 1e-3, coordinates: Self.noiseSafeCoordinates)
     }
 }
