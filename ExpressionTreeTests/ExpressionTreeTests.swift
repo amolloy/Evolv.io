@@ -180,20 +180,15 @@ struct MetalCodegenParityTests {
         try assertParity(WarpedColorNoise([Mult([VariableX(), Constant(0.2)]), VariableY(), Constant(0.1), Constant(2)]), tolerance: 1e-3, coordinates: Self.noiseSafeCoordinates)
     }
 
-    // Note: ContentView's real "(grad-direction (bw-noise .15 2) .0 .0)"
-    // sample is deliberately not used as a parity case here. Tried it first
-    // -- diffs of up to 0.5 (on a [0,1] output range), even though the
-    // isolated bw-noise translation and this smooth-source case both match
-    // tightly. Root cause: grad-direction takes a raw finite difference of
-    // its source (no division/normalization of the gradient itself before
-    // building the surface normal), so wherever the noise field is locally
-    // near-flat, Gx/Gy are small numbers built from a subtraction of two
-    // close noise samples -- exactly where float32-vs-float64 differences in
-    // the underlying Perlin hash get amplified the most after normalizing
-    // the resulting (tiny, direction-dominant) vector. That's inherent
-    // numerical sensitivity in this specific composition (noise -> finite
-    // difference -> normalize), not a translation bug, and no tolerance
-    // short of "meaninglessly loose" would make it a useful regression check.
+    /// The exact sample expression from ContentView's "(grad-direction
+    /// (bw-noise .15 2) .0 .0)" -- real usage, not just a synthetic tree.
+    @Test func gradientDirectionParity() throws {
+        try assertParity(GradientDirection([BWNoise([Constant(0.15), Constant(2)]), Constant(0.0), Constant(0.0)]),
+                          tolerance: 1e-3, coordinates: Self.noiseSafeCoordinates)
+    }
+
+    /// Same node, a source with clean closed-form derivatives instead of
+    /// noise -- an easier case to reason about by hand if this ever fails.
     @Test func gradientDirectionSmoothSourceParity() throws {
         try assertParity(GradientDirection([Mult([VariableX(), VariableY()]), Constant(0.3), Constant(-0.2)]),
                           tolerance: 1e-3)
@@ -234,5 +229,27 @@ struct MetalCodegenParityTests {
             Constant(0.8)
         ])
         try assertParity(node, tolerance: 1e-3)
+    }
+
+    @Test func rotateVectorParity() throws {
+        try assertParity(RotateVector([VariableX(), VariableY(), ConstantTriplet(Value(0.2, -0.3, 0.5))]))
+    }
+
+    // Fixed (coordinate-independent) HSV inputs chosen to land solidly
+    // mid-segment after `frac(h) * 6`, rather than near an integer boundary
+    // -- same hazard class as the noise cell-boundary and color-grad
+    // divide-by-near-zero cases above: right at a boundary, a float32-vs-
+    // float64 difference could make `Int(h)` pick a different case/channel
+    // entirely, not just a slightly different number.
+    @Test func hsvToRGBParity() throws {
+        try assertParity(HSVToRGB([ConstantTriplet(Value(0.05, 0.8, 0.9))]))
+    }
+
+    @Test func hsvToRGBOtherSegmentParity() throws {
+        try assertParity(HSVToRGB([ConstantTriplet(Value(0.55, 0.6, 0.7))]))
+    }
+
+    @Test func dissolveParity() throws {
+        try assertParity(Dissolve([VariableX(), Constant(0.5), VariableY()]))
     }
 }

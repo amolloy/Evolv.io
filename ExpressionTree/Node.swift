@@ -43,7 +43,7 @@ public extension Node {
 	/// once (e.g. `ColorGradient`'s synthesized `ScaledResult` wrappers all
 	/// sharing one `p3` sub-expression), not just for tidiness.
 	func codegenMSL(into context: MSLCodegenContext) -> MSLValue {
-		context.emit(for: self.id) { self._emitMSL(into: context) }
+		context.emit(for: self) { self._emitMSL(into: context) }
 	}
 }
 

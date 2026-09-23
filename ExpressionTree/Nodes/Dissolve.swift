@@ -21,6 +21,14 @@ public class Dissolve: CachedNode {
 		assert(children.count == 3)
 		return DissolveResult(children.map { $0.evaluate(using: evaluator) })
 	}
+
+	public func _emitMSL(into context: MSLCodegenContext) -> String {
+		assert(children.count == 3)
+		let v0 = children[0].codegenMSL(into: context)
+		let w = children[1].codegenMSL(into: context)
+		let v1 = children[2].codegenMSL(into: context)
+		return "(float3(1.0) - \(w.variableName)) * \(v0.variableName) + \(w.variableName) * \(v1.variableName)"
+	}
 }
 
 class DissolveResult: ExpressionResult {

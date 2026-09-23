@@ -42,12 +42,29 @@ public final class MSLTreeEvaluator {
 	/// coordinate in `coords`, in one dispatch. No pipeline caching here --
 	/// that's a production-render-path concern (see the plan's Evaluator
 	/// section), not needed for one-off parity checks.
+	/// Exposed for debugging generated MSL by hand (e.g. when a parity test
+	/// fails and static reading of the codegen isn't enough) -- not used by
+	/// the render path itself.
+	public static func generateSource(for node: any Node) -> String {
+		let context = MSLCodegenContext()
+		let result = node.codegenMSL(into: context)
+		return kernelSource(body: context.body(), resultVariable: result.variableName, functions: context.allFunctions(), resourceRequirements: context.resourceRequirements)
+	}
+
 	public func evaluate(node: any Node, at coords: [Coordinate]) throws -> [Value] {
 		let context = MSLCodegenContext()
 		let result = node.codegenMSL(into: context)
 
 		let source = Self.kernelSource(body: context.body(), resultVariable: result.variableName, functions: context.allFunctions(), resourceRequirements: context.resourceRequirements)
-		let library = try device.makeLibrary(source: source, options: nil)
+		let compileOptions = MTLCompileOptions()
+			// Default compile options use approximate ("fast math") instructions
+			// for things like division/normalize. This evaluator only exists for
+			// parity testing (not the eventual render path), where matching the
+			// CPU's IEEE-compliant float64 math as closely as possible matters
+			// more than the speed fast-math buys -- .safe forces IEEE-compliant
+			// float32 math instead.
+			compileOptions.mathMode = .safe
+			let library = try device.makeLibrary(source: source, options: compileOptions)
 		guard let function = library.makeFunction(name: "evaluateAtCoords") else {
 			throw MSLTreeEvaluatorError.functionNotFound
 		}

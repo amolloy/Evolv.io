@@ -33,18 +33,31 @@ public struct MSLResourceRequirements: OptionSet, Sendable {
 public final class MSLCodegenContext {
 	private var statements: [String] = []
 	private var memo: [ObjectIdentifier: MSLValue] = [:]
+	// Nodes built synthetically inside another node's _emitMSL (e.g.
+	// GradientDirection's `PreventZero([children[1], Constant(-0.5)])`) have
+	// no other owner -- nothing keeps them alive past the `codegenMSL` call
+	// that memoizes them. Swift can and does reuse a just-deallocated
+	// object's memory address for the very next allocation, which gives the
+	// new object the SAME ObjectIdentifier and makes it collide with the
+	// old one's memo entry -- confirmed in practice: GradientDirection's
+	// dirY (a second, distinct PreventZero) was silently returning dirX's
+	// memoized result. Retaining every memoized node for the context's
+	// lifetime keeps its address from being recycled during this walk.
+	private var retainedNodes: [any Node] = []
 	private var nextVariableIndex = 0
 	public private(set) var resourceRequirements: MSLResourceRequirements = []
 
 	public init() {}
 
-	/// Returns the memoized value for `key` if this node has already been
-	/// emitted; otherwise calls `build` to get its MSL expression text,
-	/// declares it as a fresh local variable, memoizes, and returns it.
-	public func emit(for key: ObjectIdentifier, _ build: () -> String) -> MSLValue {
+	/// Returns the memoized value for `node` if it's already been emitted;
+	/// otherwise calls `build` to get its MSL expression text, declares it
+	/// as a fresh local variable, memoizes, and returns it.
+	public func emit(for node: any Node, _ build: () -> String) -> MSLValue {
+		let key = node.id
 		if let cached = memo[key] {
 			return cached
 		}
+		retainedNodes.append(node)
 		let value = declare(build())
 		memo[key] = value
 		return value
