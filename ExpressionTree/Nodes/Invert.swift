@@ -5,9 +5,7 @@
 //  Created by Andy Molloy on 6/12/25.
 //
 
-import simd
-
-public class Invert: CachedNode {
+public class Invert: Node {
 	public static var name: String {
 		return "invert"
 	}
@@ -19,26 +17,9 @@ public class Invert: CachedNode {
 		self.children = children
 	}
 
-	public func _evaluate(using evaluator: Evaluator) -> any ExpressionResult {
-		assert(children.count == 1)
-		return InvertResult(children[0].evaluate(using: evaluator))
-	}
-
 	public func _emitMSL(into context: MSLCodegenContext) -> String {
 		assert(children.count == 1)
 		let e = children[0].codegenMSL(into: context)
 		return "float3(1.0) - \(e.variableName)"
-	}
-}
-
-class InvertResult: ExpressionResult {
-	let e: ExpressionResult
-
-	init(_ e: ExpressionResult) {
-		self.e = e
-	}
-
-	func value(at coord: Coordinate) -> Value {
-		return Value.one - e.value(at: coord)
 	}
 }

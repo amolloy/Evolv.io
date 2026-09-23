@@ -21,27 +21,11 @@ public class ConstantTriplet: Node {
 		self.value = value
 	}
 
-	public func evaluate(using evaluator: Evaluator) -> any ExpressionResult {
-		return ConstantTripletResult(self.value)
-	}
-
 	public func toString() -> String {
 		return "#(\(value.x) \(value.y) \(value.z))"
 	}
 
 	public func _emitMSL(into context: MSLCodegenContext) -> String {
 		"float3(\(mslFloatLiteral(value.x)), \(mslFloatLiteral(value.y)), \(mslFloatLiteral(value.z)))"
-	}
-}
-
-struct ConstantTripletResult : ExpressionResult {
-	let value: Value
-
-	init(_ value: Value) {
-		self.value = value
-	}
-
-	public func value(at coord: Coordinate) -> Value {
-		return value
 	}
 }

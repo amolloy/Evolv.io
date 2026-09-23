@@ -5,9 +5,7 @@
 //  Created by Andy Molloy on 6/9/25.
 //
 
-import simd
-
-public class BWNoise: CachedNode {
+public class BWNoise: Node {
 	public static var name: String {
 		return "bw-noise"
 	}
@@ -17,11 +15,6 @@ public class BWNoise: CachedNode {
 	required public init(_ children: [any Node]) {
 		assert(children.count == 2)
 		self.children = children
-	}
-
-	public func _evaluate(using evaluator: Evaluator) -> any ExpressionResult {
-		assert(children.count == 2)
-		return BWNoiseResult(children.map { $0.evaluate(using: evaluator) })
 	}
 
 	public func _emitMSL(into context: MSLCodegenContext) -> String {
@@ -35,28 +28,3 @@ public class BWNoise: CachedNode {
 			   "perlinNoise(coord * \(v0.variableName).z, int(\(e1.variableName).z)))"
 	}
 }
-
-class BWNoiseResult: ExpressionResult {
-	let e0: ExpressionResult
-	let e1: ExpressionResult
-
-	init(_ es: [ExpressionResult]) {
-		assert(es.count == 2)
-		self.e0 = es[0]
-		self.e1 = es[1]
-	}
-
-	func value(at coord: Coordinate) -> Value {
-		let v0 = e0.value(at: coord) * 50
-		let v1 = e1.value(at: coord)
-
-		var result = Value(repeating: 0)
-		for i in 0..<3 {
-			let scaled = coord * Coordinate(repeating: v0[i])
-			result[i] = Perlin.noise(at: scaled, offset: Int(v1[i]))
-		}
-
-		return result
-	}
-}
-

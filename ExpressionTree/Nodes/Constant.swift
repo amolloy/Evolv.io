@@ -21,27 +21,11 @@ public class Constant: Node {
 		self.value = value
 	}
 
-	public func evaluate(using evaluator: Evaluator) -> any ExpressionResult {
-		return ConstantResult(self.value)
-	}
-
 	public func toString() -> String {
 		return "\(value)"
 	}
 
 	public func _emitMSL(into context: MSLCodegenContext) -> String {
 		"float3(\(mslFloatLiteral(value)))"
-	}
-}
-
-struct ConstantResult : ExpressionResult {
-	let value: Value
-
-	init(_ value: ComponentType) {
-		self.value = Value(repeating: value)
-	}
-
-	public func value(at coord: Coordinate) -> Value {
-		return value
 	}
 }

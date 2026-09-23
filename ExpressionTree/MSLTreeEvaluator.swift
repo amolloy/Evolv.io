@@ -107,16 +107,7 @@ public final class MSLTreeEvaluator {
 	}
 
 	private static func kernelSource(body: String, resultVariable: String, functions: String, resourceRequirements: MSLResourceRequirements) -> String {
-		var preamble = ""
-		if resourceRequirements.contains(.perlinTable) {
-			preamble += mslPerlinPreamble() + "\n\n"
-		}
-		if resourceRequirements.contains(.lightingHelpers) {
-			preamble += mslLightingHelpersPreamble() + "\n\n"
-		}
-		if !functions.isEmpty {
-			preamble += functions + "\n\n"
-		}
+		let preamble = mslSharedPreamble(functions: functions, resourceRequirements: resourceRequirements)
 
 		return """
 		#include <metal_stdlib>

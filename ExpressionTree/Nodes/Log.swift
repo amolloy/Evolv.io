@@ -5,9 +5,7 @@
 //  Created by Andy Molloy on 6/12/25.
 //
 
-import simd
-
-public class Log: CachedNode {
+public class Log: Node {
 	public static var name: String {
 		return "log"
 	}
@@ -19,11 +17,6 @@ public class Log: CachedNode {
 		self.children = children
 	}
 
-	public func _evaluate(using evaluator: Evaluator) -> any ExpressionResult {
-		assert(children.count == 2)
-		return LogResult(children.map { $0.evaluate(using: evaluator) })
-	}
-
 	public func _emitMSL(into context: MSLCodegenContext) -> String {
 		assert(children.count == 2)
 		let v0 = children[0].codegenMSL(into: context)
@@ -32,58 +25,5 @@ public class Log: CachedNode {
 		let denominator = context.declare("log(abs(\(v1.variableName)))")
 		let result = context.declare("\(numerator.variableName) / \(denominator.variableName)")
 		return "select(\(result.variableName), float3(0.0), isnan(\(result.variableName)))"
-	}
-
-	public func debugValues(using evaluator: Evaluator, at coord: Coordinate) -> [String: String] {
-		let vals = children.map { $0.evaluate(using: evaluator) }
-		let inputValue = vals[0].value(at: coord)
-		let inputBase = vals[1].value(at: coord)
-
-		var debugVals = [String: String]()
-
-		let numerator = log(abs(inputValue))
-		let denominator = log(abs(inputBase))
-
-		let result = numerator / denominator
-
-		debugVals["coords"] = "\(coord.toDebugString())"
-		debugVals["inputValue"] = "\(inputValue.toDebugString())"
-		debugVals["inputBase"] = "\(inputBase.toDebugString())"
-		debugVals["numerator"] = "\(numerator.toDebugString())"
-		debugVals["denominator"] = "\(denominator.toDebugString())"
-		debugVals["result"] = "\(result.toDebugString())"
-
-		return debugVals
-	}
-}
-
-class LogResult: ExpressionResult {
-	let e0: ExpressionResult
-	let e1: ExpressionResult
-
-	init(_ es: [ExpressionResult]) {
-		assert(es.count == 2)
-		self.e0 = es[0]
-		self.e1 = es[1]
-	}
-
-	func value(at coord: Coordinate) -> Value {
-		let inputValue = e0.value(at: coord)
-		let inputBase = e1.value(at: coord)
-
-		var resultVector = Value.zero
-
-		for i in 0..<3 {
-			let numerator = log(abs(inputValue[i]))
-			let denominator = log(abs(inputBase[i]))
-
-			resultVector[i] = numerator / denominator
-
-			if resultVector[i].isNaN {
-				resultVector[i] = 0
-			}
-		}
-
-		return resultVector
 	}
 }

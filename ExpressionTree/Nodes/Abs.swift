@@ -5,9 +5,7 @@
 //  Created by Andy Molloy on 6/8/25.
 //
 
-import simd
-
-public class Abs: CachedNode {
+public class Abs: Node {
 	public static var name: String {
 		return "abs"
 	}
@@ -19,26 +17,9 @@ public class Abs: CachedNode {
 		self.children = children
 	}
 
-	public func _evaluate(using evaluator: Evaluator) -> any ExpressionResult {
-		assert(children.count == 1)
-		return AbsResult(children[0].evaluate(using: evaluator))
-	}
-
 	public func _emitMSL(into context: MSLCodegenContext) -> String {
 		assert(children.count == 1)
 		let e = children[0].codegenMSL(into: context)
 		return "abs(\(e.variableName))"
-	}
-}
-
-class AbsResult: ExpressionResult {
-	let e: ExpressionResult
-
-	init(_ e: ExpressionResult) {
-		self.e = e
-	}
-
-	func value(at coord: Coordinate) -> Value {
-		return abs(e.value(at: coord))
 	}
 }

@@ -62,67 +62,28 @@ class NodeRenderer: ObservableObject {
 		minValue = rendered.minValue
 	}
 
-	/// Evaluates the tree once, then samples every pixel (and its supersamples) in parallel across rows.
-	/// Safe because, after the single `evaluate(node:)` call below, the resulting `ExpressionResult`
-	/// tree is made up entirely of immutable (`let`-only) nodes, so concurrent `value(at:)` calls
-	/// from multiple rows never touch shared mutable state.
+	/// Renders via the shared Metal pipeline cache (see `Evaluator.render`
+	/// and `MetalRenderContext`) rather than a CPU per-pixel loop -- per the
+	/// Metal codegen migration plan, there is no CPU rendering path anymore.
 	nonisolated private static func renderPixels(node: any Node,
 									  evaluator: Evaluator,
 									  scale: ComponentType,
 									  width: Int,
 									  height: Int,
 									  supersample: Int) -> (data: [Value], maxValue: Value, minValue: Value) {
-		let result = evaluator.evaluate(node: node)
-
-		let scaleFactor = 2.0 * scale
-		let scaleOffset = scaleFactor / 2.0
-		let dx = scaleFactor / ComponentType(width)
-		let dy = scaleFactor / ComponentType(height)
-
-		var data = Array(repeating: Value(0, 0, 0), count: width * height)
-		var rowMax = Array(repeating: Value(-.infinity, -.infinity, -.infinity), count: height)
-		var rowMin = Array(repeating: Value(.infinity, .infinity, .infinity), count: height)
-
-		data.withUnsafeMutableBufferPointer { buffer in
-			rowMax.withUnsafeMutableBufferPointer { rowMaxBuffer in
-				rowMin.withUnsafeMutableBufferPointer { rowMinBuffer in
-					DispatchQueue.concurrentPerform(iterations: height) { y in
-						let yc = (ComponentType(height - 1 - y) + 0.5) / ComponentType(height) * scaleFactor - scaleOffset
-
-						var localMax = Value(-.infinity, -.infinity, -.infinity)
-						var localMin = Value(.infinity, .infinity, .infinity)
-
-						for x in 0..<width {
-							let xc = (ComponentType(x) + 0.5) / ComponentType(width) * scaleFactor - scaleOffset
-
-							var accumulated = Value.zero
-							for sy in 0..<supersample {
-								let subYc = yc + (ComponentType(sy) + 0.5) / ComponentType(supersample) * dy - dy / 2.0
-								for sx in 0..<supersample {
-									let subXc = xc + (ComponentType(sx) + 0.5) / ComponentType(supersample) * dx - dx / 2.0
-									accumulated += result.value(at: Coordinate(x: subXc, y: subYc)).sanitized()
-								}
-							}
-							let pixel = accumulated / ComponentType(supersample * supersample)
-
-							localMax = max(pixel, localMax)
-							localMin = min(pixel, localMin)
-
-							buffer[y * width + x] = pixel
-						}
-
-						rowMaxBuffer[y] = localMax
-						rowMinBuffer[y] = localMin
-					}
-				}
-			}
+		let data: [Value]
+		do {
+			data = try evaluator.render(node: node, scale: scale, supersample: supersample)
+		} catch {
+			print("Metal render failed: \(error)")
+			data = Array(repeating: Value.zero, count: width * height)
 		}
 
 		var maxValue = Value(-.infinity, -.infinity, -.infinity)
 		var minValue = Value(.infinity, .infinity, .infinity)
-		for y in 0..<height {
-			maxValue = max(maxValue, rowMax[y])
-			minValue = min(minValue, rowMin[y])
+		for pixel in data {
+			maxValue = max(maxValue, pixel)
+			minValue = min(minValue, pixel)
 		}
 
 		return (data, maxValue, minValue)

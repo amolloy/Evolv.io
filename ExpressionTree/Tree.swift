@@ -65,7 +65,7 @@ extension SIMD3 where Scalar == ComponentType {
 		return SIMD3<Double>(newX, newY, newZ)
 	}
 
-	func toDebugString() -> String {
-		return "(\(String(format: "%.4f", x)), \(String(format: "%.4f", y)), \(String(format: "%.4f", z))"
+	public func toDebugString() -> String {
+		return "(\(String(format: "%.4f", x)), \(String(format: "%.4f", y)), \(String(format: "%.4f", z)))"
 	}
 }

@@ -5,7 +5,7 @@
 //  Created by Andy Molloy on 6/12/25.
 //
 
-public class If: CachedNode {
+public class If: Node {
 	public static var name: String {
 		return "if"
 	}
@@ -17,42 +17,11 @@ public class If: CachedNode {
 		self.children = children
 	}
 
-	public func _evaluate(using evaluator: Evaluator) -> any ExpressionResult {
-		assert(children.count == 3)
-		return IfResult( children.map { $0.evaluate(using: evaluator) } )
-	}
-
 	public func _emitMSL(into context: MSLCodegenContext) -> String {
 		assert(children.count == 3)
 		let condition = children[0].codegenMSL(into: context)
 		let thenVal = children[1].codegenMSL(into: context)
 		let elseVal = children[2].codegenMSL(into: context)
 		return "select(\(elseVal.variableName), \(thenVal.variableName), \(condition.variableName) > float3(0.0))"
-	}
-}
-
-class IfResult: ExpressionResult {
-	let e0: ExpressionResult
-	let e1: ExpressionResult
-	let e2: ExpressionResult
-
-	init(_ es: [ExpressionResult]) {
-		assert(es.count == 3)
-		self.e0 = es[0]
-		self.e1 = es[1]
-		self.e2 = es[2]
-	}
-
-	func value(at coord: Coordinate) -> Value {
-		let condition = e0.value(at: coord)
-		let thenVector = e1.value(at: coord)
-		let elseVector = e2.value(at: coord)
-
-		var result = Value.zero
-		for i in 0..<3 {
-			result[i] = condition[i] > 0.0 ? thenVector[i] : elseVector[i]
-		}
-
-		return result
 	}
 }

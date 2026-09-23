@@ -5,7 +5,7 @@
 //  Created by Andy Molloy on 6/12/25.
 //
 
-public class Add: CachedNode {
+public class Add: Node {
 	public static var name: String {
 		return "+"
 	}
@@ -17,11 +17,6 @@ public class Add: CachedNode {
 		self.children = children
 	}
 
-	public func _evaluate(using evaluator: Evaluator) -> any ExpressionResult {
-		assert(children.count == 2)
-		return AddResult(children.map { $0.evaluate(using: evaluator) })
-	}
-
 	public func _emitMSL(into context: MSLCodegenContext) -> String {
 		assert(children.count == 2)
 		let v0 = children[0].codegenMSL(into: context)
@@ -29,22 +24,3 @@ public class Add: CachedNode {
 		return "\(v0.variableName) + \(v1.variableName)"
 	}
 }
-
-class AddResult: ExpressionResult {
-	let e0: ExpressionResult
-	let e1: ExpressionResult
-
-	init(_ es: [ExpressionResult]) {
-		assert(es.count == 2)
-		self.e0 = es[0]
-		self.e1 = es[1]
-	}
-
-	func value(at coord: Coordinate) -> Value {
-		let v0 = e0.value(at: coord)
-		let v1 = e1.value(at: coord)
-
-		return v0 + v1
-	}
-}
-

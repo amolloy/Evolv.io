@@ -84,12 +84,36 @@ struct NodeDebuggingView: View {
 		.onChange(of: nodeRenderer.displayMax) { _, _ in updateImage() }
 	}
 
+	// Reads the already-rendered buffer at the nearest pixel instead of
+	// live-evaluating the tree at the exact hovered coordinate: there's no
+	// more per-coordinate Swift evaluate to call now that rendering is
+	// Metal-only (see the Metal codegen migration plan's Phase C). This
+	// shows the final composited value at that point rather than the old
+	// per-node intermediate breakdown (e.g. Log's numerator/denominator) --
+	// a deliberate simplification, not an oversight.
 	private func updateDebugInfo(for location: CGPoint, in size: CGSize) {
 		self.hoverLocation = location
-		let imageX = (location.x / size.width) * 2 - 1
-		let imageY = (location.y / size.height) * 2 - 1
-		let coord = Coordinate(x: imageX, y: imageY)
-		self.debugInfo = nodeRenderer.node.debugValues(using: nodeRenderer.evaluator, at: coord)
+
+		let width = Int(nodeRenderer.evaluator.size.width)
+		let height = Int(nodeRenderer.evaluator.size.height)
+		guard width > 0, height > 0, size.width > 0, size.height > 0 else {
+			self.debugInfo = [:]
+			return
+		}
+
+		let pixelX = min(max(Int((location.x / size.width) * CGFloat(width)), 0), width - 1)
+		let pixelY = min(max(Int((location.y / size.height) * CGFloat(height)), 0), height - 1)
+		let index = pixelY * width + pixelX
+
+		guard nodeRenderer.data.indices.contains(index) else {
+			self.debugInfo = [:]
+			return
+		}
+
+		self.debugInfo = [
+			"pixel": "(\(pixelX), \(pixelY))",
+			"value": nodeRenderer.data[index].toDebugString()
+		]
 	}
 
 	private func updateImage() {

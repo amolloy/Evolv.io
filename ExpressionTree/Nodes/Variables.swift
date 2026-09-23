@@ -10,22 +10,8 @@ public class VariableX: Node {
 	public var children: [any Node] = []
 	required public init(_ children: [any Node] = []) {}
 
-	public func evaluate(using evaluator: Evaluator) -> any ExpressionResult {
-		return VariableXValue(evaluator: evaluator)
-	}
-
 	public func _emitMSL(into context: MSLCodegenContext) -> String {
 		"float3(coord.x)"
-	}
-}
-
-struct VariableXValue: ExpressionResult {
-	typealias CT = ComponentType
-
-	let evaluator: Evaluator
-
-	func value(at coord: Coordinate) -> Value {
-		return Value(repeating: coord.x)
 	}
 }
 
@@ -34,21 +20,7 @@ public class VariableY: Node {
 	public var children: [any Node] = []
 	required public init(_ children: [any Node] = []) {}
 
-	public func evaluate(using evaluator: Evaluator) -> any ExpressionResult {
-		return VariableYValue(evaluator: evaluator)
-	}
-
 	public func _emitMSL(into context: MSLCodegenContext) -> String {
 		"float3(coord.y)"
-	}
-}
-
-struct VariableYValue: ExpressionResult {
-	typealias CT = ComponentType
-
-	let evaluator: Evaluator
-
-	func value(at coord: Coordinate) -> Value {
-		return Value(repeating: coord.y)
 	}
 }

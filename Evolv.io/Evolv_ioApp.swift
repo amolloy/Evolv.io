@@ -19,16 +19,11 @@ struct Evolv_ioApp: App {
             CommandGroup(after: .appInfo) {
                 Toggle("Supersampling", isOn: $supersamplingEnabled)
                 OpenColorGradientDebugButton()
-                OpenMetalBenchmarkButton()
             }
         }
 
         WindowGroup(id: "colorGradientDebug") {
             ColorGradientDebugView()
-        }
-
-        WindowGroup(id: "metalBenchmark") {
-            MetalBenchmarkView()
         }
     }
 }
@@ -39,16 +34,6 @@ private struct OpenColorGradientDebugButton: View {
     var body: some View {
         Button("ColorGradient Debug…") {
             openWindow(id: "colorGradientDebug")
-        }
-    }
-}
-
-private struct OpenMetalBenchmarkButton: View {
-    @Environment(\.openWindow) private var openWindow
-
-    var body: some View {
-        Button("Metal Benchmark (Figure 9)…") {
-            openWindow(id: "metalBenchmark")
         }
     }
 }

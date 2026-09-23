@@ -221,6 +221,41 @@ func mslLightingHelpersPreamble() -> String {
 	"""
 }
 
+/// Assembles the shared preamble (Perlin table + helpers, lighting helpers,
+/// any `emitFunction`-produced standalone functions) that goes before a
+/// generated kernel's own per-tree function body -- shared by
+/// `MSLTreeEvaluator` (parity testing) and `MetalRenderContext` (production
+/// rendering) so the two don't drift.
+func mslSharedPreamble(functions: String, resourceRequirements: MSLResourceRequirements) -> String {
+	var preamble = ""
+	if resourceRequirements.contains(.perlinTable) {
+		preamble += mslPerlinPreamble() + "\n\n"
+	}
+	if resourceRequirements.contains(.lightingHelpers) {
+		preamble += mslLightingHelpersPreamble() + "\n\n"
+	}
+	if !functions.isEmpty {
+		preamble += functions + "\n\n"
+	}
+	return preamble
+}
+
+/// Replicates `SIMD3.sanitized()` (Tree.swift): NaN -> 0, +/-infinity -> +/-1.
+/// Applied per supersample before accumulating, matching NodeRenderer's
+/// existing CPU behavior.
+func mslSanitizeFunction() -> String {
+	"""
+	inline float3 sanitize(float3 v) {
+		float3 r = v;
+		for (int i = 0; i < 3; i++) {
+			if (isnan(r[i])) r[i] = 0.0;
+			else if (isinf(r[i])) r[i] = r[i] > 0.0 ? 1.0 : -1.0;
+		}
+		return r;
+	}
+	"""
+}
+
 /// Formats a CPU-side `ComponentType` (Double) as an MSL float literal.
 /// GPU math is float32 throughout (see the plan's precision-policy note), so
 /// this doesn't need to preserve full Double precision -- just enough for
