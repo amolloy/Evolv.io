@@ -15,7 +15,7 @@ public class GradientDirection: CachedNode {
 
 	public var children: [any Node]
 
-	private let delta = ComponentType(0.005)
+	private let delta = ComponentType(0.02)
 	private let heightFactor = ComponentType(200.0)
 	private let lightZ = ComponentType(0.5)
 
