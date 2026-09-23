@@ -32,6 +32,42 @@ public class Bump: CachedNode {
 								dirY: evaluators[6],
 								lightHeight: evaluators[7])
 	}
+
+	public func _emitMSL(into context: MSLCodegenContext) -> String {
+		assert(children.count == 8)
+		context.require(.lightingHelpers)
+
+		let source = children[0].codegenMSL(into: context)
+		let multiplier = children[1].codegenMSL(into: context)
+		let strength = children[2].codegenMSL(into: context)
+		let color1 = children[3].codegenMSL(into: context)
+		let color2 = children[4].codegenMSL(into: context)
+		let dirX = children[5].codegenMSL(into: context)
+		let dirY = children[6].codegenMSL(into: context)
+		let lightHeight = children[7].codegenMSL(into: context)
+
+		let strengthVal = context.declare("avgLum(\(strength.variableName))", type: "float")
+		let dirXVal = context.declare("avgLum(\(dirX.variableName))", type: "float")
+		let dirYVal = context.declare("avgLum(\(dirY.variableName))", type: "float")
+		let lightHeightVal = context.declare("avgLum(\(lightHeight.variableName))", type: "float")
+
+		let scaledSource = context.declare("\(source.variableName) * \(multiplier.variableName)")
+		let scaledLen = context.declare("length(\(scaledSource.variableName))", type: "float")
+		let computedNormal = context.declare("\(scaledLen.variableName) < 1e-9 ? float3(0.0, 0.0, 1.0) : \(scaledSource.variableName) / \(scaledLen.variableName)")
+
+		let mixedNormal = context.declare("mix(float3(0.0, 0.0, 1.0), \(computedNormal.variableName), \(strengthVal.variableName))")
+		let mixedLen = context.declare("length(\(mixedNormal.variableName))", type: "float")
+
+		let lightRaw = context.declare("float3(\(dirXVal.variableName), \(dirYVal.variableName), \(lightHeightVal.variableName))")
+		let lightLen = context.declare("length(\(lightRaw.variableName))", type: "float")
+
+		let t = context.declare(
+			"clamp((dot(\(mixedNormal.variableName) / \(mixedLen.variableName), \(lightRaw.variableName) / \(lightLen.variableName)) + 1.0) * 0.5, 0.0, 1.0)",
+			type: "float")
+		let mixedColor = context.declare("mix(\(color1.variableName), \(color2.variableName), \(t.variableName))")
+
+		return "(\(mixedLen.variableName) < 1e-9 || \(lightLen.variableName) < 1e-9) ? float3(0.5) : \(mixedColor.variableName)"
+	}
 }
 
 // See Bump.md #5/#6: the argument shapes across all three known `bump`

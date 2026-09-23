@@ -46,7 +46,7 @@ public final class MSLTreeEvaluator {
 		let context = MSLCodegenContext()
 		let result = node.codegenMSL(into: context)
 
-		let source = Self.kernelSource(body: context.body(), resultVariable: result.variableName, resourceRequirements: context.resourceRequirements)
+		let source = Self.kernelSource(body: context.body(), resultVariable: result.variableName, functions: context.allFunctions(), resourceRequirements: context.resourceRequirements)
 		let library = try device.makeLibrary(source: source, options: nil)
 		guard let function = library.makeFunction(name: "evaluateAtCoords") else {
 			throw MSLTreeEvaluatorError.functionNotFound
@@ -89,10 +89,16 @@ public final class MSLTreeEvaluator {
 		return values
 	}
 
-	private static func kernelSource(body: String, resultVariable: String, resourceRequirements: MSLResourceRequirements) -> String {
+	private static func kernelSource(body: String, resultVariable: String, functions: String, resourceRequirements: MSLResourceRequirements) -> String {
 		var preamble = ""
 		if resourceRequirements.contains(.perlinTable) {
 			preamble += mslPerlinPreamble() + "\n\n"
+		}
+		if resourceRequirements.contains(.lightingHelpers) {
+			preamble += mslLightingHelpersPreamble() + "\n\n"
+		}
+		if !functions.isEmpty {
+			preamble += functions + "\n\n"
 		}
 
 		return """

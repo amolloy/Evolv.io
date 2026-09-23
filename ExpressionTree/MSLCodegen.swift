@@ -22,6 +22,7 @@ public struct MSLResourceRequirements: OptionSet, Sendable {
 
 	public static let perlinTable = MSLResourceRequirements(rawValue: 1 << 0)
 	public static let colorGradientTunables = MSLResourceRequirements(rawValue: 1 << 1)
+	public static let lightingHelpers = MSLResourceRequirements(rawValue: 1 << 2)
 }
 
 /// Accumulates emitted MSL statements while walking a `Node` tree once
@@ -67,9 +68,53 @@ public final class MSLCodegenContext {
 		resourceRequirements.insert(requirement)
 	}
 
+	private var extraFunctions: [String] = []
+	private var nextFunctionIndex = 0
+
+	/// Emits `node` as a standalone top-level MSL function taking its own
+	/// `float2 coord` parameter, rather than inline-declaring it against the
+	/// ambient coordinate, and returns the function's name so callers can
+	/// invoke it at arbitrary coordinate expressions (e.g.
+	/// `fn0(coord + float2(delta, 0.0))`). MSL functions can't be nested or
+	/// close over enclosing locals, so this walks `node` in a fresh
+	/// sub-context and splices the result in as its own function -- used by
+	/// nodes that need to sample a subtree at coordinates other than the
+	/// ambient one, like `LightMapResult`'s finite-difference taps.
+	///
+	/// Every generated function (this one and the outermost `evalTree`) uses
+	/// the same parameter name, `coord` -- that's what lets a node's
+	/// `_emitMSL` reference `"coord.x"` literally and have it resolve
+	/// correctly regardless of which function it ends up spliced into,
+	/// without threading a coordinate-variable-name through every node.
+	public func emitFunction(for node: any Node) -> String {
+		let name = "fn\(nextFunctionIndex)"
+		nextFunctionIndex += 1
+
+		let subContext = MSLCodegenContext()
+		let result = node.codegenMSL(into: subContext)
+		resourceRequirements.formUnion(subContext.resourceRequirements)
+
+		// Nested functions this subtree needed must be defined before this
+		// wrapper (which calls them), so bubble them up first.
+		extraFunctions.append(contentsOf: subContext.extraFunctions)
+		extraFunctions.append("""
+		inline float3 \(name)(float2 coord) {
+			\(subContext.body())
+			return \(result.variableName);
+		}
+		""")
+		return name
+	}
+
 	/// All emitted statements so far, joined for splicing into a function body.
 	public func body() -> String {
 		statements.joined(separator: "\n\t")
+	}
+
+	/// Every standalone function emitted via `emitFunction`, in dependency
+	/// order, joined for splicing before the main kernel body.
+	public func allFunctions() -> String {
+		extraFunctions.joined(separator: "\n\n")
 	}
 }
 
@@ -121,6 +166,44 @@ func mslPerlinPreamble() -> String {
 		float x2 = perlinLerp(u, perlinGrad(ab, frac.x, frac.y - 1.0), perlinGrad(bb, frac.x - 1.0, frac.y - 1.0));
 
 		return (perlinLerp(v, x1, x2) + 1.0) / 2.0;
+	}
+	"""
+}
+
+/// Shared helpers for the lighting-model nodes (`GradientDirection`,
+/// `ColorGradient`, `Bump`), prepended whenever any node requires
+/// `.lightingHelpers`. `avgLum` matches `averageLuminance()`.
+/// `colorGradChannel` is `PerChannelLightMapResult`'s per-channel body
+/// (light-degenerate case handled by the caller before calling this, since
+/// that guard applies once, not per channel; only the normal-degenerate
+/// guard is per channel). `signedPow` matches `ColorGradResult`.
+func mslLightingHelpersPreamble() -> String {
+	"""
+	inline float avgLum(float3 v) { return (v.x + v.y + v.z) / 3.0; }
+
+	inline float colorGradChannel(float hXNegOuter, float hXNegInner, float hXPosInner, float hXPosOuter,
+									float hYNegOuter, float hYNegInner, float hYPosInner, float hYPosOuter,
+									float heightFactor, float3 lightNormalized, float colorTint) {
+		float gxInner = hXNegInner - hXPosInner;
+		float gxOuter = hXNegOuter - hXPosOuter;
+		float gx = 0.6 * gxInner + 0.4 * gxOuter;
+
+		float gyInner = hYNegInner - hYPosInner;
+		float gyOuter = hYNegOuter - hYPosOuter;
+		float gy = 0.6 * gyInner + 0.4 * gyOuter;
+
+		float3 normal = float3(-gx, -gy, 1.0 / heightFactor);
+		float normalLen = length(normal);
+		if (normalLen < 1e-9) {
+			return 0.5;
+		}
+		float t = dot(normal / normalLen, lightNormalized);
+		return colorTint * t;
+	}
+
+	inline float3 signedPow(float3 v, float p) {
+		float3 s = select(float3(1.0), float3(-1.0), v < float3(0.0));
+		return s * pow(abs(v), p);
 	}
 	"""
 }

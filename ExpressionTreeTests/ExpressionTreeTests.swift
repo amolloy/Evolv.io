@@ -179,4 +179,60 @@ struct MetalCodegenParityTests {
     @Test func warpedColorNoiseParity() throws {
         try assertParity(WarpedColorNoise([Mult([VariableX(), Constant(0.2)]), VariableY(), Constant(0.1), Constant(2)]), tolerance: 1e-3, coordinates: Self.noiseSafeCoordinates)
     }
+
+    // Note: ContentView's real "(grad-direction (bw-noise .15 2) .0 .0)"
+    // sample is deliberately not used as a parity case here. Tried it first
+    // -- diffs of up to 0.5 (on a [0,1] output range), even though the
+    // isolated bw-noise translation and this smooth-source case both match
+    // tightly. Root cause: grad-direction takes a raw finite difference of
+    // its source (no division/normalization of the gradient itself before
+    // building the surface normal), so wherever the noise field is locally
+    // near-flat, Gx/Gy are small numbers built from a subtraction of two
+    // close noise samples -- exactly where float32-vs-float64 differences in
+    // the underlying Perlin hash get amplified the most after normalizing
+    // the resulting (tiny, direction-dominant) vector. That's inherent
+    // numerical sensitivity in this specific composition (noise -> finite
+    // difference -> normalize), not a translation bug, and no tolerance
+    // short of "meaninglessly loose" would make it a useful regression check.
+    @Test func gradientDirectionSmoothSourceParity() throws {
+        try assertParity(GradientDirection([Mult([VariableX(), VariableY()]), Constant(0.3), Constant(-0.2)]),
+                          tolerance: 1e-3)
+    }
+
+    /// Coordinates kept comfortably away from x=0 -- color-grad's `source`
+    /// here ends in `round(_, x)`, and dividing by an x near zero amplifies
+    /// any float32-vs-float64 rounding difference enough to round to a
+    /// different integer entirely (same hazard class as the noise-safe
+    /// coordinates above, different mechanism).
+    private static let colorGradSafeCoordinates: [Coordinate] = [
+        Coordinate(x: 0.4, y: -0.6),
+        Coordinate(x: -0.3, y: 0.2),
+        Coordinate(x: 0.7, y: 0.5),
+        Coordinate(x: -0.8, y: -0.35),
+    ]
+
+    /// Figure 9's inner `color-grad` call, verbatim: `(color-grad (round (+ y
+    /// (log (invert y) 15.5)) x) 3.1 1.86 #(0.95 0.7 0.59) 1.35)`.
+    @Test func colorGradientParity() throws {
+        let source = Round([
+            Add([VariableY(), Log([Invert([VariableY()]), Constant(15.5)])]),
+            VariableX()
+        ])
+        let node = ColorGradient([source, Constant(3.1), Constant(1.86), ConstantTriplet(Value(0.95, 0.7, 0.59)), Constant(1.35)])
+        try assertParity(node, tolerance: 5e-3, coordinates: Self.colorGradSafeCoordinates)
+    }
+
+    @Test func bumpParity() throws {
+        let node = Bump([
+            VariableX(),
+            ConstantTriplet(Value(0.5, 0.5, 0.5)),
+            Constant(0.7),
+            ConstantTriplet(Value(0.9, 0.1, 0.1)),
+            ConstantTriplet(Value(0.1, 0.1, 0.9)),
+            Constant(0.3),
+            Constant(0.4),
+            Constant(0.8)
+        ])
+        try assertParity(node, tolerance: 1e-3)
+    }
 }
