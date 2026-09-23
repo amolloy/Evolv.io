@@ -47,7 +47,29 @@ public final class MSLCodegenContext {
 	private var nextVariableIndex = 0
 	public private(set) var resourceRequirements: MSLResourceRequirements = []
 
-	public init() {}
+	// Shared across a context and every sub-context `emitFunction` creates
+	// (at any nesting depth), so generated function names are unique across
+	// the *whole* codegen pass, not just within one context. Each
+	// MSLCodegenContext used to get its own counter starting at 0, which
+	// meant a color-grad nested inside another color-grad's source (exactly
+	// Figure 9's shape: the outer color-grad's source itself contains the
+	// inner color-grad) produced two functions both named "fn0" -- a
+	// duplicate-definition compile error that made the whole tree's render
+	// silently fall back to black. A reference type because Swift structs
+	// can't be "the same mutable counter" shared across independently
+	// constructed contexts; a class instance can be.
+	private final class FunctionNameCounter {
+		var next = 0
+	}
+	private let functionNameCounter: FunctionNameCounter
+
+	public init() {
+		functionNameCounter = FunctionNameCounter()
+	}
+
+	private init(sharingFunctionNamesWith parent: MSLCodegenContext) {
+		functionNameCounter = parent.functionNameCounter
+	}
 
 	/// Returns the memoized value for `node` if it's already been emitted;
 	/// otherwise calls `build` to get its MSL expression text, declares it
@@ -82,7 +104,6 @@ public final class MSLCodegenContext {
 	}
 
 	private var extraFunctions: [String] = []
-	private var nextFunctionIndex = 0
 
 	/// Emits `node` as a standalone top-level MSL function taking its own
 	/// `float2 coord` parameter, rather than inline-declaring it against the
@@ -100,10 +121,10 @@ public final class MSLCodegenContext {
 	/// correctly regardless of which function it ends up spliced into,
 	/// without threading a coordinate-variable-name through every node.
 	public func emitFunction(for node: any Node) -> String {
-		let name = "fn\(nextFunctionIndex)"
-		nextFunctionIndex += 1
+		let name = "fn\(functionNameCounter.next)"
+		functionNameCounter.next += 1
 
-		let subContext = MSLCodegenContext()
+		let subContext = MSLCodegenContext(sharingFunctionNamesWith: self)
 		let result = node.codegenMSL(into: subContext)
 		resourceRequirements.formUnion(subContext.resourceRequirements)
 

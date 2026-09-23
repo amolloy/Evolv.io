@@ -207,4 +207,51 @@ struct MetalRenderRegressionTests {
     @Test func dissolve() throws {
         try assertGolden(Dissolve([VariableX(), Constant(0.5), VariableY()]), Value(repeating: -0.05))
     }
+
+    /// Regression test for a real bug: a `color-grad` whose own `source`
+    /// subtree contains *another* `color-grad` (exactly Figure 9's shape --
+    /// see ContentView.sampleExpressions["Figure 9"]) produced two
+    /// `emitFunction`-generated MSL functions both named "fn0", since each
+    /// nested `MSLCodegenContext` used to keep its own function-name counter
+    /// starting at 0 instead of sharing one across the whole codegen pass.
+    /// That's a duplicate-definition compile error, which NodeRenderer's
+    /// Metal render path silently swallowed by falling back to an all-black
+    /// image -- every isolated per-node test above passed throughout,
+    /// because none of them nested a color-grad inside another color-grad's
+    /// source. Fixed in MSLCodegenContext by sharing one counter across a
+    /// context and every sub-context `emitFunction` creates.
+    @Test func nestedColorGradient() throws {
+        let inner = ColorGradient([
+            Round([Add([VariableY(), Log([Invert([VariableY()]), Constant(15.5)])]), VariableX()]),
+            Constant(3.1), Constant(1.86), ConstantTriplet(Value(0.95, 0.7, 0.59)), Constant(1.35)
+        ])
+        let outerSource = Round([
+            Add([Abs([Round([Log([Add([VariableY(), inner]), Constant(0.19)]), VariableX()])]),
+                 Log([Invert([VariableY()]), Constant(15.5)])]),
+            VariableX()
+        ])
+        let outer = ColorGradient([outerSource, Constant(3.1), Constant(1.9), ConstantTriplet(Value(0.95, 0.7, 0.35)), Constant(1.35)])
+        let figure9 = Round([Log([Add([VariableY(), outer]), Constant(0.19)]), VariableX()])
+
+        // Coordinates kept away from x=0 (round(_, x) divides by it) and off
+        // exact Perlin-adjacent boundaries, same hazard class as this
+        // suite's other color-grad-involving cases.
+        let coords: [Coordinate] = [Coordinate(x: 0.4, y: -0.6), Coordinate(x: -0.3, y: 0.2), Coordinate(x: 0.7, y: 0.5)]
+        let evaluator = try MSLTreeEvaluator()
+        let values = try evaluator.evaluate(node: figure9, at: coords)
+
+        var sawNonZero = false
+        for (i, v) in values.enumerated() {
+            #expect(v.x.isFinite && v.y.isFinite && v.z.isFinite, "coordinate \(i) (\(coords[i])) not finite: \(v)")
+            if v != Value.zero { sawNonZero = true }
+        }
+        // The specific bug this guards against makes MetalRenderContext's
+        // compile throw and NodeRenderer substitute an all-zero (black)
+        // buffer -- MSLTreeEvaluator itself would instead just throw here
+        // (caught above as a test failure), so this is really guarding
+        // against the underlying name collision recurring in some other
+        // shape, not the black-fallback specifically. Kept as a sanity
+        // check that the tree isn't degenerately all-zero regardless.
+        #expect(sawNonZero, "figure 9's tree evaluated to all zeros across every sample coordinate")
+    }
 }
