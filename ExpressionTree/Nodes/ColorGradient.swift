@@ -20,11 +20,6 @@ public final class ColorGradient: Node {
 	// of 27 for Figure 9's calls (p3=1.35) vs. 60.6 for Figure 10's (p3=3.03).
 	public static var debugHeightFactor: ComponentType = 20.0
 	public static var debugLightZ: ComponentType = 0.0
-	// Experiment: does letting each channel's normal/t diverge in sign from
-	// the others (current per-channel default) scramble hues that should be
-	// coherent? true collapses the gradient to one shared scalar height field
-	// (like grad-direction) and tints the single resulting t by `color`.
-	public static var debugSharedNormal: Bool = false
 
 	public var children: [any Node]
 
@@ -55,14 +50,8 @@ public final class ColorGradient: Node {
 	// these to a real uniform buffer (so a drag only changes a buffer, never
 	// the generated MSL, and the cache key can go back to just the tree
 	// shape) is deferred follow-up work, not required for correctness.
-	//
-	// debugSharedNormal's alternate branch (collapsing to one shared scalar
-	// height field instead of per-channel) isn't ported -- fails loudly via
-	// the precondition below rather than silently producing wrong output if
-	// it's ever flipped.
 	public func _emitMSL(into context: MSLCodegenContext) -> String {
 		assert(children.count == 5)
-		precondition(!ColorGradient.debugSharedNormal, "color-grad's debugSharedNormal=true path isn't ported to Metal codegen")
 		context.require(.lightingHelpers)
 
 		let sourceFn = context.emitFunction(for: children[0])

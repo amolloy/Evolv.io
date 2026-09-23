@@ -9,11 +9,9 @@ import SwiftUI
 import ExpressionTree
 
 // Temporary test rig for tuning ColorGradient's hardcoded delta/heightFactor/lightZ
-// constants live against any figure, without waiting on full-resolution renders.
 // Back this out (along with the ColorGradient.debug* statics) once done experimenting.
 struct ColorGradientDebugView: View {
-	private static let previewSize = CGSize(width: 200, height: 200)
-	private static let fullSize = CGSize(width: 800, height: 800)
+	private static let size = CGSize(width: 800, height: 800)
 
 	private let parser = Parser()
 
@@ -21,16 +19,11 @@ struct ColorGradientDebugView: View {
 	@State private var delta: Double = Double(ColorGradient.debugDelta)
 	@State private var heightFactor: Double = Double(ColorGradient.debugHeightFactor)
 	@State private var lightZ: Double = Double(ColorGradient.debugLightZ)
-	@State private var sharedNormal: Bool = ColorGradient.debugSharedNormal
 
 
 	@State private var previewRenderer: NodeRenderer?
 	@State private var previewImage: CGImage?
 	@State private var renderGeneration = 0
-
-	@State private var fullResRenderer: NodeRenderer?
-	@State private var fullResImage: CGImage?
-	@State private var isRenderingFullRes = false
 
 	init() {
 		_selectedFigure = State(initialValue: ContentView.sampleExpressions["Figure 9"] != nil ? "Figure 9" : (ContentView.sampleExpressions.keys.sorted().first ?? ""))
@@ -50,7 +43,7 @@ struct ColorGradientDebugView: View {
 					Image(decorative: previewImage, scale: 1.0, orientation: .up)
 						.resizable()
 						.scaledToFit()
-						.frame(width: Self.fullSize.width, height: Self.fullSize.height)
+						.frame(width: Self.size.width, height: Self.size.height)
 						.contextMenu {
 							Button("Copy Image") {
 								previewRenderer?.copyImageToPasteboard()
@@ -58,7 +51,7 @@ struct ColorGradientDebugView: View {
 						}
 				} else {
 					ProgressView("Rendering...")
-						.frame(width: Self.previewSize.width, height: Self.previewSize.height)
+						.frame(width: Self.size.width, height: Self.size.height)
 				}
 			}
 			.clipShape(RoundedRectangle(cornerRadius: 12))
@@ -68,27 +61,6 @@ struct ColorGradientDebugView: View {
 				debugSlider(label: "delta", value: $delta, range: 0...0.25)
 				debugSlider(label: "heightFactor", value: $heightFactor, range: 0.1...200)
 				debugSlider(label: "lightZ", value: $lightZ, range: 0...10)
-				Toggle("shared normal (collapse channels)", isOn: $sharedNormal)
-			}
-
-			Button(isRenderingFullRes ? "Rendering full res..." : "Render Full Resolution") {
-				renderFullRes()
-			}
-			.disabled(isRenderingFullRes)
-
-			if let fullResImage {
-				Image(decorative: fullResImage, scale: 1.0, orientation: .up)
-					.interpolation(.none)
-					.resizable()
-					.scaledToFit()
-					.frame(maxWidth: 360, maxHeight: 360)
-					.contextMenu {
-						Button("Copy Image") {
-							fullResRenderer?.copyImageToPasteboard()
-						}
-					}
-					.clipShape(RoundedRectangle(cornerRadius: 12))
-					.shadow(radius: 5)
 			}
 		}
 		.padding()
@@ -104,10 +76,6 @@ struct ColorGradientDebugView: View {
 		}
 		.onChange(of: lightZ) { _, newValue in
 			ColorGradient.debugLightZ = ComponentType(newValue)
-			renderPreview()
-		}
-		.onChange(of: sharedNormal) { _, newValue in
-			ColorGradient.debugSharedNormal = newValue
 			renderPreview()
 		}
 		.task {
@@ -143,24 +111,12 @@ struct ColorGradientDebugView: View {
 		renderGeneration += 1
 		let generation = renderGeneration
 		let renderer = NodeRenderer(node: node(for: selectedFigure),
-									 evaluator: Evaluator(size: Self.previewSize))
+									 evaluator: Evaluator(size: Self.size))
 		previewRenderer = renderer
 		Task {
 			await renderer.render()
 			guard generation == renderGeneration else { return }
 			previewImage = renderer.cgImage()
-		}
-	}
-
-	private func renderFullRes() {
-		isRenderingFullRes = true
-		let renderer = NodeRenderer(node: node(for: selectedFigure),
-									 evaluator: Evaluator(size: Self.fullSize))
-		fullResRenderer = renderer
-		Task {
-			await renderer.render()
-			fullResImage = renderer.cgImage()
-			isRenderingFullRes = false
 		}
 	}
 }
