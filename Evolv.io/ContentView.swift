@@ -58,6 +58,7 @@ struct ContentView: View {
 	]
 
 	@State private var selectedGroup: String? = nil
+	@State private var showingTreeVisualizer = false
 
 	var body: some View {
 		NavigationSplitView {
@@ -70,24 +71,36 @@ struct ContentView: View {
 			.frame(minWidth: 200)
 		} detail: {
 			if let selectedGroup {
-				VStack {
-					let node = node(for: ContentView.sampleExpressions[selectedGroup]!)
-					let nodeRenderer = NodeRenderer(node: node,
-													evaluator: Evaluator(size: CGSize(width: 800, height: 800)))
-					RenderedImageView(nodeRenderer: nodeRenderer)
-					.id(selectedGroup)
-					.contextMenu {
-						Button("Copy Image") {
-							nodeRenderer.copyImageToPasteboard()
-						}
+				let node = node(for: ContentView.sampleExpressions[selectedGroup]!)
+				let nodeRenderer = NodeRenderer(node: node,
+												evaluator: Evaluator(size: CGSize(width: 800, height: 800)))
+				RenderedImageView(nodeRenderer: nodeRenderer)
+				.id(selectedGroup)
+				.contextMenu {
+					Button("Copy Image") {
+						nodeRenderer.copyImageToPasteboard()
 					}
-					.clipShape(RoundedRectangle(cornerRadius: 12))
-					.shadow(radius: 5)
-
-					TreeVisualizerView(evaluator: Evaluator(size: CGSize(width: 44, height: 44)),
-									   rootNode: node)
+					Button("Show Expression Tree") {
+						showingTreeVisualizer = true
+					}
 				}
+				.clipShape(RoundedRectangle(cornerRadius: 12))
+				.shadow(radius: 5)
 				.navigationTitle(selectedGroup)
+				.sheet(isPresented: $showingTreeVisualizer) {
+					NavigationStack {
+						TreeVisualizerView(evaluator: Evaluator(size: CGSize(width: 44, height: 44)),
+										   rootNode: node)
+							.toolbar {
+								ToolbarItem(placement: .cancellationAction) {
+									Button("Done") {
+										showingTreeVisualizer = false
+									}
+								}
+							}
+					}
+					.frame(minWidth: 500, minHeight: 500)
+				}
 			} else {
 				Text("Select an expression group")
 			}
