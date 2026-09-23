@@ -46,6 +46,15 @@ struct ContentView: View {
 		   x)) (hsv-to-rgb (bump (if x 10.7 y) #(0.94 0.01 0.4) 0.78 #(0.18 0.28 0.58) #(0.4 0.92
 		   0.58) 10.6 0.23 0.91))) X) 3.1 1.93 #(0.95 0.7 0.35) 3.03)) -0.03) X #(0.76 0.08 0.24))
 		   """,
+		"Figure 12":
+			"""
+			(cos (round (atan (log (invert y) (+ (bump (+ (round x y) y) #(0.46 0.82 0.65) 0.02 
+			#(0.1 0.06 0.1) #(0.99 0.06 0.41) 1.47 8.7 3.7) (color-grad (round (+ y y) (log 
+			(invert x) (+ (invert y) (round (+ y x) (bump (warped-ifs (round y y) y 0.08 0.06
+			7.4 1.65 6.1 0.54 3.1 0.26 0.73 15.8 5.7 8.9 0.49 7.2 15.6 0.98) #(0.46 0.82 0.65) 
+			0.02 #(0.1 0.06 0.1) #(0.99 0.06 0.41) 0.83 8.7 2.6))))) 3.1 6.8 #(0.95 0.7 0.59) 
+			0.57))) #(0.17 0.08 0.75) 0.37) (vector y 0.09 (cos (round y y))))) 
+			"""
 	]
 
 	@State private var selectedGroup: String? = nil
