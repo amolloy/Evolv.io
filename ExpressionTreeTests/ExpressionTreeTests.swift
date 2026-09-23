@@ -51,10 +51,19 @@ struct MetalCodegenParityTests {
         #expect(swiftValues.count == metalValues.count)
         for (i, pair) in zip(swiftValues, metalValues).enumerated() {
             let (swiftValue, metalValue) = pair
-            let diff = abs(swiftValue - metalValue)
-            let maxDiff = Swift.max(diff.x, Swift.max(diff.y, diff.z))
-            #expect(maxDiff < tolerance,
-                    "coordinate \(i) (\(Self.sampleCoordinates[i])): swift=\(swiftValue) metal=\(metalValue) maxDiff=\(maxDiff)")
+            for c in 0..<3 {
+                let s = swiftValue[c]
+                let m = metalValue[c]
+                // NaN != NaN and inf - inf == NaN, so a plain subtraction
+                // would spuriously fail two sides that actually agree on
+                // "not a finite number" -- treat matching non-finite values
+                // as equal instead of falling through to the diff check.
+                if s.isNaN && m.isNaN { continue }
+                if s.isInfinite && m.isInfinite && (s > 0) == (m > 0) { continue }
+                let diff = abs(s - m)
+                #expect(diff < tolerance,
+                        "coordinate \(i) (\(Self.sampleCoordinates[i])) component \(c): swift=\(s) metal=\(m) diff=\(diff)")
+            }
         }
     }
 
@@ -94,5 +103,51 @@ struct MetalCodegenParityTests {
     @Test func sharedSubexpressionParity() throws {
         let shared = VariableX()
         try assertParity(Add([shared, shared]))
+    }
+
+    @Test func multParity() throws {
+        try assertParity(Mult([VariableX(), VariableY()]))
+    }
+
+    @Test func divParity() throws {
+        try assertParity(Div([VariableX(), ConstantTriplet(Value(2.0, -3.0, 0.5))]))
+    }
+
+    /// One component of the divisor is exactly zero, exercising Mod's
+    /// zero-divisor masking branch (not just the plain-fmod path).
+    @Test func modParity() throws {
+        try assertParity(Mod([VariableY(), ConstantTriplet(Value(0.0, 0.3, -0.4))]))
+    }
+
+    @Test func absParity() throws {
+        try assertParity(Abs([VariableX()]))
+    }
+
+    @Test func invertParity() throws {
+        try assertParity(Invert([VariableY()]))
+    }
+
+    @Test func roundParity() throws {
+        try assertParity(Round([VariableY(), ConstantTriplet(Value(0.25, 0.5, 1.0))]))
+    }
+
+    /// y=0 in the sample coordinates makes `log(abs(0))` an infinity, not a
+    /// NaN -- exercises the "infinity passes through, only NaN gets
+    /// replaced" distinction in both the Swift and MSL implementations.
+    @Test func logParity() throws {
+        try assertParity(Log([VariableY(), ConstantTriplet(Value(0.19, -3.0, 15.5))]))
+    }
+
+    @Test func ifParity() throws {
+        try assertParity(If([VariableX(), ConstantTriplet(Value(1.0, 2.0, 3.0)), ConstantTriplet(Value(-1.0, -2.0, -3.0))]))
+    }
+
+    /// `and` does bitwise AND on raw IEEE-754 bit patterns; the CPU does
+    /// this at 64-bit width and the Metal port at 32-bit width, which is a
+    /// genuinely different operation (not just lower precision) -- accepted
+    /// per the migration plan, checked here with an explicitly looser
+    /// tolerance rather than by tightening the default.
+    @Test func andParity() throws {
+        try assertParity(And([ConstantTriplet(Value(0.75, -0.25, 3.5)), ConstantTriplet(Value(0.5, 0.5, 0.5))]), tolerance: 2.0)
     }
 }

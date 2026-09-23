@@ -21,6 +21,13 @@ public class Div: CachedNode {
 		assert(children.count == 2)
 		return DivResult(children.map { $0.evaluate(using: evaluator) })
 	}
+
+	public func _emitMSL(into context: MSLCodegenContext) -> String {
+		assert(children.count == 2)
+		let v0 = children[0].codegenMSL(into: context)
+		let v1 = children[1].codegenMSL(into: context)
+		return "\(v0.variableName) / \(v1.variableName)"
+	}
 }
 
 class DivResult: ExpressionResult {

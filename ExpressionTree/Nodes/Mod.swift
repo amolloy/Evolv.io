@@ -23,6 +23,18 @@ public class Mod: CachedNode {
 		assert(children.count == 2)
 		return ModResult(children.map { $0.evaluate(using: evaluator) })
 	}
+
+	public func _emitMSL(into context: MSLCodegenContext) -> String {
+		assert(children.count == 2)
+		let v0 = children[0].codegenMSL(into: context)
+		let v1 = children[1].codegenMSL(into: context)
+
+		let isZeroMask = context.declare("\(v1.variableName) == float3(0.0)", type: "bool3")
+		let safeDivisor = context.declare("select(\(v1.variableName), float3(1.0), \(isZeroMask.variableName))")
+		let remainder = context.declare("fmod(\(v0.variableName), \(safeDivisor.variableName))")
+		let isNegativeRemainder = context.declare("\(remainder.variableName) < float3(0.0)", type: "bool3")
+		return "select(\(remainder.variableName), \(remainder.variableName) + \(v1.variableName), \(isNegativeRemainder.variableName))"
+	}
 }
 
 class ModResult: ExpressionResult {

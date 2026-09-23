@@ -49,15 +49,17 @@ public final class MSLCodegenContext {
 		return value
 	}
 
-	/// Emits a fresh `float3 tNN = expression;` statement and returns a
+	/// Emits a fresh `<type> tNN = expression;` statement and returns a
 	/// reference to it. Exposed for sub-expressions that aren't themselves a
 	/// distinct `Node` (and so have nothing to key a memo on) but still
-	/// benefit from being pulled out into their own named statement.
+	/// benefit from being pulled out into their own named statement -- e.g.
+	/// an intermediate `bool3` mask in a multi-step node like `Mod`. Defaults
+	/// to `float3` since that's what most intermediates are.
 	@discardableResult
-	public func declare(_ expression: String) -> MSLValue {
+	public func declare(_ expression: String, type: String = "float3") -> MSLValue {
 		let name = "t\(nextVariableIndex)"
 		nextVariableIndex += 1
-		statements.append("float3 \(name) = \(expression);")
+		statements.append("\(type) \(name) = \(expression);")
 		return MSLValue(variableName: name)
 	}
 

@@ -21,6 +21,14 @@ public class If: CachedNode {
 		assert(children.count == 3)
 		return IfResult( children.map { $0.evaluate(using: evaluator) } )
 	}
+
+	public func _emitMSL(into context: MSLCodegenContext) -> String {
+		assert(children.count == 3)
+		let condition = children[0].codegenMSL(into: context)
+		let thenVal = children[1].codegenMSL(into: context)
+		let elseVal = children[2].codegenMSL(into: context)
+		return "select(\(elseVal.variableName), \(thenVal.variableName), \(condition.variableName) > float3(0.0))"
+	}
 }
 
 class IfResult: ExpressionResult {

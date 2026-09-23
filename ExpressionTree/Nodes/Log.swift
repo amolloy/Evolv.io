@@ -24,6 +24,16 @@ public class Log: CachedNode {
 		return LogResult(children.map { $0.evaluate(using: evaluator) })
 	}
 
+	public func _emitMSL(into context: MSLCodegenContext) -> String {
+		assert(children.count == 2)
+		let v0 = children[0].codegenMSL(into: context)
+		let v1 = children[1].codegenMSL(into: context)
+		let numerator = context.declare("log(abs(\(v0.variableName)))")
+		let denominator = context.declare("log(abs(\(v1.variableName)))")
+		let result = context.declare("\(numerator.variableName) / \(denominator.variableName)")
+		return "select(\(result.variableName), float3(0.0), isnan(\(result.variableName)))"
+	}
+
 	public func debugValues(using evaluator: Evaluator, at coord: Coordinate) -> [String: String] {
 		let vals = children.map { $0.evaluate(using: evaluator) }
 		let inputValue = vals[0].value(at: coord)

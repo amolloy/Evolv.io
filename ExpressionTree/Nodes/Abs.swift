@@ -23,6 +23,12 @@ public class Abs: CachedNode {
 		assert(children.count == 1)
 		return AbsResult(children[0].evaluate(using: evaluator))
 	}
+
+	public func _emitMSL(into context: MSLCodegenContext) -> String {
+		assert(children.count == 1)
+		let e = children[0].codegenMSL(into: context)
+		return "abs(\(e.variableName))"
+	}
 }
 
 class AbsResult: ExpressionResult {
