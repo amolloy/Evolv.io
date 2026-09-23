@@ -20,6 +20,14 @@ public final class ColorGradient: Node {
 	// of 27 for Figure 9's calls (p3=1.35) vs. 60.6 for Figure 10's (p3=3.03).
 	public static var debugHeightFactor: ComponentType = 20.0
 	public static var debugLightZ: ComponentType = 0.0
+	// Number of finite-difference taps per axis between the center and
+	// `deltaLocal` (see ColorGradient.md's "more samples between the delta
+	// endpoints" experiment) -- e.g. 4 samples at delta*(1/4, 2/4, 3/4, 1),
+	// averaged with equal weight, instead of the previous fixed two-tap
+	// 0.6*inner + 0.4*outer blend. `debugTapCount = 1` reproduces a plain
+	// single central difference at the full delta radius; `2` is close to
+	// (but not identical to, since weights are now equal) the old scheme.
+	public static var debugTapCount: Int = 4
 
 	public var children: [any Node]
 
@@ -66,7 +74,6 @@ public final class ColorGradient: Node {
 
 		let p1Val = context.declare("avgLum(\(p1.variableName))", type: "float")
 		let deltaLocal = context.declare("(abs(\(p1Val.variableName)) / 3.1) * \(debugDeltaLit)", type: "float")
-		let dInner = context.declare("\(deltaLocal.variableName) * 0.5", type: "float")
 
 		let p3Val = context.declare("avgLum(\(p3.variableName))", type: "float")
 		let heightFactor = context.declare("\(p3Val.variableName) * \(debugHeightFactorLit)", type: "float")
@@ -74,14 +81,30 @@ public final class ColorGradient: Node {
 
 		let angle = context.declare("avgLum(\(p2.variableName))", type: "float")
 
-		let hXNegOuter = context.declare("\(sourceFn)(coord - float2(\(deltaLocal.variableName), 0.0))")
-		let hXNegInner = context.declare("\(sourceFn)(coord - float2(\(dInner.variableName), 0.0))")
-		let hXPosInner = context.declare("\(sourceFn)(coord + float2(\(dInner.variableName), 0.0))")
-		let hXPosOuter = context.declare("\(sourceFn)(coord + float2(\(deltaLocal.variableName), 0.0))")
-		let hYNegOuter = context.declare("\(sourceFn)(coord - float2(0.0, \(deltaLocal.variableName)))")
-		let hYNegInner = context.declare("\(sourceFn)(coord - float2(0.0, \(dInner.variableName)))")
-		let hYPosInner = context.declare("\(sourceFn)(coord + float2(0.0, \(dInner.variableName)))")
-		let hYPosOuter = context.declare("\(sourceFn)(coord + float2(0.0, \(deltaLocal.variableName)))")
+		// Multi-tap gradient estimate: sample `source` at `tapCount` radii
+		// evenly spaced between the center and `deltaLocal` (delta * 1/N,
+		// 2/N, ..., N/N), average the resulting central differences with
+		// equal weight. Generalizes the old fixed two-tap
+		// 0.6*inner + 0.4*outer blend to an arbitrary, live-tunable sample
+		// count (ColorGradient.debugTapCount) -- see ColorGradient.md.
+		let tapCount = max(1, ColorGradient.debugTapCount)
+		var xDiffTerms: [String] = []
+		var yDiffTerms: [String] = []
+		for i in 1...tapCount {
+			let fracLit = mslFloatLiteral(ComponentType(i) / ComponentType(tapCount))
+			let radius = context.declare("\(deltaLocal.variableName) * \(fracLit)", type: "float")
+
+			let hXNeg = context.declare("\(sourceFn)(coord - float2(\(radius.variableName), 0.0))")
+			let hXPos = context.declare("\(sourceFn)(coord + float2(\(radius.variableName), 0.0))")
+			xDiffTerms.append("(\(hXNeg.variableName) - \(hXPos.variableName))")
+
+			let hYNeg = context.declare("\(sourceFn)(coord - float2(0.0, \(radius.variableName)))")
+			let hYPos = context.declare("\(sourceFn)(coord + float2(0.0, \(radius.variableName)))")
+			yDiffTerms.append("(\(hYNeg.variableName) - \(hYPos.variableName))")
+		}
+		let tapCountLit = mslFloatLiteral(ComponentType(tapCount))
+		let gx = context.declare("(\(xDiffTerms.joined(separator: " + "))) / \(tapCountLit)")
+		let gy = context.declare("(\(yDiffTerms.joined(separator: " + "))) / \(tapCountLit)")
 
 		let lightDx = context.declare("cos(\(angle.variableName))", type: "float")
 		let lightDy = context.declare("sin(\(angle.variableName))", type: "float")
@@ -91,9 +114,9 @@ public final class ColorGradient: Node {
 
 		let lightMap = context.declare("""
 		(\(lightLen.variableName) < 1e-9) ? float3(0.5) : float3(
-			colorGradChannel(\(hXNegOuter.variableName).x, \(hXNegInner.variableName).x, \(hXPosInner.variableName).x, \(hXPosOuter.variableName).x, \(hYNegOuter.variableName).x, \(hYNegInner.variableName).x, \(hYPosInner.variableName).x, \(hYPosOuter.variableName).x, \(heightFactor.variableName), \(lightNormalized.variableName), \(colorTint.variableName).x),
-			colorGradChannel(\(hXNegOuter.variableName).y, \(hXNegInner.variableName).y, \(hXPosInner.variableName).y, \(hXPosOuter.variableName).y, \(hYNegOuter.variableName).y, \(hYNegInner.variableName).y, \(hYPosInner.variableName).y, \(hYPosOuter.variableName).y, \(heightFactor.variableName), \(lightNormalized.variableName), \(colorTint.variableName).y),
-			colorGradChannel(\(hXNegOuter.variableName).z, \(hXNegInner.variableName).z, \(hXPosInner.variableName).z, \(hXPosOuter.variableName).z, \(hYNegOuter.variableName).z, \(hYNegInner.variableName).z, \(hYPosInner.variableName).z, \(hYPosOuter.variableName).z, \(heightFactor.variableName), \(lightNormalized.variableName), \(colorTint.variableName).z))
+			colorGradChannel(\(gx.variableName).x, \(gy.variableName).x, \(heightFactor.variableName), \(lightNormalized.variableName), \(colorTint.variableName).x),
+			colorGradChannel(\(gx.variableName).y, \(gy.variableName).y, \(heightFactor.variableName), \(lightNormalized.variableName), \(colorTint.variableName).y),
+			colorGradChannel(\(gx.variableName).z, \(gy.variableName).z, \(heightFactor.variableName), \(lightNormalized.variableName), \(colorTint.variableName).z))
 		""")
 
 		return "signedPow(\(lightMap.variableName), \(p3Val.variableName))"

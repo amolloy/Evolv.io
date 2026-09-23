@@ -19,6 +19,7 @@ struct ColorGradientDebugView: View {
 	@State private var delta: Double = Double(ColorGradient.debugDelta)
 	@State private var heightFactor: Double = Double(ColorGradient.debugHeightFactor)
 	@State private var lightZ: Double = Double(ColorGradient.debugLightZ)
+	@State private var tapCount: Double = Double(ColorGradient.debugTapCount)
 
 
 	@State private var previewRenderer: NodeRenderer?
@@ -61,6 +62,7 @@ struct ColorGradientDebugView: View {
 				debugSlider(label: "delta", value: $delta, range: 0...0.25)
 				debugSlider(label: "heightFactor", value: $heightFactor, range: 0.1...200)
 				debugSlider(label: "lightZ", value: $lightZ, range: 0...10)
+				debugSlider(label: "tapCount", value: $tapCount, range: 1...16, step: 1)
 			}
 		}
 		.padding()
@@ -78,18 +80,26 @@ struct ColorGradientDebugView: View {
 			ColorGradient.debugLightZ = ComponentType(newValue)
 			renderPreview()
 		}
+		.onChange(of: tapCount) { _, newValue in
+			ColorGradient.debugTapCount = Int(newValue)
+			renderPreview()
+		}
 		.task {
 			renderPreview()
 		}
 	}
 
-	private func debugSlider(label: String, value: Binding<Double>, range: ClosedRange<Double>) -> some View {
+	private func debugSlider(label: String, value: Binding<Double>, range: ClosedRange<Double>, step: Double = 0) -> some View {
 		HStack {
 			Text(label)
 				.font(.caption.bold())
 				.frame(width: 90, alignment: .leading)
-			Slider(value: value, in: range)
-			Text(String(format: "%.4f", value.wrappedValue))
+			if step > 0 {
+				Slider(value: value, in: range, step: step)
+			} else {
+				Slider(value: value, in: range)
+			}
+			Text(step > 0 ? String(format: "%.0f", value.wrappedValue) : String(format: "%.4f", value.wrappedValue))
 				.font(.caption.monospacedDigit())
 				.frame(width: 60, alignment: .trailing)
 		}

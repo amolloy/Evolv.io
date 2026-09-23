@@ -177,7 +177,7 @@ struct MetalRenderRegressionTests {
             VariableX()
         ])
         let node = ColorGradient([source, Constant(3.1), Constant(1.86), ConstantTriplet(Value(0.95, 0.7, 0.59)), Constant(1.35)])
-        try assertGolden(node, Value(0.04215199872851372, 0.02791089378297329, 0.022158563137054443), tolerance: 1e-3)
+        try assertGolden(node, Value(0.03680462762713432, 0.024370135739445686, 0.0193475428968668), tolerance: 1e-3)
     }
 
     @Test func bump() throws {

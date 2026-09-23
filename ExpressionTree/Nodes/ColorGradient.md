@@ -389,6 +389,53 @@ ever swept widely enough to fairly judge the idea. Worth revisiting if
 other, more targeted leads (the `y=0` singularity, the `bump`/
 `rotate-vector` argument-order questions) run dry.
 
+### 17. N-tap gradient estimate: generalize the fixed 2-tap inner/outer blend to a live-tunable sample count [implemented and kept -- user judged it not clearly meaningful, but not worth reverting]
+
+Motivated by the "liquid" quality the user pointed out in Karl's figures
+(streaks that look almost refractive at their edges) -- discussed as
+possibly a Fresnel/dispersion effect (not yet tried), but before reaching
+for that, revisited an older suggestion still on the table from #6/#7/#12:
+the existing multi-tap sampling is only a 2-tap approximation (`0.5×delta`
+and `1.0×delta`, blended `0.6/0.4`) of the "proper" weighted multi-sample
+kernel that motivated it (Horn's hillshade / Sobel-style kernels). Since
+`colorGradChannel` (the shared MSL helper) took 8 fixed scalar taps as
+separate parameters, it couldn't generalize to more samples without
+changing its signature.
+
+Refactored `colorGradChannel` (`MSLCodegen.swift`) to take an
+already-computed per-channel `gx`/`gy` instead of the 8 raw tap values --
+moves all tap sampling/weighting into `ColorGradient._emitMSL`, where it can
+vary independently of the shared helper (`GradientDirection`/`Bump` don't
+call `colorGradChannel` at all, so this was safe to change without touching
+them). `ColorGradient._emitMSL` now loops `debugTapCount` times, sampling
+`source` at radii `delta × (1/N, 2/N, ..., N/N)` per axis and averaging the
+resulting central differences with equal weight (`1/N` each) -- `N=1`
+reproduces a plain single central difference at the full delta radius;
+`N=2` is close to (but not identical to, since weights are now equal
+instead of 0.6/0.4) the previous scheme. New live-tunable knob:
+`ColorGradient.debugTapCount` (default `4`; `1...16` slider in
+`ColorGradientDebugView`, step `1`). Added to `MetalRenderContext`'s
+pipeline cache key alongside the other debug statics, same reasoning as
+`debugDelta`/`debugHeightFactor`/`debugLightZ` (a slider tick must not
+silently serve a stale pipeline).
+
+The `colorGradient()`/`nestedColorGradient()` regression tests' golden
+values changed as a direct, expected consequence of `debugTapCount`'s new
+default (4 equal-weight taps) differing numerically from the old fixed
+0.6/0.4 two-tap blend -- `colorGradient()`'s golden value was updated
+accordingly (`ExpressionTreeTests.swift`); not a sign anything is broken.
+
+**Result**: live-tuned against Figure 9/10 via `ColorGradientDebugView`'s
+new `tapCount` slider -- user's read was "not sure that got us anything
+super meaningful," i.e. no clear win, no clear regression either. Left in
+(default `4`) rather than reverted -- it's a strict generalization of the
+old scheme (recovers it at `N=1`/`N=2`), stays live-tunable, and cost
+nothing in code complexity, so there's no reason to back it out even
+though it didn't move the needle on the "liquid" quality that motivated
+it. The Fresnel/dispersion idea from the same discussion remains
+untried and is probably the more promising next lead if this thread gets
+picked back up.
+
 ## Current state of the code (as of this writing)
 
 - `ColorGradient.swift`: `PerChannelLightMapResult` (per-channel, #8's
@@ -400,17 +447,22 @@ other, more targeted leads (the `y=0` singularity, the `bump`/
   sign-preserving `pow(abs(base), p3)` contrast step). Blinn-Phong specular
   kicker removed per #15 -- never turned on since #12, axed rather than left
   inert. Light position experiment (#4) and full-replacement Phong (#10) are
-  both superseded/removed. Live-tunable via `ColorGradient.debugDelta/
-  debugHeightFactor/debugLightZ` (backing `ColorGradientDebugView`); current
-  defaults `0.01 / 20 / 0.0`, the first shared-across-both-figures checkpoint
-  from #14. Note `debugHeightFactor`/`debugLightZ` are multipliers against
-  `p3` as of #14, not absolute values, despite the unchanged variable names.
+  both superseded/removed. Per #17, the multi-tap gradient sampling itself
+  is now a live-tunable `N`-tap equal-weight average (`ColorGradient.
+  debugTapCount`, default `4`) rather than the old fixed 2-tap 0.6/0.4
+  blend. Live-tunable via `ColorGradient.debugDelta/debugHeightFactor/
+  debugLightZ/debugTapCount` (backing `ColorGradientDebugView`); current
+  defaults `0.01 / 20 / 0.0 / 4`, the `0.01/20/0.0` triple being the first
+  shared-across-both-figures checkpoint from #14 (not yet re-checked
+  against the reference with `debugTapCount=4` specifically -- see #17).
+  Note `debugHeightFactor`/`debugLightZ` are multipliers against `p3` as of
+  #14, not absolute values, despite the unchanged variable names.
   `colorVal` is plain `color.value(at: coord)` again -- #16's value-keyed
   hue cycle was tried and reverted (see #16; not ruled out, just not
   currently in the code). Note: the block comment above `_evaluate`
   describing `p1`/`p2` as `dirX`/`dirY` and `p3` as a plain "contrast
   exponent" is now stale and describes an earlier architecture (#1/#8), not
-  the code below it (#12/#14).
+  the code below it (#12/#14/#17).
 - `LightMapResult.swift`: unchanged in spirit from `grad-direction`'s
   original, except the `lightDx/lightDy < 0.0006` special-case fallback
   (for the literal `(0,0)` direction case) has been removed by another

@@ -207,25 +207,18 @@ func mslPerlinPreamble() -> String {
 /// Shared helpers for the lighting-model nodes (`GradientDirection`,
 /// `ColorGradient`, `Bump`), prepended whenever any node requires
 /// `.lightingHelpers`. `avgLum` matches `averageLuminance()`.
-/// `colorGradChannel` is `PerChannelLightMapResult`'s per-channel body
-/// (light-degenerate case handled by the caller before calling this, since
-/// that guard applies once, not per channel; only the normal-degenerate
-/// guard is per channel). `signedPow` matches `ColorGradResult`.
+/// `colorGradChannel` takes an already tap-weighted per-channel gradient --
+/// the tap sampling/weighting itself now lives in `ColorGradient._emitMSL`
+/// (see `debugTapCount`), not here, so the number of samples can vary
+/// without touching this shared helper (light-degenerate case handled by
+/// the caller before calling this, since that guard applies once, not per
+/// channel; only the normal-degenerate guard is per channel). `signedPow`
+/// matches `ColorGradResult`.
 func mslLightingHelpersPreamble() -> String {
 	"""
 	inline float avgLum(float3 v) { return (v.x + v.y + v.z) / 3.0; }
 
-	inline float colorGradChannel(float hXNegOuter, float hXNegInner, float hXPosInner, float hXPosOuter,
-									float hYNegOuter, float hYNegInner, float hYPosInner, float hYPosOuter,
-									float heightFactor, float3 lightNormalized, float colorTint) {
-		float gxInner = hXNegInner - hXPosInner;
-		float gxOuter = hXNegOuter - hXPosOuter;
-		float gx = 0.6 * gxInner + 0.4 * gxOuter;
-
-		float gyInner = hYNegInner - hYPosInner;
-		float gyOuter = hYNegOuter - hYPosOuter;
-		float gy = 0.6 * gyInner + 0.4 * gyOuter;
-
+	inline float colorGradChannel(float gx, float gy, float heightFactor, float3 lightNormalized, float colorTint) {
 		float3 normal = float3(-gx, -gy, 1.0 / heightFactor);
 		float normalLen = length(normal);
 		if (normalLen < 1e-9) {

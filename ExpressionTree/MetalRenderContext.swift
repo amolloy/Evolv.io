@@ -70,7 +70,7 @@ final class MetalRenderContext {
 	/// go back to just the tree shape and a slider drag never recompiles) is
 	/// deferred follow-up work, not required for correctness.
 	func pipeline(for node: any Node) throws -> MTLComputePipelineState {
-		let key = "\(node.toString())|\(ColorGradient.debugDelta)|\(ColorGradient.debugHeightFactor)|\(ColorGradient.debugLightZ)"
+		let key = "\(node.toString())|\(ColorGradient.debugDelta)|\(ColorGradient.debugHeightFactor)|\(ColorGradient.debugLightZ)|\(ColorGradient.debugTapCount)"
 
 		lock.lock()
 		if let cached = pipelineCache[key] {
