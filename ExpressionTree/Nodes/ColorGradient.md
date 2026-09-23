@@ -432,37 +432,107 @@ super meaningful," i.e. no clear win, no clear regression either. Left in
 old scheme (recovers it at `N=1`/`N=2`), stays live-tunable, and cost
 nothing in code complexity, so there's no reason to back it out even
 though it didn't move the needle on the "liquid" quality that motivated
-it. The Fresnel/dispersion idea from the same discussion remains
-untried and is probably the more promising next lead if this thread gets
-picked back up.
+it.
+
+A literal Fresnel/chromatic-dispersion (real-optics) mechanism was also
+discussed in the same conversation as a candidate explanation for the
+"liquid" look, but the user explicitly walked that back: this project's
+whole premise is that Sims was writing cheap per-pixel Lisp ops on a
+CM-2, not simulating actual refraction, so a period-plausible variation on
+the *existing* algorithm (or yet another argument reinterpretation) is the
+right shape of idea, not a new rendering technique. See #18 below for the
+follow-up in that spirit.
+
+### 18. Curvature (2nd-difference) lighting instead of slope-dotted-with-light [implemented, live-tuned by the user -- interesting, but the user doesn't believe it's the real `color-grad` algorithm; forked into its own permanent node, `color-grad-curvature` / `ColorGradientCurvature.swift`, rather than kept as a `color-grad` toggle]
+
+Also motivated by the "liquid streak with a colored fringe at the edges"
+description, but staying inside cheap-per-pixel-op territory per the
+walk-back above: the fringe profile everyone's been chasing (dark spine,
+bright/colored highlight on both edges of a band) is exactly what a
+*second* derivative of `source` looks like on a rounded step -- flat
+interior → curvature ≈ 0 → dark (structurally, not just numerically
+near-zero the way the slope-based branch needed tuning to achieve, per
+#2); a step edge's two rounded shoulders → curvature spikes of opposite
+sign on the two sides → naturally sets up the sign split that `signedPow`
+and, further up an enclosing tree, `log` at a base < 1 (#12/Experiment C)
+turn into two complementary fringe colors -- without any light-direction
+machinery at all.
+
+First implemented as a toggle in `ColorGradient._emitMSL`
+(`ColorGradient.debugUseCurvature`), sharing `p1`'s role (delta/
+filter-radius scale) and the multi-tap sampling from #17, replacing the
+gradient+light-dot math with: per axis, average the second finite
+difference (`h(x-r) + h(x+r) - 2·h(x)`) across the same `debugTapCount`
+radii used for the slope branch, then combine the two axes as
+`cos²(angle)·curvX + sin²(angle)·curvY`, scaled by `heightFactor` and
+offset by `lightZ`, then tinted by `color` per channel. `p2` (`angle`) is
+reinterpreted a fourth way: not a light direction (#1-#3/#7), not a
+position (#4), not a single light angle (#12), but a curvature
+*anisotropy* angle -- weighting how much the x- vs y-axis curvature
+contributes, same cos/sin-of-an-angle shape as its previous role, just
+pointed at a different quantity. `debugLightZ` becomes a flat additive
+baseline (no longer a light-vector Z component) since curvature alone is
+exactly zero on flat regions with no baseline at all. `heightFactor`
+becomes a direct curvature gain rather than a normal-vector Z-scale.
+
+Regression-test fallout while it was still a toggle inside `ColorGradient`:
+`colorGradient()`'s golden value briefly changed to `(0, 0, 0)`, since the
+test's fixed coordinate happens to land in a flat, non-edge region of
+`source`, where curvature is exactly zero (unlike the slope branch's small
+nonzero baseline there) -- confirmed via `nestedColorGradient()` (samples
+three coordinates, asserts at least one nonzero) that the curvature branch
+isn't degenerately zero everywhere, just at that specific point.
+
+**User's verdict**: live-tuned against Figure 9/10 -- found the result
+genuinely interesting, but does not believe it's the real `color-grad`
+mechanism (unlike #17, this wasn't a "no clear signal either way" read --
+it's an explicit "I don't think that's right" alongside "worth keeping
+around"). Per the user's request, this is **not** a `color-grad` toggle
+any more: forked out into its own permanent node type,
+`ColorGradientCurvature` (`ColorGradientCurvature.swift`, DSL name
+`color-grad-curvature`), registered separately in `NodeRegistry.swift`
+with its own `debugDelta`/`debugHeightFactor`/`debugLightZ`/`debugTapCount`
+statics (not shared with `ColorGradient`'s). `ColorGradient`/`color-grad`
+itself reverted to the exact pre-#18 (#17) implementation, so Figure 9/10/
+12 and the 1993 Fig. 6 sample expressions -- all of which call literal
+`color-grad` -- are unaffected by this experiment either way. Has its own
+regression test (`colorGradientCurvature()` in `ExpressionTreeTests.swift`,
+a hand-derived golden value using a simple `x²` source rather than a Sims
+figure, since it isn't one). No `ColorGradientDebugView` wiring yet for
+its own debug statics -- the view's sliders tune `ColorGradient`'s, not
+`ColorGradientCurvature`'s; live-tuning the new node currently means
+editing its statics directly, or extending the view if that's wanted
+later.
 
 ## Current state of the code (as of this writing)
 
-- `ColorGradient.swift`: `PerChannelLightMapResult` (per-channel, #8's
-  foundation) extended per #12 above -- multi-tap gradient sampling, `p1`
-  driving a per-tree `delta` scale, `p2` as a single planar light angle --
-  and per #14, `heightFactor`/`lightZ` are no longer bare debug constants:
-  both are `p3 * debugHeightFactor`/`p3 * debugLightZ`, so `p3` now drives
-  three things (heightFactor scale, lightZ scale, and `ColorGradResult`'s
-  sign-preserving `pow(abs(base), p3)` contrast step). Blinn-Phong specular
-  kicker removed per #15 -- never turned on since #12, axed rather than left
-  inert. Light position experiment (#4) and full-replacement Phong (#10) are
-  both superseded/removed. Per #17, the multi-tap gradient sampling itself
-  is now a live-tunable `N`-tap equal-weight average (`ColorGradient.
-  debugTapCount`, default `4`) rather than the old fixed 2-tap 0.6/0.4
-  blend. Live-tunable via `ColorGradient.debugDelta/debugHeightFactor/
-  debugLightZ/debugTapCount` (backing `ColorGradientDebugView`); current
-  defaults `0.01 / 20 / 0.0 / 4`, the `0.01/20/0.0` triple being the first
-  shared-across-both-figures checkpoint from #14 (not yet re-checked
-  against the reference with `debugTapCount=4` specifically -- see #17).
-  Note `debugHeightFactor`/`debugLightZ` are multipliers against `p3` as of
-  #14, not absolute values, despite the unchanged variable names.
+- `ColorGradient.swift`: back to the exact pre-#18 (#17) implementation --
+  `PerChannelLightMapResult` (per-channel, #8's foundation) extended per
+  #12 -- multi-tap gradient sampling, `p1` driving a per-tree `delta`
+  scale, `p2` as a single planar light angle -- and per #14, `heightFactor`/
+  `lightZ` as `p3 * debugHeightFactor`/`p3 * debugLightZ` rather than bare
+  constants. `p3` doubles as the trailing sign-preserving
+  `pow(abs(base), p3)` contrast exponent (`signedPow`). Per #17, the
+  finite-difference sampling is a live-tunable `N`-tap equal-weight
+  average (`debugTapCount`, default `4`) rather than the original fixed
+  2-tap 0.6/0.4 blend. Blinn-Phong specular kicker removed per #15. Light
+  position experiment (#4) and full-replacement Phong (#10) are both
+  superseded/removed. Live-tunable via `ColorGradient.debugDelta/
+  debugHeightFactor/debugLightZ/debugTapCount` (backing
+  `ColorGradientDebugView`); current defaults `0.01 / 20 / 0.0 / 4`.
   `colorVal` is plain `color.value(at: coord)` again -- #16's value-keyed
   hue cycle was tried and reverted (see #16; not ruled out, just not
-  currently in the code). Note: the block comment above `_evaluate`
+  currently in the code). Note: the block comment above `_emitMSL`
   describing `p1`/`p2` as `dirX`/`dirY` and `p3` as a plain "contrast
-  exponent" is now stale and describes an earlier architecture (#1/#8), not
-  the code below it (#12/#14/#17).
+  exponent" is now stale and describes an earlier architecture (#1/#8),
+  not the code below it (#12/#14/#17).
+- `ColorGradientCurvature.swift`: per #18, a separate node
+  (`color-grad-curvature`) hosting the curvature-based lighting theory --
+  see #18 above for the full mechanism and reinterpretations of `p2`/
+  `heightFactor`/`lightZ`. Kept because the user found it interesting, not
+  because it's believed to be the real `color-grad`. Its own
+  `debugDelta`/`debugHeightFactor`/`debugLightZ`/`debugTapCount` statics,
+  independent of `ColorGradient`'s.
 - `LightMapResult.swift`: unchanged in spirit from `grad-direction`'s
   original, except the `lightDx/lightDy < 0.0006` special-case fallback
   (for the literal `(0,0)` direction case) has been removed by another

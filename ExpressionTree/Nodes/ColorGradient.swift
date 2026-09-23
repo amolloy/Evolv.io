@@ -86,7 +86,7 @@ public final class ColorGradient: Node {
 		// 2/N, ..., N/N), average the resulting central differences with
 		// equal weight. Generalizes the old fixed two-tap
 		// 0.6*inner + 0.4*outer blend to an arbitrary, live-tunable sample
-		// count (ColorGradient.debugTapCount) -- see ColorGradient.md.
+		// count (ColorGradient.debugTapCount) -- see ColorGradient.md #17.
 		let tapCount = max(1, ColorGradient.debugTapCount)
 		var xDiffTerms: [String] = []
 		var yDiffTerms: [String] = []

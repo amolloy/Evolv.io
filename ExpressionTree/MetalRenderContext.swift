@@ -60,17 +60,18 @@ final class MetalRenderContext {
 	}
 
 	/// Compiles (or returns the cached pipeline for) `node`'s generated MSL.
-	/// Keyed by `node.toString()` plus ColorGradient's live debug statics --
-	/// those are baked into generated MSL as literals (not live uniforms; see
-	/// ColorGradient._emitMSL), so a ColorGradientDebugView slider tick changes
-	/// what a *structurally identical* tree should compile to. Without the
-	/// statics in the key, a slider drag would silently serve a stale pipeline
-	/// compiled with the old values -- wrong output, not just a missed cache
-	/// optimization. Promoting these to real uniforms (so the cache key can
-	/// go back to just the tree shape and a slider drag never recompiles) is
-	/// deferred follow-up work, not required for correctness.
+	/// Keyed by `node.toString()` plus ColorGradient's/ColorGradientCurvature's
+	/// live debug statics -- those are baked into generated MSL as literals
+	/// (not live uniforms; see ColorGradient._emitMSL /
+	/// ColorGradientCurvature._emitMSL), so a ColorGradientDebugView slider
+	/// tick changes what a *structurally identical* tree should compile to.
+	/// Without the statics in the key, a slider drag would silently serve a
+	/// stale pipeline compiled with the old values -- wrong output, not just
+	/// a missed cache optimization. Promoting these to real uniforms (so the
+	/// cache key can go back to just the tree shape and a slider drag never
+	/// recompiles) is deferred follow-up work, not required for correctness.
 	func pipeline(for node: any Node) throws -> MTLComputePipelineState {
-		let key = "\(node.toString())|\(ColorGradient.debugDelta)|\(ColorGradient.debugHeightFactor)|\(ColorGradient.debugLightZ)|\(ColorGradient.debugTapCount)"
+		let key = "\(node.toString())|\(ColorGradient.debugDelta)|\(ColorGradient.debugHeightFactor)|\(ColorGradient.debugLightZ)|\(ColorGradient.debugTapCount)|\(ColorGradientCurvature.debugDelta)|\(ColorGradientCurvature.debugHeightFactor)|\(ColorGradientCurvature.debugLightZ)|\(ColorGradientCurvature.debugTapCount)"
 
 		lock.lock()
 		if let cached = pipelineCache[key] {

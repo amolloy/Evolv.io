@@ -180,6 +180,21 @@ struct MetalRenderRegressionTests {
         try assertGolden(node, Value(0.03680462762713432, 0.024370135739445686, 0.0193475428968668), tolerance: 1e-3)
     }
 
+    /// `source = x²` has constant curvature (2·r² per finite-difference
+    /// radius `r`) along x and exactly zero curvature along y (it doesn't
+    /// depend on y), independent of the sample coordinate -- so the golden
+    /// value here is hand-derived, not just captured from a run: with
+    /// `p2 = 0` (curvature weight fully on the x axis), `p3 = 1` (identity
+    /// contrast exponent), `color = (1,1,1)`, and the default
+    /// `debugDelta/debugHeightFactor/debugTapCount` (0.01/20/4), curvature
+    /// averages to `2 * mean((0.01*i/4)^2 for i in 1...4) = 9.375e-5`,
+    /// scaled by `heightFactor = 20` gives `t = 0.001875`.
+    @Test func colorGradientCurvature() throws {
+        let source = Mult([VariableX(), VariableX()])
+        let node = ColorGradientCurvature([source, Constant(3.1), Constant(0.0), ConstantTriplet(Value(1, 1, 1)), Constant(1.0)])
+        try assertGolden(node, Value(0.001875, 0.001875, 0.001875))
+    }
+
     @Test func bump() throws {
         let node = Bump([
             VariableX(),

@@ -21,7 +21,6 @@ struct ColorGradientDebugView: View {
 	@State private var lightZ: Double = Double(ColorGradient.debugLightZ)
 	@State private var tapCount: Double = Double(ColorGradient.debugTapCount)
 
-
 	@State private var previewRenderer: NodeRenderer?
 	@State private var previewImage: CGImage?
 	@State private var renderGeneration = 0

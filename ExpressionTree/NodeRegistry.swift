@@ -21,6 +21,7 @@ public final class NodeRegistry {
 			Div.self,
 			BWNoise.self,
 			ColorGradient.self,
+			ColorGradientCurvature.self,
 			ColorNoise.self,
 			Constant.self,
 			ConstantTriplet.self,
