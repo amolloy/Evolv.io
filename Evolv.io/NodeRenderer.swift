@@ -53,9 +53,9 @@ class NodeRenderer: ObservableObject {
 		let dy = scaleFactor / ComponentType(height)
 
 		for y in 0..<height {
-			let yc = ComponentType(height - y) / ComponentType(height) * scaleFactor - scaleOffset
+			let yc = (ComponentType(height - 1 - y) + 0.5) / ComponentType(height) * scaleFactor - scaleOffset
 			for x in 0..<width {
-				let xc = ComponentType(x) / ComponentType(width) * scaleFactor - scaleOffset
+				let xc = (ComponentType(x) + 0.5) / ComponentType(width) * scaleFactor - scaleOffset
 
 				var accumulated = Value.zero
 				for sy in 0..<supersample {
@@ -80,6 +80,8 @@ class NodeRenderer: ObservableObject {
 		let height = Int(evaluator.size.height)
 
 		let pixelData: [UInt8] = data.flatMap { pixel in
+//			let mapped = pixel.triangleFolded() * 255.0
+
 			let normalized = (pixel - displayMin) / (displayMax - displayMin)
 			let clamped = clamp(normalized, min: Value.zero, max: Value.one)
 			let mapped = clamped * 255.0
@@ -139,5 +141,26 @@ extension CGImage {
 		CGImageDestinationAddImage(destination, self, nil)
 		guard CGImageDestinationFinalize(destination) else { return nil }
 		return mutableData as Data
+	}
+}
+
+extension SIMD3 where Scalar == ComponentType {
+	/// True periodic triangle folding: bounces continuously between 0.0 and 1.0
+	public func triangleFolded() -> SIMD3<ComponentType> {
+		func fold(_ v: ComponentType) -> ComponentType {
+			let m = v.truncatingRemainder(dividingBy: 2.0)
+			let pos = m < 0 ? m + 2.0 : m
+			return pos > 1.0 ? 2.0 - pos : pos
+		}
+		return SIMD3<ComponentType>(fold(self.x), fold(self.y), fold(self.z))
+	}
+
+	/// Periodic fractional wrap in [0.0, 1.0)
+	public func fract() -> SIMD3<ComponentType> {
+		return SIMD3<ComponentType>(
+			self.x - floor(self.x),
+			self.y - floor(self.y),
+			self.z - floor(self.z)
+		)
 	}
 }
