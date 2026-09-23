@@ -12,15 +12,32 @@ func mix(_ a: SIMD3<ComponentType>, _ b: SIMD3<ComponentType>, _ t: ComponentTyp
 	return a + (b - a) * t
 }
 
+// `heightFactor`/`lightZ` used to be pure global debug constants -- the
+// same value for every color-grad call in every figure, which architecturally
+// can't express "Figure 9 wants one steepness/light-height, Figure 10 wants
+// another." This scales `p3` (otherwise only used downstream as a contrast
+// exponent -- see ColorGradResult) by a live debug multiplier instead, so
+// each call's own already-varying p3 (1.35 for Figure 9's two calls, 3.03
+// for Figure 10) drives a genuinely different value per call.
+private struct ScaledResult: ExpressionResult {
+	let base: ExpressionResult
+	let scale: ComponentType
+
+	func value(at coord: Coordinate) -> Value {
+		return base.value(at: coord) * scale
+	}
+}
+
 // Per-channel treatment: source's R/G/B as three independent heightmaps
 // instead of collapsing them to one scalar via averageLuminance() before
 // doing the finite-difference/lighting math. Real, meaningful effect
 // whenever source's channels actually differ (e.g. the outer color-grad's
 // source, which inherits per-channel tint from the inner color-grad) --
 // letting each channel see its own local slope instead of forcing all three
-// to move in lockstep. Phong specular was tried on top of this and reverted;
-// this plain diffuse mix (black -> color, contrast exponent p3) is the last
-// version that looked like a genuine step forward rather than a wash.
+// to move in lockstep. A Blinn-Phong specular kicker was tried on top of
+// this and removed (see ColorGradient.md); this plain diffuse mix (black ->
+// color, contrast exponent p3) is the last version that looked like a
+// genuine step forward rather than a wash.
 private struct PerChannelLightMapResult: ExpressionResult {
 	let source: ExpressionResult
 	let theta: ExpressionResult
@@ -38,9 +55,7 @@ private struct PerChannelLightMapResult: ExpressionResult {
 		let lightDx = cos(angle)
 		let lightDy = sin(angle)
 
-		let V = Value(0, 0, 1)
-		guard let lightNormalized = simd_normalize(safe: Value(lightDx, lightDy, lightZ)),
-			  let halfVector = simd_normalize(safe: lightNormalized + V) else {
+		guard let lightNormalized = simd_normalize(safe: Value(lightDx, lightDy, lightZ)) else {
 			return Value(repeating: 0.5)
 		}
 
@@ -63,6 +78,28 @@ private struct PerChannelLightMapResult: ExpressionResult {
 
 		let colorVal = color.value(at: coord)
 
+		if ColorGradient.debugSharedNormal {
+			// Collapse to one shared scalar height field (grad-direction's
+			// approach) before differencing, so every channel sees the same
+			// normal/t and only `color` distinguishes them -- tests whether
+			// per-channel sign divergence (the else branch below) is what's
+			// scrambling hues into ones Sims' figures don't show.
+			let gxInner = hXNegInner.averageLuminance() - hXPosInner.averageLuminance()
+			let gxOuter = hXNegOuter.averageLuminance() - hXPosOuter.averageLuminance()
+			let gx = 0.6 * gxInner + 0.4 * gxOuter
+
+			let gyInner = hYNegInner.averageLuminance() - hYPosInner.averageLuminance()
+			let gyOuter = hYNegOuter.averageLuminance() - hYPosOuter.averageLuminance()
+			let gy = 0.6 * gyInner + 0.4 * gyOuter
+
+			guard let normal = simd_normalize(safe: Value(-gx, -gy, 1.0 / heightFactor)) else {
+				return Value(repeating: 0.5)
+			}
+
+			let t = dot(normal, lightNormalized)
+			return colorVal * t
+		}
+
 		var result = Value.zero
 		for i in 0..<3 {
 			let gxInner = hXNegInner[i] - hXPosInner[i]
@@ -78,12 +115,7 @@ private struct PerChannelLightMapResult: ExpressionResult {
 				continue
 			}
 
-			let tDiffuse = dot(normal, lightNormalized)
-			var t = tDiffuse
-			if ColorGradient.debugSpecular > 0 {
-				let nDotH = max(0.0, dot(normal, halfVector))
-				t += pow(nDotH, ColorGradient.debugShininess) * ColorGradient.debugSpecular
-			}
+			let t = dot(normal, lightNormalized)
 			result[i] = colorVal[i] * t
 		}
 		return result
@@ -119,11 +151,19 @@ public final class ColorGradient: CachedNode {
 
 	// Temporary debug knobs so ColorGradientDebugView can tune these live;
 	// revert to the plain literals below (0.01 / 3 / 0.04) once done experimenting.
-	public static var debugDelta: ComponentType = 0.02
-	public static var debugHeightFactor: ComponentType = 15.0
+	public static var debugDelta: ComponentType = 0.01
+	// heightFactor/lightZ are p3 * these multipliers (see #14 in
+	// ColorGradient.md), not absolute values. First shared setting found
+	// to give decent results on both Figure 9 and Figure 10 at once (see
+	// #14's checkpoint note) -- heightFactor=20 means an actual heightFactor
+	// of 27 for Figure 9's calls (p3=1.35) vs. 60.6 for Figure 10's (p3=3.03).
+	public static var debugHeightFactor: ComponentType = 20.0
 	public static var debugLightZ: ComponentType = 0.0
-	public static var debugSpecular: ComponentType = 0.0
-	public static var debugShininess: ComponentType = 8.0
+	// Experiment: does letting each channel's normal/t diverge in sign from
+	// the others (current per-channel default) scramble hues that should be
+	// coherent? true collapses the gradient to one shared scalar height field
+	// (like grad-direction) and tints the single resulting t by `color`.
+	public static var debugSharedNormal: Bool = false
 
 	public var children: [any Node]
 
@@ -135,27 +175,31 @@ public final class ColorGradient: CachedNode {
 	public func _evaluate(using evaluator: Evaluator) -> any ExpressionResult {
 		let evaluators = children.map { $0.evaluate(using: evaluator) }
 
-		// source/p1/p2 line up 1:1 with grad-direction's source/dirX/dirY, and
-		// grad-direction is a verified match for Sims' own algorithm (he
-		// publishes its output directly as figure 4h), so its heightFactor
-		// and lightZ are reused here as-is rather than guessed at again.
-		// delta is wider than grad-direction's 0.005: color-grad is always
-		// fed round's output, a true step function, so the width of the
-		// resulting dark band is roughly 2*delta in coordinate space --
-		// 0.005 produced 1-2px bands, but Sims' reference figures show bands
-		// tens of pixels wide with a colored fringe at the edges, matched by
-		// 0.02 at our render resolution. `color` fills the colorization
-		// grad-direction has no room for. That leaves p3 as the one truly
-		// new argument -- applied here as a contrast/gamma exponent on the
-		// final lit color, since grad-direction's 3-argument signature has
-		// no structural room left for it to mean anything else.
+		// source/p1/p2 line up 1:1 with grad-direction's source/dirX/dirY.
+		// delta is wider than grad-direction's 0.005 for the reason noted
+		// historically: color-grad is always fed round's output, a true step
+		// function, and 0.02 better matches the band widths in Sims'
+		// reference figures than 0.005 did. `color` fills the colorization
+		// grad-direction has no room for.
+		//
+		// Experiment (#14 in ColorGradient.md): heightFactor/lightZ used to
+		// be pure global debug constants, identical for every call in every
+		// figure -- architecturally incapable of giving Figure 9 and Figure
+		// 10 different steepness/light-height even though tuning them by
+		// hand for each figure separately suggested they need to differ.
+		// p3 already varies substantially between calls (1.35 for both of
+		// Figure 9's, 3.03 for Figure 10's) and was otherwise only spent on
+		// ColorGradResult's trailing contrast exponent -- reused here to
+		// scale heightFactor/lightZ too, so one consistent formula can (in
+		// principle) fit multiple figures without per-figure hand-tuning.
+		let p3 = evaluators[4]
 		let lightMap = PerChannelLightMapResult(source: evaluators[0],
 									  theta: evaluators[2],
 									  delta: evaluators[1],
-									  heightFactor: ConstantResult(ColorGradient.debugHeightFactor),
-									  lightZ: ConstantResult(ColorGradient.debugLightZ),
+									  heightFactor: ScaledResult(base: p3, scale: ColorGradient.debugHeightFactor),
+									  lightZ: ScaledResult(base: p3, scale: ColorGradient.debugLightZ),
 									  color: evaluators[3])
 
-		return ColorGradResult(lightMap: lightMap, exponent: evaluators[4])
+		return ColorGradResult(lightMap: lightMap, exponent: p3)
 	}
 }

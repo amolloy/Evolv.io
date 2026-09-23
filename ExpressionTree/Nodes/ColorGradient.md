@@ -212,21 +212,205 @@ both push in the direction of "less gets folded up into brightness" -- but
 that connection hasn't been confirmed, and no rendered result has been
 evaluated against the reference yet.
 
+### 13. Source-as-normal: skip differencing entirely, read `source` as a literal surface normal [tried and rejected]
+Motivated by wondering whether the per-channel finite-difference approach
+(#8) was itself the source of the wrong-hue problem (localized neon colors
+where Sims shows dark/muted ones, and outright wrong hues -- blue where he
+gets black, teal where he gets brown/orange, red where he gets purple).
+Hypothesis: instead of differentiating `source` to build a height-field
+normal, treat `source`'s raw `(R, G, B)` at each point as a literal
+`(x, y, z)` surface normal directly (`normalize(source)`, no `gx`/`gy` at
+all), with `p1`/`p2` reverting to plain Cartesian light `dirX`/`dirY`
+components (grad-direction's original argument shape, pre-#1/#7/#12
+reinterpretations) and a nonzero debug `lightZ` (defaulted to `0.5`,
+grad-direction's verified value, instead of the `0.0` the differencing-based
+code had drifted to).
+
+Implemented as a full replacement (old per-channel code temporarily renamed
+to `color-grad-old` / `ColorGradientOld`, new `color-grad` / `ColorGradient`
+built from scratch around this theory) rather than a toggle, specifically so
+it could be checked directly against Sims' reference figure with no
+side-by-side ambiguity. **Result: "completely and utterly wrong"** (user's
+words) -- reverted in full. `ColorGradient.swift`/`ColorGradientOld.swift`
+were merged back into a single `ColorGradient.swift` (the pre-#13,
+post-#12 per-channel/shared-normal code), `ColorGradientOld.swift` deleted,
+and `NodeRegistry`/`ColorGradientDebugView` reverted to match. Recorded here
+so this specific idea isn't tried again from scratch.
+
+### 14. `p3` scales `heightFactor`/`lightZ` instead of them being pure global constants [implemented, unverified]
+Motivated by a direct architectural observation: `heightFactor`/`lightZ`
+were `ConstantResult(ColorGradient.debugHeightFactor)`/
+`ConstantResult(ColorGradient.debugLightZ)` -- literal process-wide static
+defaults, identical for *every* `color-grad` call in *every* figure,
+never derived from any of the node's 5 actual arguments (`source, p1, p2,
+color, p3`). That's not a tuning limitation, it's a hard guarantee: the
+code had no way to give Figure 9 and Figure 10 different steepness/
+light-height even in principle. This came up because the user could get
+Figure 10's debug view to show spike-like structure by pushing `delta`
+and `lightZ` (primarily) and `heightFactor` (secondarily) to values that,
+by recollection, make Figure 9 look wrong -- a direct sign that whichever
+knob is doing this needs to vary *per call*, not be shared.
+
+Checked which of the 5 arguments could plausibly be that knob:
+- `p1` (drives `delta`, `PerChannelLightMapResult` line ~33-34) is `3.1` in
+  *every* known call (Figure 9's two, Figure 10, Figure 12) -- identical
+  between the very figures we need to differ, so it cannot be the source of
+  a Figure-9-vs-10 difference no matter what.
+- `p2` (drives light angle only) varies `1.86` / `1.90` / `1.93` across
+  Figure 9's two calls and Figure 10 -- barely at all, nowhere near enough
+  range to flip "columns" into "spikes."
+- `p3` varies `1.35` (both Figure 9 calls) vs. `3.03` (Figure 10) -- more
+  than double, in exactly the two figures that need to differ -- and was
+  otherwise spent entirely on `ColorGradResult`'s trailing contrast
+  exponent, never touching the lighting geometry.
+
+Implemented: `heightFactor = p3 * debugHeightFactor`, `lightZ = p3 *
+debugLightZ` (new `ScaledResult` wrapper), keeping `p1→delta` and
+`p2→angle` as before. `p3` now does triple duty -- heightFactor scale,
+lightZ scale, and the original contrast exponent -- which isn't out of
+character for this codebase (see the `bump` investigation's argument
+overloading). `debugLightZ`'s default moved from `0.0` to `0.5` since
+multiplying by a `0.0` scale would make the experiment a no-op regardless
+of `p3`.
+
+**Checkpoint**: ran the actual test described above -- hold one shared
+`(debugDelta, debugHeightFactor, debugLightZ)` triple and check both
+figures at once, no per-figure retuning. `debugDelta = 0.01,
+debugHeightFactor = 20, debugLightZ = 0` gives "decent" results (user's
+word) on *both* Figure 9 and Figure 10 simultaneously -- the first time
+that's been true. Because `heightFactor = p3 * debugHeightFactor`, this one
+shared slider setting produces genuinely different actual heightFactors
+per figure (`27` for Figure 9's calls, `p3=1.35`; `60.6` for Figure 10's,
+`p3=3.03`) -- real, if indirect, evidence the `p3`-scaling mechanism is
+doing something rather than nothing.
+
+Caveats: `debugLightZ = 0` reproduces the exact "shared value erases `p3`'s
+effect on lightZ entirely" case discussed above -- whatever `lightZ`
+contributes here, it's identical (zero) for every call regardless of `p3`,
+so this checkpoint provides no evidence either way about scaling `lightZ`
+by `p3` specifically, only about `heightFactor`. Separately, `debugDelta`
+is *not* differentiated by `p3` at all (`p1`, not `p3`, drives `delta`, and
+`p1=3.1` in every known call) -- so `delta`'s contribution here is, and can
+only ever be, identical across figures under the current code; whatever
+`0.01` is doing, it's doing the same thing for both. "Decent for both" is
+real progress, but it's currently resting entirely on `heightFactor`
+scaling by `p3` (the one piece of #14 that isn't structurally neutralized
+in this checkpoint) plus two knobs (`delta`, `lightZ=0`) that are, by
+construction, identical between the figures. Adopted as the new defaults
+(`ColorGradient.swift`) on that basis. Not yet compared closely against
+Sims' actual reference figures -- "decent" was a live-tuning judgment, not
+a side-by-side check.
+
+### 15. Removed the Blinn-Phong specular kicker (#12) entirely [axed]
+The optional specular kicker added in #12 (`debugSpecular`/`debugShininess`,
+gated off by default, layered on top of the per-channel diffuse mix) never
+amounted to anything -- it's been sitting at `debugSpecular = 0` (fully
+inert) through every experiment since, including all of #13/#14/the
+`p3`-scaling checkpoint above. Distinct from #10 (full replacement of
+diffuse with specular, tried and reverted) -- this was the smaller "keep
+diffuse, add a specular highlight on top" version, which just never got
+turned on again after #12 landed it. Didn't work out; removed rather than
+left inert: `halfVector`, both `if ColorGradient.debugSpecular > 0` blocks,
+and the `debugSpecular`/`debugShininess` statics are gone from
+`ColorGradient.swift`. `lightNormalized`'s guard no longer needs to build
+`halfVector` alongside it. No behavior change (it was a no-op at
+`debugSpecular = 0`), just less dead code to reason about going forward.
+
+### 16. Value-keyed hue cycle: `color-grad` as a colormap, not just a light-map [tried and reverted -- probably not right, but not ruled out]
+Motivated by a close look at Figure 9's central swoops against the
+reference: the same stroke's two edges share one hue (e.g. orange-black-
+orange), but *different* strokes/swoops show *different* hues (some
+orange-black-orange, some blue-black-blue, some orange-black-yellow), and
+larger swoops contain multiple such stroke-and-edge sets. Our render showed
+one hue family repeated everywhere, never varying stroke to stroke.
+Traced this to a real structural gap: `PerChannelLightMapResult` only ever
+looks at `source`'s local *slope* (via finite-differencing) to decide
+lighting -- never at `source`'s absolute *value*. Zero slope (flat
+interior) always gives the same baseline response; a jump always gives the
+same edge response; both get scaled by the same fixed `color` tint every
+time, regardless of which quantization level ("stroke") produced them. No
+mechanism exists for different strokes to look different, by construction.
+
+Separately motivated by the function's own name: mapping a scalar value to
+a color via some transfer function is classic pre-1991 technique (false-
+color/pseudocolor scientific visualization, elevation-tinted terrain maps,
+palette-cycling demo effects) -- arguably a more natural first guess for
+something named "color gradient" than the slope-based light-map model this
+whole file has assumed from the start, which was adopted by analogy to
+`grad-direction`'s argument shape (see the original `_evaluate` comment),
+not from `color-grad`'s own name.
+
+Implemented as an addition, not a replacement: kept the existing slope-
+based brightness computation entirely as-is (so the #14 checkpoint's
+"decent for both Figure 9 and 10" result isn't disturbed), and multiplied
+in a classic phase-offset-cosine palette keyed on `source`'s absolute
+value instead of its slope:
+
+```swift
+let sourceLevel = source.value(at: coord).averageLuminance()
+let huePhase = sourceLevel * ColorGradient.debugHueFrequency
+let hue = Value(0.5 + 0.5 * cos(huePhase),
+                0.5 + 0.5 * cos(huePhase + 2*pi/3),
+                0.5 + 0.5 * cos(huePhase + 4*pi/3))
+let colorVal = color.value(at: coord) * hue
+```
+
+`color` now tints/scales the cycling hue rather than being applied as a
+static per-call color outright. New live-tunable knob:
+`ColorGradient.debugHueFrequency` (default `10.0`, range `0...50` in
+`ColorGradientDebugView`) -- how many full hue cycles per unit of
+`source`'s value. This should make different quantization levels
+(different `source` values) land at different phases of the cycle, hence
+different hues, while a single narrow stroke (a narrow range of `source`
+values) stays close to one phase, hence one hue -- matching "same hue on
+both edges of a stroke, different hues across strokes" if the theory holds.
+
+**Result: user judged it probably not right** after live-tuning
+`debugHueFrequency` against the reference -- reverted in full.
+`ColorGradient.swift` back to plain `colorVal = color.value(at: coord)`
+(no hue cycle, no `debugHueFrequency`), `ColorGradientDebugView.swift`'s
+`hueFrequency` slider removed. The #14 checkpoint (`0.01 / 20 / 0.0`,
+unaffected by this addition either way) stands as the current baseline.
+
+Not fully ruled out, though -- kept here rather than deleted because the
+underlying *reasoning* (different strokes need something keyed on
+`source`'s absolute value, not just its slope, to plausibly explain
+stroke-to-stroke hue variety; a value-to-color colormap is a very
+period-plausible reading of "color gradient") hasn't been refuted, only
+this specific realization of it (phase-offset cosine palette, multiplied
+on top of the existing slope-based brightness, frequency `10.0`). Open
+questions that a future attempt should address, if picked back up: whether
+layering the hue on top of the existing brightness term (rather than
+replacing it, or having `p1`/`p2` feed the hue cycle instead of the
+brightness term) is even the right shape of combination; whether a
+non-cyclic (monotonic ramp) value-to-color mapping might fit better than a
+periodic one; and whether `debugHueFrequency`'s order of magnitude was
+ever swept widely enough to fairly judge the idea. Worth revisiting if
+other, more targeted leads (the `y=0` singularity, the `bump`/
+`rotate-vector` argument-order questions) run dry.
+
 ## Current state of the code (as of this writing)
 
 - `ColorGradient.swift`: `PerChannelLightMapResult` (per-channel, #8's
   foundation) extended per #12 above -- multi-tap gradient sampling, `p1`
-  driving a per-tree `delta` scale, `p2` as a single planar light angle,
-  `lightZ` fully decoupled (debug-constant only), optional Blinn-Phong
-  specular kicker on top of diffuse (off by default), feeding into
-  `ColorGradResult`'s now-sign-preserving `pow(abs(base), p3)` contrast
-  step. Light position experiment (#4) and full-replacement Phong (#10)
-  are both superseded/removed. Live-tunable via `ColorGradient.debugDelta/
-  debugHeightFactor/debugLightZ/debugSpecular/debugShininess` (backing
-  `ColorGradientDebugView`); current defaults `0.02 / 15 / 0.0 / 0.0 / 8.0`.
-  Note: the block comment above `_evaluate` describing `p1`/`p2` as
-  `dirX`/`dirY` and `p3` as a plain "contrast exponent" is now stale and
-  describes an earlier architecture (#1/#8), not the code below it (#12).
+  driving a per-tree `delta` scale, `p2` as a single planar light angle --
+  and per #14, `heightFactor`/`lightZ` are no longer bare debug constants:
+  both are `p3 * debugHeightFactor`/`p3 * debugLightZ`, so `p3` now drives
+  three things (heightFactor scale, lightZ scale, and `ColorGradResult`'s
+  sign-preserving `pow(abs(base), p3)` contrast step). Blinn-Phong specular
+  kicker removed per #15 -- never turned on since #12, axed rather than left
+  inert. Light position experiment (#4) and full-replacement Phong (#10) are
+  both superseded/removed. Live-tunable via `ColorGradient.debugDelta/
+  debugHeightFactor/debugLightZ` (backing `ColorGradientDebugView`); current
+  defaults `0.01 / 20 / 0.0`, the first shared-across-both-figures checkpoint
+  from #14. Note `debugHeightFactor`/`debugLightZ` are multipliers against
+  `p3` as of #14, not absolute values, despite the unchanged variable names.
+  `colorVal` is plain `color.value(at: coord)` again -- #16's value-keyed
+  hue cycle was tried and reverted (see #16; not ruled out, just not
+  currently in the code). Note: the block comment above `_evaluate`
+  describing `p1`/`p2` as `dirX`/`dirY` and `p3` as a plain "contrast
+  exponent" is now stale and describes an earlier architecture (#1/#8), not
+  the code below it (#12/#14).
 - `LightMapResult.swift`: unchanged in spirit from `grad-direction`'s
   original, except the `lightDx/lightDy < 0.0006` special-case fallback
   (for the literal `(0,0)` direction case) has been removed by another
