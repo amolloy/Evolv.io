@@ -28,6 +28,10 @@ public class Constant: Node {
 	public func toString() -> String {
 		return "\(value)"
 	}
+
+	public func _emitMSL(into context: MSLCodegenContext) -> String {
+		"float3(\(mslFloatLiteral(value)))"
+	}
 }
 
 struct ConstantResult : ExpressionResult {

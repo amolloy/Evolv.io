@@ -13,6 +13,10 @@ public class VariableX: Node {
 	public func evaluate(using evaluator: Evaluator) -> any ExpressionResult {
 		return VariableXValue(evaluator: evaluator)
 	}
+
+	public func _emitMSL(into context: MSLCodegenContext) -> String {
+		"float3(coord.x)"
+	}
 }
 
 struct VariableXValue: ExpressionResult {
@@ -32,6 +36,10 @@ public class VariableY: Node {
 
 	public func evaluate(using evaluator: Evaluator) -> any ExpressionResult {
 		return VariableYValue(evaluator: evaluator)
+	}
+
+	public func _emitMSL(into context: MSLCodegenContext) -> String {
+		"float3(coord.y)"
 	}
 }
 

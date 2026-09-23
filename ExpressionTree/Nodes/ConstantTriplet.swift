@@ -28,6 +28,10 @@ public class ConstantTriplet: Node {
 	public func toString() -> String {
 		return "#(\(value.x) \(value.y) \(value.z))"
 	}
+
+	public func _emitMSL(into context: MSLCodegenContext) -> String {
+		"float3(\(mslFloatLiteral(value.x)), \(mslFloatLiteral(value.y)), \(mslFloatLiteral(value.z)))"
+	}
 }
 
 struct ConstantTripletResult : ExpressionResult {
