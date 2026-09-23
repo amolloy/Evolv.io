@@ -15,8 +15,10 @@ import ExpressionTree
 
 struct SnapshotDump {
 	static let testSnapshotKeys = [
+		"Figure 6",
 		"Figure 9",
 		"Figure 10",
+		"Figure 12",
 	]
 
 	@Test @MainActor func dumpSampleExpressions() async throws {

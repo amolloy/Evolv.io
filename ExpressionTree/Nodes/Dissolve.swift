@@ -19,7 +19,7 @@ public class Dissolve: CachedNode {
 
 	public func _evaluate(using evaluator: Evaluator) -> any ExpressionResult {
 		assert(children.count == 3)
-		return AddResult(children.map { $0.evaluate(using: evaluator) })
+		return DissolveResult(children.map { $0.evaluate(using: evaluator) })
 	}
 }
 
