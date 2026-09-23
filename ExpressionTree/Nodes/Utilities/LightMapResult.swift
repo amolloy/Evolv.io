@@ -46,12 +46,12 @@ class LightMapResult: ExpressionResult {
 		let heightFactor = self.heightFactor.value(at: coord).averageLuminance()
 		let lightZ = self.lightZ.value(at: coord).averageLuminance()
 
-		let height_x1 = source.value(at: coord + Coordinate(delta, 0)).averageLuminance()
-		let height_x2 = source.value(at: coord - Coordinate(delta, 0)).averageLuminance()
+		let height_x1 = source.value(at: coord - Coordinate(delta, 0)).averageLuminance()
+		let height_x2 = source.value(at: coord + Coordinate(delta, 0)).averageLuminance()
 		let Gx = height_x1 - height_x2
 
-		let height_y1 = source.value(at: coord + Coordinate(0, delta)).averageLuminance()
-		let height_y2 = source.value(at: coord - Coordinate(0, delta)).averageLuminance()
+		let height_y1 = source.value(at: coord - Coordinate(0, delta)).averageLuminance()
+		let height_y2 = source.value(at: coord + Coordinate(0, delta)).averageLuminance()
 		let Gy = height_y1 - height_y2
 
 		let surfaceNormal = Value(-Gx, -Gy, 1.0 / heightFactor)
