@@ -70,6 +70,34 @@ struct NodeDebuggingView: View {
 				.padding()
 				.background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16))
 
+				// Live toggle/slider controls any DSL node in this tree
+				// declared via `debug slider(...)`/`debug toggle` -- see
+				// LiveDebugValues. Nil until the first render completes, and
+				// stays nil forever if this tree declares none.
+				if let liveDebugValues = nodeRenderer.liveDebugValues {
+					VStack(alignment: .leading, spacing: 8) {
+						ForEach(Array(liveDebugValues.slots.enumerated()), id: \.offset) { index, slot in
+							switch slot.kind {
+								case .toggle:
+									Toggle(debugControlLabel(for: slot), isOn: liveRerendering(liveDebugValues.toggleBinding(at: index)))
+								case .slider(let minBound, let maxBound):
+									HStack {
+										Text(debugControlLabel(for: slot))
+											.font(.caption.bold())
+											.frame(width: 110, alignment: .leading)
+										Slider(value: liveRerendering(liveDebugValues.floatBinding(at: index)),
+											   in: Float(minBound)...Float(maxBound))
+										Text(String(format: "%.3f", liveDebugValues.values[index]))
+											.font(.caption.monospaced())
+											.frame(width: 54)
+									}
+							}
+						}
+					}
+					.padding()
+					.background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16))
+				}
+
 			} else {
 				ProgressView("Rendering...")
 					.frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -118,6 +146,29 @@ struct NodeDebuggingView: View {
 
 	private func updateImage() {
 		image = nodeRenderer.cgImage()
+	}
+
+	/// Wraps a `LiveDebugValues` binding so setting it also kicks a real
+	/// GPU re-render -- `LiveDebugValues.setValue` only writes the new value
+	/// into its buffer; nothing else about a control's storage knows this
+	/// view exists. Fires on every drag frame, not debounced: the whole
+	/// point of the live-uniform buffer is that this is cheap (same
+	/// compiled pipeline, just a new dispatch), never a recompile.
+	private func liveRerendering<V>(_ binding: Binding<V>) -> Binding<V> {
+		Binding(
+			get: { binding.wrappedValue },
+			set: { newValue in
+				binding.wrappedValue = newValue
+				Task {
+					await nodeRenderer.render()
+					updateImage()
+				}
+			}
+		)
+	}
+
+	private func debugControlLabel(for slot: DebugControlSlot) -> String {
+		"\(slot.templateName).\(slot.paramName)"
 	}
 
 	private func redBinding() -> Binding<ClosedRange<ComponentType>> {

@@ -97,13 +97,32 @@ public final class DSLCodegenNode: Node {
 
 		for (decl, child) in zip(template.params, children) {
 			if decl.isFunction {
-				env[decl.name] = .function(context.emitFunction(for: child))
+				env[decl.name] = .sampledFunction(context.emitFunction(for: child))
 			} else {
 				env[decl.name] = .value(child.codegenMSL(into: context))
 			}
 		}
 
-		let interpreter = DSLInterpreter(context: context, params: effectiveParams, env: env)
+		// A `debug`-annotated `$param` reads from the live `debugValues`
+		// uniform instead of getting baked in as a literal -- see
+		// MSLCodegenContext.registerDebugControl. Every other `$param`
+		// (i.e. every non-debug param today) is completely unaffected: it
+		// still resolves through `effectiveParams` exactly as before.
+		var liveParamText: [String: String] = [:]
+		for control in template.debugControls {
+			guard let defaultParam = effectiveParams[control.paramName] else {
+				preconditionFailure("'\(template.name)': debug control on '$\(control.paramName)' has no default -- the parser should have required one")
+			}
+			let defaultValue: ComponentType
+			switch defaultParam {
+				case .float(let f): defaultValue = f
+				case .int(let i): defaultValue = ComponentType(i)
+			}
+			liveParamText[control.paramName] = context.registerDebugControl(
+				templateName: template.name, paramName: control.paramName, kind: control.kind, defaultValue: defaultValue)
+		}
+
+		let interpreter = DSLInterpreter(context: context, params: effectiveParams, env: env, liveParamText: liveParamText)
 		for stmt in template.body {
 			interpreter.execute(stmt)
 		}
@@ -175,17 +194,29 @@ enum DSLBinding {
 	/// an MSL literal) and for a reduction loop's induction variable
 	/// (formatted as a plain integer at codegen-unroll time).
 	case literal(String)
+	/// A module function (this node's own `requires()`, or a sibling
+	/// function within the same module) -- calling it substitutes the
+	/// name-mangled function name as the callee. Never needs `debugValues`
+	/// threaded to it: a module `func` has no `param`/`$name` grammar at
+	/// all (see `DSLParser.parseFuncDecl`), so it structurally can never
+	/// reference a debug-controlled param.
+	case function(String)
 	/// A child sampled via `MSLCodegenContext.emitFunction` -- referencing
 	/// it bare would be meaningless in MSL (there's no such thing as a
 	/// function value), but calling it (`source(coord + ...)`) substitutes
-	/// the generated function's name as the callee.
-	case function(String)
+	/// the generated function's name as the callee. Unlike `.function`
+	/// above, the emitted function *does* take a `debugValues` parameter
+	/// (the sampled child can itself have debug-annotated params), so a
+	/// call through this binding must forward it -- see
+	/// `DSLInterpreter.evaluate`'s `.call` case.
+	case sampledFunction(String)
 
 	var text: String {
 		switch self {
 			case .value(let v): return v.variableName
 			case .literal(let s): return s
 			case .function(let s): return s
+			case .sampledFunction(let s): return s
 		}
 	}
 }
@@ -197,11 +228,19 @@ final class DSLInterpreter {
 	private let context: MSLCodegenContext
 	private let params: [String: DSLParamValue]
 	private var env: [String: DSLBinding]
+	/// `$param` names that resolve to a live `debugValues[N]` slot instead
+	/// of a baked literal -- checked before `params` in the `.param` case
+	/// below. Empty for every call site except a node's own top-level
+	/// `_emitMSL` (module functions and reduce-loop iterations never
+	/// register debug controls of their own, but do inherit this dictionary
+	/// unchanged when they share the same `DSLInterpreter`/sub-interpreter).
+	private let liveParamText: [String: String]
 
-	init(context: MSLCodegenContext, params: [String: DSLParamValue], env: [String: DSLBinding]) {
+	init(context: MSLCodegenContext, params: [String: DSLParamValue], env: [String: DSLBinding], liveParamText: [String: String] = [:]) {
 		self.context = context
 		self.params = params
 		self.env = env
+		self.liveParamText = liveParamText
 	}
 
 	func execute(_ stmt: DSLLetStmt) {
@@ -227,6 +266,9 @@ final class DSLInterpreter {
 				return env[name]?.text ?? name
 
 			case .param(let name):
+				if let liveText = liveParamText[name] {
+					return liveText
+				}
 				guard let value = params[name] else {
 					preconditionFailure("DSL: unresolved param '$\(name)'")
 				}
@@ -258,6 +300,12 @@ final class DSLInterpreter {
 				// case below requires a binding, precisely because a bare
 				// *non-call* reference to an unbound name is never valid).
 				if case .identifier(let name) = callee {
+					if case .sampledFunction(let fnName) = env[name] {
+						// The emitted function also takes `debugValues` (it
+						// may itself contain debug-annotated params) -- see
+						// `MSLCodegenContext.emitFunction`.
+						return "\(fnName)(\(argsText), debugValues)"
+					}
 					if let binding = env[name] {
 						return "\(binding.text)(\(argsText))"
 					}
@@ -283,7 +331,7 @@ final class DSLInterpreter {
 		for i in loValue...hiValue {
 			var iterEnv = env
 			iterEnv[variable] = .literal(String(i))
-			let iteration = DSLInterpreter(context: context, params: params, env: iterEnv)
+			let iteration = DSLInterpreter(context: context, params: params, env: iterEnv, liveParamText: liveParamText)
 			for stmt in body {
 				iteration.execute(stmt)
 			}

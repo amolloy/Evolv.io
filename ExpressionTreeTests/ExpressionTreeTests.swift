@@ -7,6 +7,7 @@
 
 import Testing
 import Foundation
+import Metal
 import simd
 @testable import ExpressionTree
 
@@ -522,6 +523,119 @@ struct DSLLibraryTests {
         let actual = try evaluator.evaluate(node: combined, at: [Coordinate(x: 0, y: 0)])[0]
         // module-a's helper(1) = 2, module-b's helper(1) = 3, combined = 5.
         #expect(actual == Value(repeating: 5.0))
+    }
+
+    /// A fixture node with one `debug slider` param and one `debug toggle`
+    /// param -- shared by the three tests below. `v0` is broadcast
+    /// (`ConstantTriplet`), so the golden math is trivial:
+    /// `result = enabled * (v0 * factor)`.
+    private func writeDebugControlFixture(to tempDir: URL) throws {
+        try """
+        node "debug-test-scale"(v0) {
+            param $factor: float = 0.6 debug slider(0.0, 1.0)
+            param $enabled: float = 1.0 debug toggle
+            return $enabled * (v0 * $factor)
+        }
+        """.write(to: tempDir.appendingPathComponent("debug-test-scale.evolvnode"), atomically: true, encoding: .utf8)
+    }
+
+    /// With no live-values buffer supplied, a `debug`-annotated param must
+    /// still render using its in-file default -- exactly as if it had no
+    /// `debug` clause at all. This is what every render call site except
+    /// `NodeDebuggingView`'s relies on (main canvas, thumbnails, etc).
+    @Test func debugAnnotatedParamRendersWithDefaultsWhenNoOverrideSupplied() throws {
+        let tempDir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        try writeDebugControlFixture(to: tempDir)
+
+        let (constructors, issues) = DSLLibrary.scan(roots: [tempDir], reservedNames: [])
+        #expect(issues.isEmpty, "unexpected load issues: \(issues.map(\.message))")
+        let constructor = try #require(constructors["debug-test-scale"])
+        let node = try constructor([ConstantTriplet(Value(1.0, 1.0, 1.0))])
+
+        let evaluator = try MSLTreeEvaluator()
+        let actual = try evaluator.evaluate(node: node, at: [Coordinate(x: 0, y: 0)])[0]
+        // enabled default 1.0 * (1.0 * factor default 0.6) = 0.6.
+        let diff = abs(actual - Value(repeating: 0.6))
+        #expect(Swift.max(diff.x, Swift.max(diff.y, diff.z)) < 1e-5, "expected 0.6, got \(actual)")
+    }
+
+    /// The actual "live, no recompile" guarantee this whole mechanism
+    /// exists for: mutating the *same* `MTLBuffer` object's contents in
+    /// place between two `render` calls (never allocating a new buffer,
+    /// never touching `NodeRegistry`/the pipeline cache) changes the
+    /// rendered output. If debug params were still being baked as MSL
+    /// literals, this would render the same value twice regardless of the
+    /// buffer's contents.
+    @Test func liveDebugValuesBufferMutationChangesOutputWithoutRecompiling() throws {
+        let tempDir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        try writeDebugControlFixture(to: tempDir)
+
+        let (constructors, issues) = DSLLibrary.scan(roots: [tempDir], reservedNames: [])
+        #expect(issues.isEmpty, "unexpected load issues: \(issues.map(\.message))")
+        let constructor = try #require(constructors["debug-test-scale"])
+        let node = try constructor([ConstantTriplet(Value(1.0, 1.0, 1.0))])
+
+        let context = MetalRenderContext.shared
+        let controls = try context.debugControls(for: node)
+        #expect(controls.count == 2, "expected 2 debug slots (factor, enabled), got \(controls.map(\.paramName))")
+
+        let factorSlot = try #require(controls.first { $0.paramName == "factor" })
+        let enabledSlot = try #require(controls.first { $0.paramName == "enabled" })
+
+        var initial = controls.map { Float($0.defaultValue) }
+        guard let buffer = context.device.makeBuffer(bytes: &initial, length: initial.count * MemoryLayout<Float>.stride, options: .storageModeShared) else {
+            Issue.record("Failed to allocate debug-values buffer")
+            return
+        }
+        let ptr = buffer.contents().bindMemory(to: Float.self, capacity: controls.count)
+
+        ptr[factorSlot.slotIndex] = 0.2
+        ptr[enabledSlot.slotIndex] = 1.0
+        let first = try context.render(node: node, width: 1, height: 1, scale: 1, supersample: 1, liveDebugValues: buffer)[0]
+        #expect(Swift.max(abs(first.x - 0.2), Swift.max(abs(first.y - 0.2), abs(first.z - 0.2))) < 1e-4, "expected ~0.2, got \(first)")
+
+        // Same buffer object, mutated in place -- no new allocation, no reload.
+        ptr[factorSlot.slotIndex] = 0.9
+        let second = try context.render(node: node, width: 1, height: 1, scale: 1, supersample: 1, liveDebugValues: buffer)[0]
+        #expect(Swift.max(abs(second.x - 0.9), Swift.max(abs(second.y - 0.9), abs(second.z - 0.9))) < 1e-4, "expected ~0.9, got \(second)")
+    }
+
+    /// The reverse-engineering-driven design choice behind
+    /// `MSLCodegenContext.registerDebugControl`: two occurrences of the
+    /// *same* node type in one tree must share exactly one debug slot, not
+    /// two independent ones -- so tuning a node type's constant retunes
+    /// every place it's used, not just one call site.
+    @Test func sameNodeTypeUsedTwiceSharesOneDebugControlSlot() throws {
+        let tempDir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        try writeDebugControlFixture(to: tempDir)
+
+        let (constructors, issues) = DSLLibrary.scan(roots: [tempDir], reservedNames: [])
+        #expect(issues.isEmpty, "unexpected load issues: \(issues.map(\.message))")
+        let constructor = try #require(constructors["debug-test-scale"])
+        let first = try constructor([ConstantTriplet(Value(1.0, 1.0, 1.0))])
+        let second = try constructor([ConstantTriplet(Value(1.0, 1.0, 1.0))])
+        let combined = DSLTestNodes.add(first, second)
+
+        let context = MetalRenderContext.shared
+        let controls = try context.debugControls(for: combined)
+        #expect(controls.count == 2, "expected exactly 2 slots total (factor, enabled) even with 2 occurrences, got \(controls.map(\.paramName))")
+
+        var overrides = controls.map { Float($0.defaultValue) }
+        let factorSlot = try #require(controls.first { $0.paramName == "factor" })
+        overrides[factorSlot.slotIndex] = 0.1
+        guard let buffer = context.device.makeBuffer(bytes: &overrides, length: overrides.count * MemoryLayout<Float>.stride, options: .storageModeShared) else {
+            Issue.record("Failed to allocate debug-values buffer")
+            return
+        }
+        let actual = try context.render(node: combined, width: 1, height: 1, scale: 1, supersample: 1, liveDebugValues: buffer)[0]
+        // Both occurrences retuned by the one shared slot: (1*0.1) + (1*0.1) = 0.2.
+        #expect(Swift.max(abs(actual.x - 0.2), Swift.max(abs(actual.y - 0.2), abs(actual.z - 0.2))) < 1e-4, "expected ~0.2, got \(actual)")
     }
 
     @Test func nameCollidingWithAReservedBuiltinIsReportedNotRegistered() throws {

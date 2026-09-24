@@ -7,9 +7,42 @@
 //  codegen" plan for the full migration this is phase A of.
 //
 
+import Metal
+
 /// A reference to an already-emitted MSL local variable holding a `float3`.
 public struct MSLValue {
 	public let variableName: String
+}
+
+/// What kind of UI control a `debug`-annotated `$param` should get in
+/// `NodeDebuggingView` -- see `DSLDebugControl`/`DebugControlSlot` below.
+public enum DebugControlKind: Sendable {
+	case toggle
+	case slider(min: ComponentType, max: ComponentType)
+}
+
+/// One live-tunable `$param` slot, keyed by node type + param name (not by
+/// occurrence -- see `MSLCodegenContext.registerDebugControl`), and the
+/// buffer index a generated kernel reads it from at runtime instead of a
+/// baked MSL literal.
+public struct DebugControlSlot: Sendable {
+	public let templateName: String
+	public let paramName: String
+	public let kind: DebugControlKind
+	public let defaultValue: ComponentType
+	public let slotIndex: Int
+}
+
+/// Builds a `debugValues` buffer from each control's default -- used
+/// whenever a render doesn't supply its own live-values buffer (every
+/// call site except `NodeDebuggingView`'s), and to seed a fresh
+/// `LiveDebugValues`. Never zero-length: a generated kernel always declares
+/// `constant float* debugValues [[buffer(2)]]`, even for a tree with no
+/// debug controls at all, so there's always something valid to bind.
+public func mslMakeDefaultDebugValuesBuffer(device: MTLDevice, controls: [DebugControlSlot]) -> MTLBuffer? {
+	var values = controls.map { Float($0.defaultValue) }
+	if values.isEmpty { values = [0] }
+	return device.makeBuffer(bytes: &values, length: values.count * MemoryLayout<Float>.stride, options: .storageModeShared)
 }
 
 /// Optional GPU-side resources a generated kernel may need bound alongside
@@ -73,12 +106,34 @@ public final class MSLCodegenContext {
 	}
 	private let functionNameCounter: FunctionNameCounter
 
+	// Live-tunable `$param` slots a debug-annotated `param` statement
+	// registered (see `DSLCodegenNode._emitMSL`), deduped by node type +
+	// param name -- see `registerDebugControl`. A slot's index is baked
+	// directly into already-emitted MSL text at registration time (the
+	// substituted "debugValues[N]" string), so -- exactly like
+	// `functionNameCounter` above, and for the same reason -- this must be
+	// one shared, reference-type registry across a context and every
+	// sub-context `emitFunction` creates, not a per-context accumulator
+	// merged after the fact: a node with a debug param that's also used as
+	// someone's sampled `:fn` child (e.g. a future debug-annotated
+	// `color-grad` nested inside another `color-grad`'s `source`, exactly
+	// Figure 9's shape again) registers from inside a nested sub-context,
+	// and needs the *same* global slot index the outer context would have
+	// assigned, not a locally-numbered one that collides once merged.
+	private final class DebugControlRegistry {
+		var slots: [DebugControlSlot] = []
+		var slotsByKey: [String: Int] = [:]
+	}
+	private let debugControlRegistry: DebugControlRegistry
+
 	public init() {
 		functionNameCounter = FunctionNameCounter()
+		debugControlRegistry = DebugControlRegistry()
 	}
 
-	private init(sharingFunctionNamesWith parent: MSLCodegenContext) {
+	private init(sharingCodegenPassStateWith parent: MSLCodegenContext) {
 		functionNameCounter = parent.functionNameCounter
+		debugControlRegistry = parent.debugControlRegistry
 	}
 
 	/// Returns the memoized value for `node` if it's already been emitted;
@@ -125,6 +180,29 @@ public final class MSLCodegenContext {
 		customModuleTexts.keys.sorted().map { customModuleTexts[$0]! }.joined(separator: "\n\n")
 	}
 
+	/// Every debug control registered so far in this codegen pass (see
+	/// `registerDebugControl`), in slot-index order.
+	public var debugControls: [DebugControlSlot] { debugControlRegistry.slots }
+
+	/// Registers a `debug`-annotated `$param` as a live uniform slot instead
+	/// of a baked literal, returning the MSL text (`"debugValues[N]"`) to
+	/// substitute at its reference site. Deduped by `templateName.paramName`
+	/// (not by node occurrence) -- every occurrence of the same node type
+	/// shares one slot, since the goal is tuning one constant for a node
+	/// type, not per-call-site values (and every occurrence already shares
+	/// the same in-file default, so there's no "whose default wins"
+	/// question).
+	public func registerDebugControl(templateName: String, paramName: String, kind: DebugControlKind, defaultValue: ComponentType) -> String {
+		let key = "\(templateName).\(paramName)"
+		if let existingIndex = debugControlRegistry.slotsByKey[key] {
+			return "debugValues[\(existingIndex)]"
+		}
+		let slotIndex = debugControlRegistry.slots.count
+		debugControlRegistry.slots.append(DebugControlSlot(templateName: templateName, paramName: paramName, kind: kind, defaultValue: defaultValue, slotIndex: slotIndex))
+		debugControlRegistry.slotsByKey[key] = slotIndex
+		return "debugValues[\(slotIndex)]"
+	}
+
 	private var extraFunctions: [String] = []
 
 	/// Emits `node` as a standalone top-level MSL function taking its own
@@ -138,15 +216,20 @@ public final class MSLCodegenContext {
 	/// ambient one, like `LightMapResult`'s finite-difference taps.
 	///
 	/// Every generated function (this one and the outermost `evalTree`) uses
-	/// the same parameter name, `coord` -- that's what lets a node's
-	/// `_emitMSL` reference `"coord.x"` literally and have it resolve
-	/// correctly regardless of which function it ends up spliced into,
-	/// without threading a coordinate-variable-name through every node.
+	/// the same parameter names, `coord` and `debugValues` -- that's what
+	/// lets a node's `_emitMSL` reference `"coord.x"` or a debug-controlled
+	/// `$param`'s `"debugValues[N]"` literally and have it resolve correctly
+	/// regardless of which function it ends up spliced into, without
+	/// threading either name through every node by hand. `debugValues` must
+	/// be part of this function's signature (not just `evalTree`'s) because
+	/// `node` here can itself be a node with debug-annotated params -- e.g.
+	/// a future debug-annotated `color-grad` nested inside another
+	/// `color-grad`'s `source`, exactly Figure 9's shape.
 	public func emitFunction(for node: any Node) -> String {
 		let name = "fn\(functionNameCounter.next)"
 		functionNameCounter.next += 1
 
-		let subContext = MSLCodegenContext(sharingFunctionNamesWith: self)
+		let subContext = MSLCodegenContext(sharingCodegenPassStateWith: self)
 		let result = node.codegenMSL(into: subContext)
 		resourceRequirements.formUnion(subContext.resourceRequirements)
 		customModuleTexts.merge(subContext.customModuleTexts) { existing, _ in existing }
@@ -155,7 +238,7 @@ public final class MSLCodegenContext {
 		// wrapper (which calls them), so bubble them up first.
 		extraFunctions.append(contentsOf: subContext.extraFunctions)
 		extraFunctions.append("""
-		inline float3 \(name)(float2 coord) {
+		inline float3 \(name)(float2 coord, constant float* debugValues) {
 			\(subContext.body())
 			return \(result.variableName);
 		}

@@ -51,7 +51,12 @@ public final class MSLTreeEvaluator {
 		return kernelSource(body: context.body(), resultVariable: result.variableName, functions: context.allFunctions(), resourceRequirements: context.resourceRequirements, customModules: context.customModulesMSL())
 	}
 
-	public func evaluate(node: any Node, at coords: [Coordinate]) throws -> [Value] {
+	/// `debugValues`, when supplied, overrides the defaults any `debug`-
+	/// annotated `$param` in `node`'s tree would otherwise use -- lets a
+	/// parity test exercise a specific live value without needing to build
+	/// an `MTLBuffer` by hand. `nil` (every existing caller) renders with
+	/// each control's in-file default, same as before this parameter existed.
+	public func evaluate(node: any Node, at coords: [Coordinate], debugValues: [Float]? = nil) throws -> [Value] {
 		let context = MSLCodegenContext()
 		let result = node.codegenMSL(into: context)
 
@@ -76,6 +81,16 @@ public final class MSLTreeEvaluator {
 			  let resultBuffer = device.makeBuffer(length: count * MemoryLayout<SIMD4<Float>>.stride, options: .storageModeShared) else {
 			throw MSLTreeEvaluatorError.bufferAllocationFailed
 		}
+		let debugValuesBuffer: MTLBuffer?
+		if var overrides = debugValues {
+			if overrides.isEmpty { overrides = [0] }
+			debugValuesBuffer = device.makeBuffer(bytes: &overrides, length: overrides.count * MemoryLayout<Float>.stride, options: .storageModeShared)
+		} else {
+			debugValuesBuffer = mslMakeDefaultDebugValuesBuffer(device: device, controls: context.debugControls)
+		}
+		guard let debugValuesBuffer else {
+			throw MSLTreeEvaluatorError.bufferAllocationFailed
+		}
 
 		let coordPtr = coordBuffer.contents().bindMemory(to: SIMD2<Float>.self, capacity: count)
 		for i in 0..<count {
@@ -89,6 +104,7 @@ public final class MSLTreeEvaluator {
 		encoder.setComputePipelineState(pipeline)
 		encoder.setBuffer(coordBuffer, offset: 0, index: 0)
 		encoder.setBuffer(resultBuffer, offset: 0, index: 1)
+		encoder.setBuffer(debugValuesBuffer, offset: 0, index: 2)
 
 		let threadgroupWidth = min(pipeline.maxTotalThreadsPerThreadgroup, count)
 		encoder.dispatchThreads(MTLSize(width: count, height: 1, depth: 1),
@@ -113,15 +129,16 @@ public final class MSLTreeEvaluator {
 		#include <metal_stdlib>
 		using namespace metal;
 
-		\(preamble)inline float3 evalTree(float2 coord) {
+		\(preamble)inline float3 evalTree(float2 coord, constant float* debugValues) {
 			\(body)
 			return \(resultVariable);
 		}
 
 		kernel void evaluateAtCoords(device const float2* coords [[buffer(0)]],
 									  device float4* results [[buffer(1)]],
+									  constant float* debugValues [[buffer(2)]],
 									  uint gid [[thread_position_in_grid]]) {
-			results[gid] = float4(evalTree(coords[gid]), 1.0);
+			results[gid] = float4(evalTree(coords[gid], debugValues), 1.0);
 		}
 		"""
 	}

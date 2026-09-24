@@ -43,7 +43,11 @@ final class MetalRenderContext {
 	let device: MTLDevice
 	let commandQueue: MTLCommandQueue
 
-	private var pipelineCache: [String: MTLComputePipelineState] = [:]
+	private struct CompiledTree {
+		let pipeline: MTLComputePipelineState
+		let debugControls: [DebugControlSlot]
+	}
+	private var pipelineCache: [String: CompiledTree] = [:]
 	private let lock = NSLock()
 
 	private init() {
@@ -73,14 +77,16 @@ final class MetalRenderContext {
 		lock.unlock()
 	}
 
-	/// Compiles (or returns the cached pipeline for) `node`'s generated MSL.
-	/// Keyed by `node.toString()` alone -- every node's tunables are baked
+	/// Compiles (or returns the cached compile for) `node`'s generated MSL,
+	/// alongside the manifest of any live-tunable `debug` controls its
+	/// `.evolvnode` params registered (see `DebugControlSlot`). Keyed by
+	/// `node.toString()` alone -- every node's *non-live* tunables are baked
 	/// into `.evolvnode` text now (see color-grad-curvature.evolvnode etc.),
 	/// and any edit there goes through NodeRegistry.reload(), which clears
 	/// this whole cache directly, so there's no live-mutable Swift state
 	/// left that could make an identical `toString()` compile to different
 	/// MSL.
-	func pipeline(for node: any Node) throws -> MTLComputePipelineState {
+	private func compiled(for node: any Node) throws -> CompiledTree {
 		let key = node.toString()
 
 		lock.lock()
@@ -99,18 +105,36 @@ final class MetalRenderContext {
 			throw MetalRenderError.functionNotFound
 		}
 		let pipeline = try device.makeComputePipelineState(function: function)
+		let compiledTree = CompiledTree(pipeline: pipeline, debugControls: context.debugControls)
 
 		lock.lock()
-		pipelineCache[key] = pipeline
+		pipelineCache[key] = compiledTree
 		lock.unlock()
-		return pipeline
+		return compiledTree
+	}
+
+	/// What live `debug` controls (if any) `node`'s tree declares -- reuses
+	/// whatever's already cached by `compiled(for:)` (a render call, or a
+	/// prior call to this method), so asking is effectively free once a
+	/// tree has been compiled once. `NodeRenderer` calls this after its
+	/// first render to build a `LiveDebugValues` for `NodeDebuggingView`.
+	func debugControls(for node: any Node) throws -> [DebugControlSlot] {
+		try compiled(for: node).debugControls
 	}
 
 	/// Renders `node` over `width`x`height` pixels, matching
 	/// `NodeRenderer.renderPixels`'s coordinate mapping and supersampling
 	/// exactly (this replaces that CPU implementation, not just resembles it).
-	func render(node: any Node, width: Int, height: Int, scale: ComponentType, supersample: Int) throws -> [Value] {
-		let pipeline = try pipeline(for: node)
+	/// `liveDebugValues`, when supplied, is bound as the kernel's
+	/// `debugValues` buffer as-is (this is the actual "live, no recompile"
+	/// mechanism -- see `LiveDebugValues`); `nil` (every call site except
+	/// `NodeDebuggingView`'s) builds a fresh buffer from each control's
+	/// default instead, so a tree with debug controls still renders
+	/// correctly wherever nobody's watching sliders (the main canvas,
+	/// thumbnails, etc).
+	func render(node: any Node, width: Int, height: Int, scale: ComponentType, supersample: Int, liveDebugValues: MTLBuffer? = nil) throws -> [Value] {
+		let compiledTree = try compiled(for: node)
+		let pipeline = compiledTree.pipeline
 		let pixelCount = width * height
 
 		guard let outputBuffer = device.makeBuffer(length: pixelCount * MemoryLayout<SIMD4<Float>>.stride, options: .storageModeShared) else {
@@ -118,6 +142,9 @@ final class MetalRenderContext {
 		}
 		var params = RenderParams(width: UInt32(width), height: UInt32(height), scale: Float(scale), supersample: UInt32(supersample))
 		guard let paramsBuffer = device.makeBuffer(bytes: &params, length: MemoryLayout<RenderParams>.stride, options: .storageModeShared) else {
+			throw MetalRenderError.bufferAllocationFailed
+		}
+		guard let debugValuesBuffer = liveDebugValues ?? mslMakeDefaultDebugValuesBuffer(device: device, controls: compiledTree.debugControls) else {
 			throw MetalRenderError.bufferAllocationFailed
 		}
 
@@ -128,6 +155,7 @@ final class MetalRenderContext {
 		encoder.setComputePipelineState(pipeline)
 		encoder.setBuffer(outputBuffer, offset: 0, index: 0)
 		encoder.setBuffer(paramsBuffer, offset: 0, index: 1)
+		encoder.setBuffer(debugValuesBuffer, offset: 0, index: 2)
 
 		let tgWidth = pipeline.threadExecutionWidth
 		let tgHeight = max(1, pipeline.maxTotalThreadsPerThreadgroup / tgWidth)
@@ -162,13 +190,14 @@ final class MetalRenderContext {
 
 		\(preamble)\(mslSanitizeFunction())
 
-		inline float3 evalTree(float2 coord) {
+		inline float3 evalTree(float2 coord, constant float* debugValues) {
 			\(body)
 			return \(resultVariable);
 		}
 
 		kernel void renderImage(device float4* outBuffer [[buffer(0)]],
 								 constant Params& params [[buffer(1)]],
+								 constant float* debugValues [[buffer(2)]],
 								 uint2 gid [[thread_position_in_grid]]) {
 			if (gid.x >= params.width || gid.y >= params.height) return;
 
@@ -188,7 +217,7 @@ final class MetalRenderContext {
 				float subYc = yc + (float(sy) + 0.5) / float(supersample) * dy - dy * 0.5;
 				for (uint sx = 0; sx < supersample; sx++) {
 					float subXc = xc + (float(sx) + 0.5) / float(supersample) * dx - dx * 0.5;
-					accumulated += sanitize(evalTree(float2(subXc, subYc)));
+					accumulated += sanitize(evalTree(float2(subXc, subYc), debugValues));
 				}
 			}
 			float3 pixel = accumulated / float(supersample * supersample);

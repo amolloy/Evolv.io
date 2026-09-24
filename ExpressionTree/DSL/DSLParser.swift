@@ -22,9 +22,13 @@
 //                  ('requires' '(' (IDENT|STRING) (',' (IDENT|STRING))* ')')?
 //                  '{' (letStmt | paramStmt)* 'return' expr '}'
 //    paramDecl  := IDENT (':' IDENT)?          -- ": fn" marks a sampled child
-//    paramStmt  := 'param' '$' IDENT ':' IDENT '=' NUMBER
+//    paramStmt  := 'param' '$' IDENT ':' IDENT '=' NUMBER debugClause?
 //                  -- a self-contained default for a `$name` reference,
 //                  used when nothing external supplies one
+//    debugClause := 'debug' ('toggle' | 'slider' '(' NUMBER ',' NUMBER ')')
+//                  -- only valid on a 'float' param; registers it as a live,
+//                  no-recompile-needed uniform NodeDebuggingView can surface
+//                  as a Toggle/Slider (see MSLCodegenContext.registerDebugControl)
 //    moduleDecl := 'module' STRING '{' funcDecl* '}'
 //    funcDecl   := 'func' IDENT '(' (IDENT ':' IDENT (',' IDENT ':' IDENT)*)? ')'
 //                  '->' IDENT '{' letStmt* 'return' expr '}'
@@ -111,10 +115,12 @@ final class DSLParser {
 		try expect(.lbrace)
 		var body: [DSLLetStmt] = []
 		var paramDefaults: [String: DSLParamValue] = [:]
+		var debugControls: [DSLDebugControl] = []
 		while checkIdentifier("let") || checkIdentifier("param") {
 			if checkIdentifier("param") {
-				let (paramName, value) = try parseParamDefaultStmt()
+				let (paramName, value, debugControl) = try parseParamDefaultStmt()
 				paramDefaults[paramName] = value
+				if let debugControl { debugControls.append(debugControl) }
 			} else {
 				body.append(try parseLetStmt())
 			}
@@ -124,7 +130,7 @@ final class DSLParser {
 		try expect(.rbrace)
 		try expect(.eof)
 
-		return DSLTemplate(name: name, params: params, requires: requires, paramDefaults: paramDefaults, body: body, returnExpr: returnExpr)
+		return DSLTemplate(name: name, params: params, requires: requires, paramDefaults: paramDefaults, debugControls: debugControls, body: body, returnExpr: returnExpr)
 	}
 
 	private func parseModule() throws -> DSLModule {
@@ -180,7 +186,7 @@ final class DSLParser {
 		return name
 	}
 
-	private func parseParamDefaultStmt() throws -> (name: String, value: DSLParamValue) {
+	private func parseParamDefaultStmt() throws -> (name: String, value: DSLParamValue, debugControl: DSLDebugControl?) {
 		try expectIdentifier("param")
 		guard case .param(let name) = peek() else {
 			throw DSLParseError(message: "Expected '$name' after 'param', found \(peek())")
@@ -194,20 +200,45 @@ final class DSLParser {
 		}
 		pos += 1
 
+		let value: DSLParamValue
 		switch type {
 			case "float":
 				guard let d = Double(text) else {
 					throw DSLParseError(message: "Invalid float literal '\(text)' for param '$\(name)'")
 				}
-				return (name, .float(ComponentType(d)))
+				value = .float(ComponentType(d))
 			case "int":
 				guard let i = Int(text) else {
 					throw DSLParseError(message: "Invalid int literal '\(text)' for param '$\(name)'")
 				}
-				return (name, .int(i))
+				value = .int(i)
 			default:
 				throw DSLParseError(message: "Unknown param type '\(type)' for '$\(name)' -- expected 'float' or 'int'")
 		}
+
+		var debugControl: DSLDebugControl? = nil
+		if checkIdentifier("debug") {
+			pos += 1
+			guard case .float = value else {
+				throw DSLParseError(message: "'debug' is only valid on a 'float' param, found on int param '$\(name)'")
+			}
+			if checkIdentifier("toggle") {
+				pos += 1
+				debugControl = DSLDebugControl(paramName: name, kind: .toggle)
+			} else if checkIdentifier("slider") {
+				pos += 1
+				try expect(.lparen)
+				let lo = try expectNumberLiteral(context: "slider min for param '$\(name)'")
+				try expect(.comma)
+				let hi = try expectNumberLiteral(context: "slider max for param '$\(name)'")
+				try expect(.rparen)
+				debugControl = DSLDebugControl(paramName: name, kind: .slider(min: ComponentType(lo), max: ComponentType(hi)))
+			} else {
+				throw DSLParseError(message: "Expected 'toggle' or 'slider(min, max)' after 'debug' for param '$\(name)', found \(peek())")
+			}
+		}
+
+		return (name, value, debugControl)
 	}
 
 	private func parseParamDecl() throws -> DSLParam {
@@ -453,6 +484,20 @@ final class DSLParser {
 		}
 		pos += 1
 		return name
+	}
+
+	/// Reads a raw `.number` token as a `Double` -- used for `debug
+	/// slider(min, max)` bounds, which (like a `param` default itself) are
+	/// plain literals, not full expressions.
+	private func expectNumberLiteral(context: String) throws -> Double {
+		guard case .number(let text) = peek() else {
+			throw DSLParseError(message: "Expected a numeric literal for \(context), found \(peek())")
+		}
+		pos += 1
+		guard let d = Double(text) else {
+			throw DSLParseError(message: "Invalid numeric literal '\(text)' for \(context)")
+		}
+		return d
 	}
 
 	/// Accepts either form for a `requires(...)` entry -- a bare

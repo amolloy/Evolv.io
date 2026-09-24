@@ -67,6 +67,12 @@ public struct DSLTemplate {
 	/// because a library-loaded node (unlike the two original
 	/// DSLSampleDefinitions demos) has no Swift caller to inject params.
 	let paramDefaults: [String: DSLParamValue]
+	/// `debug slider(...)`/`debug toggle` clauses from `param` statements --
+	/// see `DSLDebugControl`. A subset of `paramDefaults`' keys (every
+	/// debug-controlled param still needs a plain default, used as its
+	/// initial/reset value and by anything rendering this tree without a
+	/// live-values buffer of its own).
+	let debugControls: [DSLDebugControl]
 	let body: [DSLLetStmt]
 	let returnExpr: DSLExpr
 }
@@ -74,6 +80,18 @@ public struct DSLTemplate {
 public enum DSLParamValue {
 	case float(ComponentType)
 	case int(Int)
+}
+
+/// A `debug slider(min, max)` / `debug toggle` clause on a `param`
+/// statement -- see `DSLParser.parseParamDefaultStmt` and
+/// `MSLCodegenContext.registerDebugControl`. Only `float`-typed params can
+/// carry one (the parser rejects `debug` on an `int` param): sliders/toggles
+/// are a runtime-value concept, `int` params are purely a codegen-time
+/// unroll-count concept (`average`'s bounds), and there's no need yet to mix
+/// the two.
+struct DSLDebugControl {
+	let paramName: String
+	let kind: DebugControlKind
 }
 
 /// A `func name(p0: type, ...) -> type { <let>* return expr }` declaration,

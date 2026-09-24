@@ -8,6 +8,7 @@
 import ExpressionTree
 import CoreGraphics
 import Foundation
+import Metal
 import simd
 import SwiftUI
 
@@ -30,6 +31,12 @@ class NodeRenderer: ObservableObject {
 
 	@Published var displayMax: Value = Value.one
 	@Published var displayMin: Value = Value.zero
+	/// The live toggle/slider controls this tree's DSL nodes declared, if
+	/// any -- nil until the first `render()` completes (the manifest isn't
+	/// knowable before a tree's first compile) and whenever it declares
+	/// none. Built once and reused for every subsequent render, so moving a
+	/// slider never recompiles anything -- see `LiveDebugValues`.
+	@Published private(set) var liveDebugValues: LiveDebugValues?
 
 	init(node: any Node,
 		 evaluator: Evaluator,
@@ -47,6 +54,7 @@ class NodeRenderer: ObservableObject {
 		let evaluator = self.evaluator
 		let scale = self.scale
 		let supersample = UserDefaults.standard.isSupersamplingEnabled ? 4 : 1
+		let liveDebugValuesBuffer = self.liveDebugValues?.buffer
 
 		let rendered = await Task.detached(priority: .userInitiated) {
 			Self.renderPixels(node: node,
@@ -54,12 +62,19 @@ class NodeRenderer: ObservableObject {
 							   scale: scale,
 							   width: width,
 							   height: height,
-							   supersample: supersample)
+							   supersample: supersample,
+							   liveDebugValues: liveDebugValuesBuffer)
 		}.value
 
 		data = rendered.data
 		maxValue = rendered.maxValue
 		minValue = rendered.minValue
+
+		if liveDebugValues == nil,
+		   let controls = try? evaluator.debugControls(for: node),
+		   let built = LiveDebugValues(slots: controls, device: evaluator.device) {
+			liveDebugValues = built
+		}
 	}
 
 	/// Renders via the shared Metal pipeline cache (see `Evaluator.render`
@@ -70,10 +85,11 @@ class NodeRenderer: ObservableObject {
 									  scale: ComponentType,
 									  width: Int,
 									  height: Int,
-									  supersample: Int) -> (data: [Value], maxValue: Value, minValue: Value) {
+									  supersample: Int,
+									  liveDebugValues: MTLBuffer?) -> (data: [Value], maxValue: Value, minValue: Value) {
 		let data: [Value]
 		do {
-			data = try evaluator.render(node: node, scale: scale, supersample: supersample)
+			data = try evaluator.render(node: node, scale: scale, supersample: supersample, liveDebugValues: liveDebugValues)
 		} catch {
 			print("Metal render failed: \(error)")
 			data = Array(repeating: Value.zero, count: width * height)
