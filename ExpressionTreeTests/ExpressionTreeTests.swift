@@ -270,3 +270,50 @@ struct MetalRenderRegressionTests {
         #expect(sawNonZero, "figure 9's tree evaluated to all zeros across every sample coordinate")
     }
 }
+
+/// Spike: proves the hand-rolled text DSL in ExpressionTree/DSL/ can express
+/// real node definitions and reproduce the exact behavior of the
+/// hand-written Swift nodes it's modeled on -- checked by reusing the same
+/// golden values as MetalRenderRegressionTests' mod()/colorGradient() above
+/// (one simple node, one that exercises every hard case: a sampled-function
+/// child, a requires() clause, and a dynamic tap-count reduction). Source
+/// text lives in DSLSampleDefinitions.swift, shared with NodeRegistry's
+/// live "dsl-mod"/"dsl-color-grad" registrations so this suite can't drift
+/// from what's actually rendered in the app. See DSLCodegenNode.swift's
+/// header comment for what's deliberately still not done (file loading,
+/// hot reload, NodeRegistry's static-vs-per-instance name tension).
+struct DSLSpikeTests {
+    private static let coord = Coordinate(x: 0.3, y: -0.4)
+
+    @Test func dslMod() throws {
+        let node = DSLCodegenNode(template: DSLSampleDefinitions.modTemplate,
+                                   children: [VariableY(), ConstantTriplet(Value(0.0, 0.3, -0.4))])
+
+        let evaluator = try MSLTreeEvaluator()
+        let actual = try evaluator.evaluate(node: node, at: [Self.coord])[0]
+        let expected = Value(-0.4, 0.2, 0.0)
+        let diff = abs(actual - expected)
+        #expect(Swift.max(diff.x, Swift.max(diff.y, diff.z)) < 1e-4, "expected \(expected), got \(actual)")
+    }
+
+    /// Figure 9's inner `color-grad` call, same tree and golden value as
+    /// MetalRenderRegressionTests.colorGradient() above -- params match
+    /// ColorGradient's current debugDelta/debugHeightFactor/debugLightZ/
+    /// debugTapCount defaults (0.01/20.0/0.0/4), same as
+    /// DSLSampleDefinitions.colorGradParams.
+    @Test func dslColorGradient() throws {
+        let source = Round([
+            Add([VariableY(), Log([Invert([VariableY()]), Constant(15.5)])]),
+            VariableX()
+        ])
+        let node = DSLCodegenNode(template: DSLSampleDefinitions.colorGradTemplate,
+                                   params: DSLSampleDefinitions.colorGradParams,
+                                   children: [source, Constant(3.1), Constant(1.86), ConstantTriplet(Value(0.95, 0.7, 0.59)), Constant(1.35)])
+
+        let evaluator = try MSLTreeEvaluator()
+        let actual = try evaluator.evaluate(node: node, at: [Self.coord])[0]
+        let expected = Value(0.03680462762713432, 0.024370135739445686, 0.0193475428968668)
+        let diff = abs(actual - expected)
+        #expect(Swift.max(diff.x, Swift.max(diff.y, diff.z)) < 1e-3, "expected \(expected), got \(actual)")
+    }
+}

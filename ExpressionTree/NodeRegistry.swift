@@ -46,6 +46,22 @@ public final class NodeRegistry {
         for type in nodeTypes {
             builtRegistry[type.name] = type.init
         }
+
+        // "dsl-"-prefixed spike registrations: the same math as "mod" and
+        // "color-grad" above, but emitted by interpreting a parsed
+        // DSLTemplate (see DSLCodegenNode.swift) instead of a hand-written
+        // _emitMSL. Registered under distinct names, not as replacements,
+        // so both can be picked from ContentView's sample list side by
+        // side. See DSLSampleDefinitions.swift for the source text.
+        builtRegistry["dsl-mod"] = { children in
+            DSLCodegenNode(template: DSLSampleDefinitions.modTemplate, children: children)
+        }
+        builtRegistry["dsl-color-grad"] = { children in
+            DSLCodegenNode(template: DSLSampleDefinitions.colorGradTemplate,
+                            params: DSLSampleDefinitions.colorGradParams,
+                            children: children)
+        }
+
         self.registry = builtRegistry
     }
     

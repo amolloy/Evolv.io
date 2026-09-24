@@ -16,6 +16,14 @@ struct ContentView: View {
 		"y": "y",
 		"(abs x)": "(abs x)",
 		"(mod X (abs Y))": "(mod X (abs Y))",
+		// DSL-spike versions of "(mod X (abs Y))" above and of a standalone
+		// color-grad call below, for side-by-side comparison against their
+		// hand-written equivalents -- see ExpressionTree/DSL/DSLSampleDefinitions.swift.
+		"(dsl-mod X (abs Y))": "(dsl-mod X (abs Y))",
+		"(color-grad ...)":
+			"(color-grad (round (+ y (log (invert y) 15.5)) x) 3.1 1.86 #(0.95 0.7 0.59) 1.35)",
+		"(dsl-color-grad ...)":
+			"(dsl-color-grad (round (+ y (log (invert y) 15.5)) x) 3.1 1.86 #(0.95 0.7 0.59) 1.35)",
 		"(and X Y)": "(and X Y)",
 		"(bw-noise .2 2)": "(bw-noise .2 2)",
 		"(color-noise .1 2)": "(color-noise .1 2)",
