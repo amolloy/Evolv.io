@@ -1,5 +1,5 @@
 node "rotate-vector"(angle, x, y) {
-	let c = cos(angle * M_PI_F)
-	let s = sin(angle * M_PI_F)
+	let c = cos(angle)
+	let s = sin(angle)
 	return c * x + s * y
 }
