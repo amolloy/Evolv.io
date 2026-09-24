@@ -33,16 +33,26 @@
 //    expr       := ternary
 //    ternary    := or ('?' expr ':' expr)?
 //    or         := and ('||' and)*
-//    and        := equality ('&&' equality)*
+//    and        := bitAnd ('&&' bitAnd)*
+//    bitAnd     := equality ('&' equality)*        -- e.g. `and`'s bit-twiddling
 //    equality   := comparison (('=='|'!=') comparison)*
 //    comparison := additive (('<'|'<='|'>'|'>=') additive)*
 //    additive   := multiplicative (('+'|'-') multiplicative)*
 //    multiplicative := unary (('*'|'/') unary)*
 //    unary      := ('-'|'!')? postfix
 //    postfix    := primary ('.' IDENT | '(' argList ')')*
-//    primary    := NUMBER | IDENT | '$' IDENT | '(' expr ')' | reduceExpr
+//    primary    := NUMBER | IDENT genericSuffix? | '$' IDENT | '(' expr ')' | reduceExpr
+//    genericSuffix := '<' IDENT '>'                 -- folds into one identifier,
+//                  e.g. `as_type<uint3>`, so it can be called like any other
+//                  passthrough MSL builtin (see DSLInterpreter's unbound-call
+//                  handling) without the grammar needing real generics
 //    reduceExpr := 'average' '(' IDENT 'in' expr '...' expr ')'
 //                  '{' letStmt* expr '}'
+//
+//  Bare (non-call) identifiers that aren't bound to a child/let/param are
+//  passed through as literal text too (not just in call position) -- see
+//  DSLInterpreter.evaluate's `.identifier` case -- so a node can reference
+//  a plain MSL constant like `M_PI_F` without it needing a binding.
 //
 
 struct DSLParseError: Error, CustomStringConvertible {
@@ -251,9 +261,17 @@ final class DSLParser {
 	}
 
 	private func parseAnd() throws -> DSLExpr {
-		var lhs = try parseEquality()
+		var lhs = try parseBitwiseAnd()
 		while match(.and) {
-			lhs = .binary(op: "&&", lhs: lhs, rhs: try parseEquality())
+			lhs = .binary(op: "&&", lhs: lhs, rhs: try parseBitwiseAnd())
+		}
+		return lhs
+	}
+
+	private func parseBitwiseAnd() throws -> DSLExpr {
+		var lhs = try parseEquality()
+		while match(.amp) {
+			lhs = .binary(op: "&", lhs: lhs, rhs: try parseEquality())
 		}
 		return lhs
 	}
@@ -338,7 +356,7 @@ final class DSLParser {
 				return .number(text)
 			case .identifier(let name):
 				pos += 1
-				return .identifier(name)
+				return .identifier(tryFoldGenericSuffix(name))
 			case .param(let name):
 				pos += 1
 				return .param(name)
@@ -350,6 +368,30 @@ final class DSLParser {
 			default:
 				throw DSLParseError(message: "Unexpected token \(peek()) in expression")
 		}
+	}
+
+	/// Folds a trailing `<IDENT>` onto `name` if what follows really looks
+	/// like MSL's generic-cast syntax (`as_type<uint3>`) rather than a
+	/// less-than comparison -- backtracks otherwise, so `x < y` is
+	/// unaffected. The combined text (e.g. "as_type<uint3>") becomes a
+	/// single `.identifier`, which then works exactly like any other
+	/// passthrough MSL builtin name in call position (see
+	/// DSLInterpreter.evaluate's `.call` case) -- no separate AST shape
+	/// needed for "generic call".
+	private func tryFoldGenericSuffix(_ name: String) -> String {
+		guard check(.lt) else { return name }
+		let saved = pos
+		pos += 1 // consume '<'
+		guard case .identifier(let typeName) = peek() else {
+			pos = saved
+			return name
+		}
+		pos += 1
+		guard match(.gt) else {
+			pos = saved
+			return name
+		}
+		return "\(name)<\(typeName)>"
 	}
 
 	private func parseReduce() throws -> DSLExpr {

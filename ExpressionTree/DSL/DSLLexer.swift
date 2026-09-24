@@ -28,6 +28,7 @@ enum DSLToken: Equatable {
 	case plus, minus, star, slash
 	case assign, eq, neq, lt, lte, gt, gte
 	case and, or, not
+	case amp
 	case eof
 }
 
@@ -166,9 +167,8 @@ final class DSLLexer {
 				if peek() == "=" { pos += 1; return .gte }
 				return .gt
 			case "&":
-				guard peek() == "&" else { throw DSLLexError(message: "Unexpected '&'; did you mean '&&'?") }
-				pos += 1
-				return .and
+				if peek() == "&" { pos += 1; return .and }
+				return .amp
 			case "|":
 				guard peek() == "|" else { throw DSLLexError(message: "Unexpected '|'; did you mean '||'?") }
 				pos += 1

@@ -214,10 +214,16 @@ final class DSLInterpreter {
 				return text
 
 			case .identifier(let name):
-				guard let binding = env[name] else {
-					preconditionFailure("DSL: unresolved identifier '\(name)'")
-				}
-				return binding.text
+				// A bound name (child/let/param/reduce variable) substitutes
+				// its resolved text. An *unbound* one is assumed to be a
+				// passthrough MSL constant (`M_PI_F`) or type name, exactly
+				// the same permissive rule already applied to unbound names
+				// in call position (see the `.call` case below) -- there's
+				// no meaningful way to distinguish "a real typo" from "a
+				// legitimate bare MSL identifier this DSL doesn't know
+				// about" at this layer, and a genuine typo still fails
+				// loudly at the Metal compile step, just later.
+				return env[name]?.text ?? name
 
 			case .param(let name):
 				guard let value = params[name] else {

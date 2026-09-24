@@ -84,18 +84,18 @@ public final class Parser {
 
 	private func makeTerminalNode(token: String) throws -> any Node {
         if let value = Double(token) {
-            // It's a bare number, so it's a ConstantNode.
+            // It's a bare number, so it's a ConstantNode. Bare numbers and
+            // #(...) triplets are the two cases that can never be
+            // DSL-defined nodes -- they're literal syntax the tokenizer
+            // recognizes directly, not a name+children shape the registry
+            // could look up (there's no "body" to write for a literal;
+            // its value comes from the parse site, not a formula).
             return Constant(value)
         }
-        
-        // It's not a number, so treat it as a variable.
-        switch token {
-        case "x":
-            return VariableX()
-        case "y":
-            return VariableY()
-        default:
-            throw ParseError.unknownFunction(token)
-        }
+
+        // Anything else -- including "x"/"y", which look like bare
+        // variables here but are genuinely registry-defined nodes with
+        // zero children (see Evolv.io/Resources/BundledNodes/{x,y}.evolvnode).
+        return try registry.makeNode(name: token, children: [])
     }
 }
