@@ -14,7 +14,6 @@ struct TreeVisualizerView: View {
 	let layout: TreeLayout
 
 	@State private var store = TreeThumbnailStore()
-	@State private var selectedNodeForDetail: LaidOutNode?
 
 	init(evaluator: Evaluator, rootNode: any Node) {
 		self.evaluator = evaluator
@@ -47,13 +46,8 @@ struct TreeVisualizerView: View {
 				.frame(width: layout.contentSize.width, height: layout.contentSize.height)
 
 				ForEach(layout.nodes) { laidOut in
-					Button {
-						selectedNodeForDetail = laidOut
-					} label: {
-						NodeTileView(node: laidOut.node, image: store.images[laidOut.node.toString()])
-					}
-					.buttonStyle(.plain)
-					.position(laidOut.center)
+					NodeTileView(node: laidOut.node, image: store.images[laidOut.node.toString()])
+						.position(laidOut.center)
 				}
 			}
 			.frame(width: layout.contentSize.width, height: layout.contentSize.height)
@@ -62,9 +56,6 @@ struct TreeVisualizerView: View {
 		.navigationTitle("Expression Tree")
 		.task {
 			await store.renderAll(nodes: layout.nodes, evaluator: evaluator)
-		}
-		.sheet(item: $selectedNodeForDetail) { laidOut in
-			DetailImageView(node: laidOut.node)
 		}
 	}
 }
@@ -103,38 +94,5 @@ private struct NodeTileView: View {
 				}
 		}
 		.frame(width: TreeLayout.tileSize.width, height: TreeLayout.tileSize.height)
-	}
-}
-
-struct DetailImageView: View {
-	let node: any Node
-
-	@Environment(\.dismiss) private var dismiss
-
-	var body: some View {
-		VStack(spacing: 20) {
-			Text("Detail View")
-				.font(.headline)
-
-			Text(node.toString())
-				.font(.caption.monospaced())
-				.padding(.horizontal)
-				.textSelection(.enabled)
-
-			NodeDebuggingView(
-				evaluator: Evaluator(size: CGSize(width: 512, height: 512)),
-				expressionTree: node
-			)
-			.clipShape(RoundedRectangle(cornerRadius: 16))
-			.shadow(radius: 10)
-
-			Button("Done") {
-				dismiss()
-			}
-			.keyboardShortcut(.defaultAction)
-
-		}
-		.padding()
-		.frame(minWidth: 600, minHeight: 700)
 	}
 }

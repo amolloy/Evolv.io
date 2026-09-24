@@ -8,12 +8,16 @@
 // -- doesn't apply to a text file baked at parse time). To tune these now,
 // edit the literals directly and use "Reload Custom Nodes".
 node "color-grad"(source: fn, p1, p2, color, p3) requires(lighting) {
+	param $debugDelta: float = 0.01 debug slider(0.0, 1.0)
+	param $debugHeightFactor: float = 20.0 debug slider(0.0, 100.0)
+	param $debugLightZ: float = 0.0 debug slider(0.0, 2.0)
+
 	let p1Val: float = avgLum(p1)
-	let deltaLocal: float = (abs(p1Val) / 3.1) * 0.01
+	let deltaLocal: float = (abs(p1Val) / 3.1) * $debugDelta
 
 	let p3Val: float = avgLum(p3)
-	let heightFactor: float = p3Val * 20.0
-	let lightZ: float = p3Val * 0.0
+	let heightFactor: float = p3Val * $debugHeightFactor
+	let lightZ: float = p3Val * $debugLightZ
 
 	let angle: float = avgLum(p2)
 

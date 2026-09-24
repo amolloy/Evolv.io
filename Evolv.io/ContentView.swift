@@ -63,6 +63,7 @@ struct ContentView: View {
 
 	@State private var selectedGroup: String? = nil
 	@State private var showingTreeVisualizer = false
+	@State private var showingDebugView = false
 
 	var body: some View {
 		NavigationSplitView {
@@ -87,6 +88,9 @@ struct ContentView: View {
 					Button("Show Expression Tree") {
 						showingTreeVisualizer = true
 					}
+					Button("Show Debug View") {
+						showingDebugView = true
+					}
 				}
 				.clipShape(RoundedRectangle(cornerRadius: 12))
 				.shadow(radius: 5)
@@ -107,6 +111,23 @@ struct ContentView: View {
 					.frame(minWidth: 1000, minHeight: 800)
 #endif
 					.presentationSizing(.page)
+				}
+				.sheet(isPresented: $showingDebugView) {
+					NavigationStack {
+						NodeDebuggingView(evaluator: Evaluator(size: CGSize(width: 512, height: 512)),
+										   expressionTree: node)
+							.padding()
+							.toolbar {
+								ToolbarItem(placement: .cancellationAction) {
+									Button("Done") {
+										showingDebugView = false
+									}
+								}
+							}
+					}
+#if os(macOS)
+					.frame(minWidth: 600, minHeight: 750)
+#endif
 				}
 			} else {
 				Text("Select an expression group")
