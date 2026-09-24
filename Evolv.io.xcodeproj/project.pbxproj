@@ -11,6 +11,7 @@
 		B44879572DF60DE9005212B0 /* ExpressionTree.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = B448794E2DF60DE9005212B0 /* ExpressionTree.framework */; };
 		B44879612DF60DE9005212B0 /* ExpressionTree.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = B448794E2DF60DE9005212B0 /* ExpressionTree.framework */; };
 		B44879622DF60DE9005212B0 /* ExpressionTree.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = B448794E2DF60DE9005212B0 /* ExpressionTree.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		B4D08EB33065C64D0032F85D /* EvolvNodeFormat.md in Resources */ = {isa = PBXBuildFile; fileRef = B4D08EB13065C64D0032F85D /* EvolvNodeFormat.md */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -74,6 +75,7 @@
 		B44879562DF60DE9005212B0 /* ExpressionTreeTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = ExpressionTreeTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		B4B2EECE304208CA000D0917 /* ProjectSummary.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = ProjectSummary.md; sourceTree = "<group>"; };
 		B4B2EED6304485CF000D0917 /* SimsSiggraph91.pdf */ = {isa = PBXFileReference; lastKnownFileType = image.pdf; path = SimsSiggraph91.pdf; sourceTree = "<group>"; };
+		B4D08EB13065C64D0032F85D /* EvolvNodeFormat.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = EvolvNodeFormat.md; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -149,8 +151,6 @@
 			isa = PBXGroup;
 			children = (
 				B4B2EED7304485CF000D0917 /* Documentation */,
-				B4B2EECE304208CA000D0917 /* ProjectSummary.md */,
-				B44879432DF60AC7005212B0 /* README.md */,
 				B448791A2DF60A68005212B0 /* Evolv.io */,
 				B44879292DF60A69005212B0 /* Evolv.ioTests */,
 				B44879332DF60A69005212B0 /* Evolv.ioUITests */,
@@ -175,6 +175,9 @@
 		B4B2EED7304485CF000D0917 /* Documentation */ = {
 			isa = PBXGroup;
 			children = (
+				B4B2EECE304208CA000D0917 /* ProjectSummary.md */,
+				B44879432DF60AC7005212B0 /* README.md */,
+				B4D08EB13065C64D0032F85D /* EvolvNodeFormat.md */,
 				B4B2EED6304485CF000D0917 /* SimsSiggraph91.pdf */,
 			);
 			path = Documentation;
@@ -370,6 +373,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				B4D08EB33065C64D0032F85D /* EvolvNodeFormat.md in Resources */,
 				B44879442DF60ACB005212B0 /* README.md in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
