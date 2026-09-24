@@ -5,6 +5,7 @@
 //  Created by Andy Molloy on 6/12/25.
 //
 
+import Foundation
 
 public final class NodeRegistry {
 	public typealias NodeConstructor = ([any Node]) throws -> any Node
@@ -80,33 +81,50 @@ public final class NodeRegistry {
 		}
 	}
 
-	public func makeNode(name: String, children: [any Node]) throws -> any Node {
+	public func makeNode(name: String, children: [any Node], expression: String) throws(ParseError) -> any Node {
         guard let constructor = registry[name] else {
-            throw ParseError.unknownFunction(name)
+            throw ParseError.unknownFunction(name: name, expression: expression)
         }
-        return try constructor(children)
+        do {
+            return try constructor(children)
+        } catch {
+            // `NodeConstructor` is declared as a plain `throws` closure --
+            // it can throw a `ParseError` itself (e.g. `.invalidArgumentCount`
+            // from `DSLCodegenNode`) or something unrelated entirely, so
+            // everything gets wrapped here to keep `Parser` on a single,
+            // typed error path regardless of which.
+            throw ParseError.nodeConstructionFailed(name: name, expression: expression, underlying: error)
+        }
     }
 }
 
-public enum ParseError: Error {
-	case unexpectedEndOfInput
-	case unknownFunction(String)
-	case invalidToken(String)
-	case expectedClosingParenthesis
-	case invalidArgumentCount(expected: Int, found: Int)
+/// Everything `Parser` (and the registry it drives) can throw while turning
+/// Lisp-like text into a `Node` tree. Every case carries the full source
+/// `expression` plus whatever was actually found, so `errorDescription` is
+/// enough on its own for a user to locate and fix the mistake -- see
+/// `Parser`'s centralized logging of this at the top-level `parse(_:)`.
+public enum ParseError: Error, LocalizedError {
+	case unexpectedEndOfInput(expression: String, expected: String)
+	case unknownFunction(name: String, expression: String)
+	case invalidNumberLiteral(token: String, expression: String, context: String)
+	case expectedClosingParenthesis(expression: String, found: String)
+	case invalidArgumentCount(name: String, expected: Int, found: Int)
+	case nodeConstructionFailed(name: String, expression: String, underlying: Error)
 
 	public var errorDescription: String? {
 		switch self {
-			case .unexpectedEndOfInput:
-				return "Unexpected end of expression."
-			case .unknownFunction(let name):
-				return "Unknown function name: '\(name)'."
-			case .invalidToken(let token):
-				return "Invalid token found: '\(token)'."
-			case .expectedClosingParenthesis:
-				return "Expected a closing ')'."
-			case .invalidArgumentCount(let expected, let found):
-				return "Invalid argument count for function: expected \(expected), but found \(found)."
+			case .unexpectedEndOfInput(let expression, let expected):
+				return "Unexpected end of expression \"\(expression)\": expected \(expected)."
+			case .unknownFunction(let name, let expression):
+				return "Unknown function name '\(name)' in expression \"\(expression)\"."
+			case .invalidNumberLiteral(let token, let expression, let context):
+				return "Invalid number '\(token)' in expression \"\(expression)\" (\(context))."
+			case .expectedClosingParenthesis(let expression, let found):
+				return "Expected a closing ')' in expression \"\(expression)\", but found \(found)."
+			case .invalidArgumentCount(let name, let expected, let found):
+				return "'\(name)' expects \(expected) argument\(expected == 1 ? "" : "s"), but found \(found)."
+			case .nodeConstructionFailed(let name, let expression, let underlying):
+				return "Failed to construct node '\(name)' in expression \"\(expression)\": \(underlying.localizedDescription)"
 		}
 	}
 }

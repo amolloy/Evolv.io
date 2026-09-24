@@ -78,7 +78,7 @@ struct ContentView: View {
 			if let selectedGroup {
 				let node = node(for: ContentView.sampleExpressions[selectedGroup]!)
 				let nodeRenderer = NodeRenderer(node: node,
-												evaluator: Evaluator(size: CGSize(width: 800, height: 800)))
+												 evaluator: Evaluator(size: CGSize(width: 800, height: 800)))
 				RenderedImageView(nodeRenderer: nodeRenderer)
 				.id(selectedGroup)
 				.contextMenu {
@@ -138,8 +138,8 @@ struct ContentView: View {
 	func node(for expression: String) -> any Node {
 		do {
 			return try ContentView.parser.parse(expression)
-		} catch {
-			print("Error parsing expression:", expression)
+		} catch let e {
+			print("Error parsing expression \"\(expression)\": \(e.localizedDescription)")
 			return Constant(0)
 		}
 	}

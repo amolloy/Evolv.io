@@ -288,13 +288,13 @@ struct MetalRenderRegressionTests {
     /// the bug lives in MSLCodegenContext/emitFunction, not in either
     /// implementation of color-grad's own math.
     @Test func nestedColorGradient() throws {
-        func colorGrad(_ children: [any Node]) -> DSLCodegenNode {
-            DSLCodegenNode(template: DSLSampleDefinitions.colorGradTemplate,
+        func colorGrad(_ children: [any Node]) throws -> DSLCodegenNode {
+            try DSLCodegenNode(template: DSLSampleDefinitions.colorGradTemplate,
                             params: DSLSampleDefinitions.colorGradParams,
                             modules: ["lighting": DSLSampleDefinitions.lightingModule],
                             children: children)
         }
-        let inner = colorGrad([
+        let inner = try colorGrad([
             DSLTestNodes.round(
                 DSLTestNodes.add(DSLTestNodes.y(), DSLTestNodes.log(DSLTestNodes.invert(DSLTestNodes.y()), Constant(15.5))),
                 DSLTestNodes.x()
@@ -313,7 +313,7 @@ struct MetalRenderRegressionTests {
             ),
             DSLTestNodes.x()
         )
-        let outer = colorGrad([outerSource, Constant(3.1), Constant(1.9), ConstantTriplet(Value(0.95, 0.7, 0.35)), Constant(1.35)])
+        let outer = try colorGrad([outerSource, Constant(3.1), Constant(1.9), ConstantTriplet(Value(0.95, 0.7, 0.35)), Constant(1.35)])
         let figure9 = DSLTestNodes.round(DSLTestNodes.log(DSLTestNodes.add(DSLTestNodes.y(), outer), Constant(0.19)), DSLTestNodes.x())
 
         // Coordinates kept away from x=0 (round(_, x) divides by it) and off
@@ -350,7 +350,7 @@ struct DSLSpikeTests {
     private static let coord = Coordinate(x: 0.3, y: -0.4)
 
     @Test func dslMod() throws {
-        let node = DSLCodegenNode(template: DSLSampleDefinitions.modTemplate,
+        let node = try DSLCodegenNode(template: DSLSampleDefinitions.modTemplate,
                                    children: [DSLTestNodes.y(), ConstantTriplet(Value(0.0, 0.3, -0.4))])
 
         let evaluator = try MSLTreeEvaluator()
@@ -370,7 +370,7 @@ struct DSLSpikeTests {
             DSLTestNodes.add(DSLTestNodes.y(), DSLTestNodes.log(DSLTestNodes.invert(DSLTestNodes.y()), Constant(15.5))),
             DSLTestNodes.x()
         )
-        let node = DSLCodegenNode(template: DSLSampleDefinitions.colorGradTemplate,
+        let node = try DSLCodegenNode(template: DSLSampleDefinitions.colorGradTemplate,
                                    params: DSLSampleDefinitions.colorGradParams,
                                    modules: ["lighting": DSLSampleDefinitions.lightingModule],
                                    children: [source, Constant(3.1), Constant(1.86), ConstantTriplet(Value(0.95, 0.7, 0.59)), Constant(1.35)])
@@ -776,7 +776,7 @@ struct DSLLibraryTests {
             return v0 * $factor
         }
         """).parseTemplate()
-        let node = DSLCodegenNode(template: template, params: ["factor": .float(10.0)], children: [Constant(0.3)])
+        let node = try DSLCodegenNode(template: template, params: ["factor": .float(10.0)], children: [Constant(0.3)])
 
         let evaluator = try MSLTreeEvaluator()
         let actual = try evaluator.evaluate(node: node, at: [Coordinate(x: 0, y: 0)])[0]

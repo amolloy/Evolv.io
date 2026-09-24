@@ -135,7 +135,7 @@ public enum DSLLibrary {
 				claimed.insert(name)
 				claimedBy[name] = fileURL
 				constructors[name] = { children in
-					DSLCodegenNode(template: template, modules: resolvedModules, children: children)
+					try DSLCodegenNode(template: template, modules: resolvedModules, children: children)
 				}
 
 				let argList = template.params.map { $0.isFunction ? "\($0.name):fn" : $0.name }.joined(separator: ", ")

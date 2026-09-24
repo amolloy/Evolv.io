@@ -35,9 +35,10 @@ public final class DSLCodegenNode: Node {
 	let modules: [String: DSLResolvedModule]
 	public var children: [any Node]
 
-	public init(template: DSLTemplate, params: [String: DSLParamValue] = [:], modules: [String: DSLResolvedModule] = [:], children: [any Node]) {
-		precondition(children.count == template.params.count,
-					 "'\(template.name)' expects \(template.params.count) children, got \(children.count)")
+	public init(template: DSLTemplate, params: [String: DSLParamValue] = [:], modules: [String: DSLResolvedModule] = [:], children: [any Node]) throws {
+		guard children.count == template.params.count else {
+			throw ParseError.invalidArgumentCount(name: template.name, expected: template.params.count, found: children.count)
+		}
 		self.template = template
 		self.params = params
 		self.modules = modules
