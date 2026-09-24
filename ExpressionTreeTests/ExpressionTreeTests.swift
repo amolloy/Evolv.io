@@ -307,6 +307,7 @@ struct DSLSpikeTests {
         ])
         let node = DSLCodegenNode(template: DSLSampleDefinitions.colorGradTemplate,
                                    params: DSLSampleDefinitions.colorGradParams,
+                                   modules: ["lighting": DSLSampleDefinitions.lightingModule],
                                    children: [source, Constant(3.1), Constant(1.86), ConstantTriplet(Value(0.95, 0.7, 0.59)), Constant(1.35)])
 
         let evaluator = try MSLTreeEvaluator()
@@ -399,5 +400,168 @@ struct DSLLibraryTests {
         #expect(constructors["dup"] != nil)
         #expect(issues.count == 1)
         #expect(issues.first?.fileURL.lastPathComponent == "b.evolvnode")
+    }
+
+    /// A node `requires()`ing a module, both loose files in the same root
+    /// -- proves the module gets parsed, turned into real MSL, spliced
+    /// into the kernel, and actually called (not just that scanning
+    /// doesn't error).
+    @Test func moduleRequirementResolvesAndProducesCorrectOutput() throws {
+        let tempDir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+
+        try """
+        module "double-helpers" {
+            func doubleIt(v: float3) -> float3 {
+                return v * 2.0
+            }
+        }
+        """.write(to: tempDir.appendingPathComponent("double-helpers.evolvnode"), atomically: true, encoding: .utf8)
+        try """
+        node "fixture-double"(v0) requires("double-helpers") {
+            return doubleIt(v0)
+        }
+        """.write(to: tempDir.appendingPathComponent("fixture-double.evolvnode"), atomically: true, encoding: .utf8)
+
+        let (constructors, issues) = DSLLibrary.scan(roots: [tempDir], reservedNames: [])
+        #expect(issues.isEmpty, "unexpected load issues: \(issues.map(\.message))")
+        let constructor = try #require(constructors["fixture-double"])
+        let node = try constructor([Constant(3.0)])
+
+        let evaluator = try MSLTreeEvaluator()
+        let actual = try evaluator.evaluate(node: node, at: [Coordinate(x: 0, y: 0)])[0]
+        #expect(actual == Value(repeating: 6.0))
+    }
+
+    /// A `requires()` naming a module that was never found -- reported per
+    /// file, that node isn't registered, and (crucially) nothing traps.
+    @Test func unresolvedRequiresIsReportedNotCrashed() throws {
+        let tempDir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+
+        try """
+        node "fixture-orphan"(v0) requires("nonexistent-module") {
+            return v0
+        }
+        """.write(to: tempDir.appendingPathComponent("fixture-orphan.evolvnode"), atomically: true, encoding: .utf8)
+
+        let (constructors, issues) = DSLLibrary.scan(roots: [tempDir], reservedNames: [])
+        #expect(constructors["fixture-orphan"] == nil)
+        #expect(issues.contains { $0.message.contains("nonexistent-module") })
+    }
+
+    /// `param $factor: float = 2.0` with no external override -- resolved
+    /// purely from the file's own default (the only path a library-loaded
+    /// node can take, since NodeRegistry's constructor closures have no
+    /// slot for external params -- that's what `param` defaults are for).
+    @Test func paramDefaultIsUsedWhenNoExternalValueSupplied() throws {
+        let tempDir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+
+        try """
+        node "fixture-scale"(v0) {
+            param $factor: float = 2.0
+            return v0 * $factor
+        }
+        """.write(to: tempDir.appendingPathComponent("fixture-scale.evolvnode"), atomically: true, encoding: .utf8)
+
+        let (constructors, issues) = DSLLibrary.scan(roots: [tempDir], reservedNames: [])
+        #expect(issues.isEmpty, "unexpected load issues: \(issues.map(\.message))")
+        let constructor = try #require(constructors["fixture-scale"])
+        let node = try constructor([Constant(0.3)])
+
+        let evaluator = try MSLTreeEvaluator()
+        let actual = try evaluator.evaluate(node: node, at: [Coordinate(x: 0, y: 0)])[0]
+        let diff = abs(actual - Value(repeating: 0.6))
+        #expect(Swift.max(diff.x, Swift.max(diff.y, diff.z)) < 1e-6)
+    }
+
+    /// Same template as above, but constructed directly (bypassing
+    /// DSLLibrary, which has no way to inject external params through a
+    /// bare Lisp expression) -- proves DSLCodegenNode's `effectiveParams`
+    /// merge really does let an external value win over the file's own
+    /// default, for whatever future caller does have one to supply
+    /// (mirrors DSLSampleDefinitions.colorGradParams's usage today).
+    @Test func externalParamOverridesInFileDefault() throws {
+        let template = try DSLParser("""
+        node "fixture-scale"(v0) {
+            param $factor: float = 2.0
+            return v0 * $factor
+        }
+        """).parseTemplate()
+        let node = DSLCodegenNode(template: template, params: ["factor": .float(10.0)], children: [Constant(0.3)])
+
+        let evaluator = try MSLTreeEvaluator()
+        let actual = try evaluator.evaluate(node: node, at: [Coordinate(x: 0, y: 0)])[0]
+        let diff = abs(actual - Value(repeating: 3.0))
+        #expect(Swift.max(diff.x, Swift.max(diff.y, diff.z)) < 1e-6)
+    }
+
+    /// Two subfolders, each with its own `Package.evolvnode`, each
+    /// defining a node with the *same* bare name -- without namespacing
+    /// this would be a collision; with it, both register distinctly and
+    /// the bare name itself is never claimed by either.
+    @Test func packageManifestsNamespaceNodesToAvoidCollision() throws {
+        let tempDir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+        let aliceDir = tempDir.appendingPathComponent("AliceStuff")
+        let bobDir = tempDir.appendingPathComponent("BobStuff")
+        try FileManager.default.createDirectory(at: aliceDir, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: bobDir, withIntermediateDirectories: true)
+
+        try #"package "alice""#.write(to: aliceDir.appendingPathComponent("Package.evolvnode"), atomically: true, encoding: .utf8)
+        try #"package "bob""#.write(to: bobDir.appendingPathComponent("Package.evolvnode"), atomically: true, encoding: .utf8)
+        try """
+        node "warp"(v0) {
+            return v0
+        }
+        """.write(to: aliceDir.appendingPathComponent("warp.evolvnode"), atomically: true, encoding: .utf8)
+        try """
+        node "warp"(v0) {
+            return v0
+        }
+        """.write(to: bobDir.appendingPathComponent("warp.evolvnode"), atomically: true, encoding: .utf8)
+
+        let (constructors, issues) = DSLLibrary.scan(roots: [tempDir], reservedNames: [])
+        #expect(issues.isEmpty, "unexpected load issues: \(issues.map(\.message))")
+        #expect(constructors["alice.warp"] != nil)
+        #expect(constructors["bob.warp"] != nil)
+        #expect(constructors["warp"] == nil)
+    }
+
+    /// A node's bare `requires(helpers)` resolves against a module in its
+    /// *own* namespaced folder (both under the same `Package.evolvnode`),
+    /// without needing the requirement written out fully-qualified.
+    @Test func requiresResolvesAgainstModuleInSameNamespace() throws {
+        let tempDir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+        let aliceDir = tempDir.appendingPathComponent("Alice")
+        try FileManager.default.createDirectory(at: aliceDir, withIntermediateDirectories: true)
+
+        try #"package "alice""#.write(to: aliceDir.appendingPathComponent("Package.evolvnode"), atomically: true, encoding: .utf8)
+        try """
+        module "helpers" {
+            func triple(v: float3) -> float3 {
+                return v * 3.0
+            }
+        }
+        """.write(to: aliceDir.appendingPathComponent("helpers.evolvnode"), atomically: true, encoding: .utf8)
+        try """
+        node "fixture-triple"(v0) requires(helpers) {
+            return triple(v0)
+        }
+        """.write(to: aliceDir.appendingPathComponent("fixture-triple.evolvnode"), atomically: true, encoding: .utf8)
+
+        let (constructors, issues) = DSLLibrary.scan(roots: [tempDir], reservedNames: [])
+        #expect(issues.isEmpty, "unexpected load issues: \(issues.map(\.message))")
+        let constructor = try #require(constructors["alice.fixture-triple"])
+        let node = try constructor([Constant(2.0)])
+
+        let evaluator = try MSLTreeEvaluator()
+        let actual = try evaluator.evaluate(node: node, at: [Coordinate(x: 0, y: 0)])[0]
+        #expect(actual == Value(repeating: 6.0))
     }
 }

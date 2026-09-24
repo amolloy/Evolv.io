@@ -8,30 +8,37 @@
 //  replaces. See the "file-based, hot-reloadable DSL node library" plan for
 //  the full design (bundled vs. user roots, namespacing, modules).
 //
-//  Phase 1 scope: every `.evolvnode` file is a `node` (no `module`/`package`
-//  parsing yet -- see DSLParser.parseTemplate, which only understands the
-//  `node "name"(...) { ... }` form so far), and a bare declared name is
-//  always the registry name (no namespace prefixing yet).
+//  Namespacing convention: a file named exactly `Package.evolvnode`
+//  (containing just `package "name"`) at a folder's top level namespaces
+//  every other .evolvnode file anywhere beneath that folder within the
+//  same root -- registered as `name.localName` instead of the bare
+//  `localName`. A deeper folder's own `Package.evolvnode` takes over for
+//  its own subtree instead of stacking with the outer one. Loose files
+//  with no enclosing manifest register under their bare declared name.
 //
 
 import Foundation
 
 /// Something that went wrong loading one `.evolvnode` file -- a parse
-/// failure or a name collision. Collected rather than thrown/fatalError'd:
-/// a bad or colliding file dropped in by a user must never crash the app,
-/// unlike `DSLSampleDefinitions`'s fixed, developer-controlled source text.
+/// failure, a name collision, or an unresolved `requires()`. Collected
+/// rather than thrown/fatalError'd: a bad or colliding file dropped in by
+/// a user must never crash the app, unlike `DSLSampleDefinitions`'s fixed,
+/// developer-controlled source text.
 public struct DSLLoadIssue: Sendable {
 	public let fileURL: URL
 	public let message: String
 }
 
 public enum DSLLibrary {
-	/// Recursively scans `roots` (in order) for `.evolvnode` files and
-	/// parses each as a node definition. A name already in `reservedNames`
-	/// (whether a built-in Swift node or an earlier file in this same scan)
-	/// is a load issue, not a silent override -- the first successfully
-	/// parsed claim on a name wins; everything else claiming that name is
-	/// skipped and reported.
+	/// Recursively scans `roots` (in order) for `.evolvnode` files, resolves
+	/// `Package.evolvnode` namespaces and `module` files, and builds a
+	/// NodeRegistry constructor for every `node` file. A name already in
+	/// `reservedNames` (a built-in Swift node, or an earlier file in this
+	/// same scan) is a load issue, not a silent override -- the first
+	/// successfully parsed claim on a name wins; everything else claiming
+	/// that name is skipped and reported. Likewise, a node `requires()`ing
+	/// a module that isn't found (in its own namespace, falling back to
+	/// unnamespaced) is reported and that node is skipped, not crashed.
 	///
 	/// Takes explicit root `URL`s rather than reading `Bundle.main`/the
 	/// container Documents folder itself, so this is testable against a
@@ -43,25 +50,77 @@ public enum DSLLibrary {
 		var issues: [DSLLoadIssue] = []
 
 		for root in roots {
-			for fileURL in evolvNodeFiles(under: root) {
+			let files = evolvNodeFiles(under: root)
+
+			// Parse everything once. A parse failure here is reported and
+			// that file just doesn't appear in `parsed` -- module/package
+			// resolution below only ever sees successfully parsed files.
+			var parsed: [URL: DSLFile] = [:]
+			for fileURL in files {
 				do {
 					let source = try String(contentsOf: fileURL, encoding: .utf8)
-					let template = try DSLParser(source).parseTemplate()
-					let name = template.name
-
-					if claimed.contains(name) {
-						let owner = claimedBy[name]?.path ?? "a built-in node"
-						issues.append(DSLLoadIssue(fileURL: fileURL, message: "node name '\(name)' is already used by \(owner); skipped"))
-						continue
-					}
-
-					claimed.insert(name)
-					claimedBy[name] = fileURL
-					constructors[name] = { children in
-						DSLCodegenNode(template: template, children: children)
-					}
+					parsed[fileURL] = try DSLParser(source).parseFile()
 				} catch {
 					issues.append(DSLLoadIssue(fileURL: fileURL, message: "\(error)"))
+				}
+			}
+
+			var namespaceByFolder: [String: String] = [:]
+			for (fileURL, file) in parsed {
+				if case .package(let name) = file {
+					namespaceByFolder[fileURL.deletingLastPathComponent().path] = name
+				}
+			}
+
+			func namespace(for fileURL: URL) -> String? {
+				var folder = fileURL.deletingLastPathComponent()
+				while true {
+					if let name = namespaceByFolder[folder.path] { return name }
+					if folder.path == root.path || folder.pathComponents.count <= 1 { return nil }
+					folder = folder.deletingLastPathComponent()
+				}
+			}
+			func qualify(_ bareName: String, fileURL: URL) -> String {
+				guard let ns = namespace(for: fileURL) else { return bareName }
+				return "\(ns).\(bareName)"
+			}
+
+			var modulesByQualifiedName: [String: DSLModule] = [:]
+			for (fileURL, file) in parsed {
+				guard case .module(let module) = file else { continue }
+				modulesByQualifiedName[qualify(module.name, fileURL: fileURL)] = module
+			}
+
+			for fileURL in files {
+				guard case .node(let template)? = parsed[fileURL] else { continue }
+				let name = qualify(template.name, fileURL: fileURL)
+
+				if claimed.contains(name) {
+					let owner = claimedBy[name]?.path ?? "a built-in node"
+					issues.append(DSLLoadIssue(fileURL: fileURL, message: "node name '\(name)' is already used by \(owner); skipped"))
+					continue
+				}
+
+				// `perlin` is a reserved intrinsic (see DSLCodegenNode);
+				// everything else must resolve to a scanned module, tried
+				// first in this node's own namespace, then unnamespaced.
+				var resolvedModules: [String: DSLModule] = [:]
+				var requiresFailed = false
+				for requirement in template.requires where requirement != "perlin" {
+					let qualifiedRequirement = qualify(requirement, fileURL: fileURL)
+					guard let module = modulesByQualifiedName[qualifiedRequirement] ?? modulesByQualifiedName[requirement] else {
+						issues.append(DSLLoadIssue(fileURL: fileURL, message: "requires(\(requirement)): no such module"))
+						requiresFailed = true
+						break
+					}
+					resolvedModules[requirement] = module
+				}
+				guard !requiresFailed else { continue }
+
+				claimed.insert(name)
+				claimedBy[name] = fileURL
+				constructors[name] = { children in
+					DSLCodegenNode(template: template, modules: resolvedModules, children: children)
 				}
 			}
 		}

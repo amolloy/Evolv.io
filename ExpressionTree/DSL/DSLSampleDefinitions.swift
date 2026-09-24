@@ -77,8 +77,44 @@ enum DSLSampleDefinitions {
 		"tapCount": .int(4),
 	]
 
+	/// `colorGradSource`'s `requires(lighting)` needs a real module to
+	/// resolve against now that "lighting" isn't a hardcoded intrinsic
+	/// (see DSLCodegenNode._emitMSL) -- same content as the bundled
+	/// Evolv.io/Resources/BundledNodes/lighting.evolvnode, kept separate
+	/// for the same test-isolation reason `modSource`/`colorGradSource`
+	/// aren't shared with the bundled files (see the file header above).
+	static let lightingModuleSource = """
+	module "lighting" {
+		func avgLum(v: float3) -> float {
+			return (v.x + v.y + v.z) / 3.0
+		}
+
+		func colorGradChannel(gx: float, gy: float, heightFactor: float, lightNormalized: float3, colorTint: float) -> float {
+			let normal = float3(-gx, -gy, 1.0 / heightFactor)
+			let normalLen: float = length(normal)
+			let t: float = dot(normal / normalLen, lightNormalized)
+			return (normalLen < 1e-9) ? 0.5 : colorTint * t
+		}
+
+		func signedPow(v: float3, p: float) -> float3 {
+			let s = select(float3(1.0), float3(-1.0), v < float3(0.0))
+			return s * pow(abs(v), p)
+		}
+	}
+	"""
+
 	static let modTemplate: DSLTemplate = parseOrFatalError(modSource, label: "modSource")
 	static let colorGradTemplate: DSLTemplate = parseOrFatalError(colorGradSource, label: "colorGradSource")
+	static let lightingModule: DSLModule = {
+		do {
+			guard case .module(let module) = try DSLParser(lightingModuleSource).parseFile() else {
+				fatalError("DSLSampleDefinitions.lightingModuleSource did not parse as a module")
+			}
+			return module
+		} catch {
+			fatalError("DSLSampleDefinitions.lightingModuleSource failed to parse: \(error)")
+		}
+	}()
 
 	// A parse failure here means the embedded source text itself is broken,
 	// not anything a caller passed in -- same "unrecoverable, not worth a

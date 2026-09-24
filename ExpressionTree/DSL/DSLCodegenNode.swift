@@ -2,14 +2,11 @@
 //  DSLCodegenNode.swift
 //  Evolv.io
 //
-//  Spike: a generic `Node` that emits MSL by interpreting a parsed
-//  DSLTemplate against an MSLCodegenContext, instead of a hand-written
-//  Swift `_emitMSL`. This exists to answer a design question -- "would a
-//  readable text format for these definitions actually work, including the
-//  hard cases?" -- not to be wired into NodeRegistry/production rendering
-//  yet. See ExpressionTreeTests' DSLSpikeTests for the parity checks this
-//  is validated against (same golden values as the hand-written Mod/
-//  ColorGradient tests).
+//  A generic `Node` that emits MSL by interpreting a parsed DSLTemplate
+//  against an MSLCodegenContext, instead of a hand-written Swift
+//  `_emitMSL`. See DSLLibrary.swift for how these get constructed from
+//  scanned `.evolvnode` files, and ExpressionTreeTests' DSLSpikeTests/
+//  DSLLibraryTests for the parity checks this is validated against.
 //
 //  Every DSL-defined node "type" (mod, color-grad, whatever comes next)
 //  is the same Swift class here, parameterized by a DSLTemplate instance
@@ -21,9 +18,7 @@
 //  name instead of ever consulting `Self.name`, and gives that static
 //  requirement an unused placeholder value. Reworking `Node.name` into an
 //  instance property so DSLCodegenNode could report a real per-template
-//  name (needed once these are registered in NodeRegistry and rendered
-//  through the production pipeline-cache path, which keys on
-//  `node.toString()`) is next-phase work, not needed to prove this out.
+//  name is a bigger protocol change than this library needs to solve.
 //
 
 public final class DSLCodegenNode: Node {
@@ -31,18 +26,26 @@ public final class DSLCodegenNode: Node {
 
 	public let template: DSLTemplate
 	public let params: [String: DSLParamValue]
+	/// Modules this node's `requires()` clause can resolve against, already
+	/// namespace-resolved by whoever constructed this (see
+	/// `DSLLibrary.scan`) but not yet turned into MSL text -- that happens
+	/// lazily in `_emitMSL`, only when actually rendered, so a bug in an
+	/// unused module can never crash anything that doesn't call it (same
+	/// deferred-until-rendered behavior as a bug in a node's own body).
+	let modules: [String: DSLModule]
 	public var children: [any Node]
 
-	public init(template: DSLTemplate, params: [String: DSLParamValue] = [:], children: [any Node]) {
+	public init(template: DSLTemplate, params: [String: DSLParamValue] = [:], modules: [String: DSLModule] = [:], children: [any Node]) {
 		precondition(children.count == template.params.count,
 					 "'\(template.name)' expects \(template.params.count) children, got \(children.count)")
 		self.template = template
 		self.params = params
+		self.modules = modules
 		self.children = children
 	}
 
 	public init(_ children: [any Node]) throws {
-		fatalError("DSLCodegenNode has no fixed arity -- construct with init(template:params:children:) instead")
+		fatalError("DSLCodegenNode has no fixed arity -- construct with init(template:params:modules:children:) instead")
 	}
 
 	public func toString() -> String {
@@ -52,12 +55,21 @@ public final class DSLCodegenNode: Node {
 
 	public func _emitMSL(into context: MSLCodegenContext) -> String {
 		for requirement in template.requires {
-			switch requirement {
-				case "lighting": context.require(.lightingHelpers)
-				case "perlin": context.require(.perlinTable)
-				default: preconditionFailure("'\(template.name)': unknown requires(\(requirement))")
+			if requirement == "perlin" {
+				// The one reserved intrinsic: its table is live-shuffled
+				// Swift data (see Perlin.swift), so it can never be a plain
+				// text module like everything else here.
+				context.require(.perlinTable)
+			} else if let module = modules[requirement] {
+				context.requireModule(name: requirement, text: emitModuleFunctionsMSL(module))
+			} else {
+				preconditionFailure("'\(template.name)': unresolved requires(\(requirement)) -- no such module")
 			}
 		}
+
+		// External params win over a node's own `param $name = default` --
+		// see DSLTemplate.paramDefaults.
+		let effectiveParams = template.paramDefaults.merging(params) { _, external in external }
 
 		var env: [String: DSLBinding] = ["coord": .literal("coord")]
 		for (decl, child) in zip(template.params, children) {
@@ -68,12 +80,40 @@ public final class DSLCodegenNode: Node {
 			}
 		}
 
-		let interpreter = DSLInterpreter(context: context, params: params, env: env)
+		let interpreter = DSLInterpreter(context: context, params: effectiveParams, env: env)
 		for stmt in template.body {
 			interpreter.execute(stmt)
 		}
 		return interpreter.evaluate(template.returnExpr)
 	}
+}
+
+/// Turns a parsed module's functions into standalone MSL function text.
+/// Each function gets its own fresh `MSLCodegenContext` (so its local `tN`
+/// numbering is independent of whatever tree is calling into it -- exactly
+/// how `MSLCodegenContext.emitFunction` already isolates a node subtree).
+func emitModuleFunctionsMSL(_ module: DSLModule) -> String {
+	module.funcs.map(emitFunctionMSL).joined(separator: "\n\n")
+}
+
+private func emitFunctionMSL(_ decl: DSLFuncDecl) -> String {
+	let context = MSLCodegenContext()
+	var env: [String: DSLBinding] = [:]
+	for param in decl.params {
+		env[param.name] = .literal(param.name)
+	}
+	let interpreter = DSLInterpreter(context: context, params: [:], env: env)
+	for stmt in decl.body {
+		interpreter.execute(stmt)
+	}
+	let returnText = interpreter.evaluate(decl.returnExpr)
+	let paramList = decl.params.map { "\($0.type) \($0.name)" }.joined(separator: ", ")
+	return """
+	inline \(decl.returnType) \(decl.name)(\(paramList)) {
+		\(context.body())
+		return \(returnText);
+	}
+	"""
 }
 
 /// What a DSL name currently refers to while interpreting a template's body.

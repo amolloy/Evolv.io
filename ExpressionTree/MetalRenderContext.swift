@@ -59,6 +59,20 @@ final class MetalRenderContext {
 		self.commandQueue = commandQueue
 	}
 
+	/// Called by `NodeRegistry.reload()`: a DSL node's `toString()` doesn't
+	/// encode the *content* of whatever module its `requires()` resolved
+	/// to, so editing a module file and reloading could otherwise still
+	/// serve a pipeline compiled against the old file's MSL text under an
+	/// identical cache key. Clearing the whole cache on every reload is
+	/// coarser than re-keying on module content, but reload is a rare,
+	/// explicit user action (not a per-frame cost), so simple correctness
+	/// wins over precision here.
+	func clearPipelineCache() {
+		lock.lock()
+		pipelineCache.removeAll()
+		lock.unlock()
+	}
+
 	/// Compiles (or returns the cached pipeline for) `node`'s generated MSL.
 	/// Keyed by `node.toString()` plus ColorGradient's/ColorGradientCurvature's
 	/// live debug statics -- those are baked into generated MSL as literals
@@ -82,7 +96,7 @@ final class MetalRenderContext {
 
 		let context = MSLCodegenContext()
 		let result = node.codegenMSL(into: context)
-		let source = Self.kernelSource(body: context.body(), resultVariable: result.variableName, functions: context.allFunctions(), resourceRequirements: context.resourceRequirements)
+		let source = Self.kernelSource(body: context.body(), resultVariable: result.variableName, functions: context.allFunctions(), resourceRequirements: context.resourceRequirements, customModules: context.customModulesMSL())
 
 		let library = try device.makeLibrary(source: source, options: nil)
 		guard let function = library.makeFunction(name: "renderImage") else {
@@ -136,8 +150,8 @@ final class MetalRenderContext {
 		return data
 	}
 
-	private static func kernelSource(body: String, resultVariable: String, functions: String, resourceRequirements: MSLResourceRequirements) -> String {
-		let preamble = mslSharedPreamble(functions: functions, resourceRequirements: resourceRequirements)
+	private static func kernelSource(body: String, resultVariable: String, functions: String, resourceRequirements: MSLResourceRequirements, customModules: String) -> String {
+		let preamble = mslSharedPreamble(functions: functions, resourceRequirements: resourceRequirements, customModules: customModules)
 
 		return """
 		#include <metal_stdlib>

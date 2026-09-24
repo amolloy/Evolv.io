@@ -46,6 +46,15 @@ public final class MSLCodegenContext {
 	private var retainedNodes: [any Node] = []
 	private var nextVariableIndex = 0
 	public private(set) var resourceRequirements: MSLResourceRequirements = []
+	// Open-ended counterpart to `resourceRequirements` above: named MSL
+	// text blobs a DSL-defined node's `requires(name)` pulled in (see
+	// DSLCodegenNode._emitMSL / DSLLibrary.swift), keyed by name so the
+	// same module required by two different nodes in one tree is only
+	// spliced into the kernel once. `resourceRequirements` stays a fixed
+	// OptionSet because it's also used by the hand-written Swift nodes
+	// (ColorGradient, Bump, etc.) for their two built-in intrinsics; this
+	// is specifically for everything else.
+	private var customModuleTexts: [String: String] = [:]
 
 	// Shared across a context and every sub-context `emitFunction` creates
 	// (at any nesting depth), so generated function names are unique across
@@ -103,6 +112,18 @@ public final class MSLCodegenContext {
 		resourceRequirements.insert(requirement)
 	}
 
+	/// Registers `text` (a module's already-generated MSL function
+	/// definitions) under `name`, deduped so requiring the same module
+	/// twice in one tree only splices it in once.
+	public func requireModule(name: String, text: String) {
+		customModuleTexts[name] = text
+	}
+
+	/// Every custom module required so far, in a deterministic order.
+	public func customModulesMSL() -> String {
+		customModuleTexts.keys.sorted().map { customModuleTexts[$0]! }.joined(separator: "\n\n")
+	}
+
 	private var extraFunctions: [String] = []
 
 	/// Emits `node` as a standalone top-level MSL function taking its own
@@ -127,6 +148,7 @@ public final class MSLCodegenContext {
 		let subContext = MSLCodegenContext(sharingFunctionNamesWith: self)
 		let result = node.codegenMSL(into: subContext)
 		resourceRequirements.formUnion(subContext.resourceRequirements)
+		customModuleTexts.merge(subContext.customModuleTexts) { existing, _ in existing }
 
 		// Nested functions this subtree needed must be defined before this
 		// wrapper (which calls them), so bubble them up first.
@@ -240,13 +262,16 @@ func mslLightingHelpersPreamble() -> String {
 /// generated kernel's own per-tree function body -- shared by
 /// `MSLTreeEvaluator` (parity testing) and `MetalRenderContext` (production
 /// rendering) so the two don't drift.
-func mslSharedPreamble(functions: String, resourceRequirements: MSLResourceRequirements) -> String {
+func mslSharedPreamble(functions: String, resourceRequirements: MSLResourceRequirements, customModules: String = "") -> String {
 	var preamble = ""
 	if resourceRequirements.contains(.perlinTable) {
 		preamble += mslPerlinPreamble() + "\n\n"
 	}
 	if resourceRequirements.contains(.lightingHelpers) {
 		preamble += mslLightingHelpersPreamble() + "\n\n"
+	}
+	if !customModules.isEmpty {
+		preamble += customModules + "\n\n"
 	}
 	if !functions.isEmpty {
 		preamble += functions + "\n\n"

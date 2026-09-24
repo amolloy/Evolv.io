@@ -17,10 +17,18 @@
 //  DSLCodegenNode.swift for how the resulting DSLTemplate is turned into
 //  MSL. Grammar (informal, lowest to highest precedence):
 //
+//    file       := nodeDecl | moduleDecl | packageDecl   -- one per file
 //    nodeDecl   := 'node' STRING '(' paramDecl (',' paramDecl)* ')'
-//                  ('requires' '(' IDENT (',' IDENT)* ')')?
-//                  '{' letStmt* 'return' expr '}'
+//                  ('requires' '(' (IDENT|STRING) (',' (IDENT|STRING))* ')')?
+//                  '{' (letStmt | paramStmt)* 'return' expr '}'
 //    paramDecl  := IDENT (':' IDENT)?          -- ": fn" marks a sampled child
+//    paramStmt  := 'param' '$' IDENT ':' IDENT '=' NUMBER
+//                  -- a self-contained default for a `$name` reference,
+//                  used when nothing external supplies one
+//    moduleDecl := 'module' STRING '{' funcDecl* '}'
+//    funcDecl   := 'func' IDENT '(' (IDENT ':' IDENT (',' IDENT ':' IDENT)*)? ')'
+//                  '->' IDENT '{' letStmt* 'return' expr '}'
+//    packageDecl := 'package' STRING          -- a whole file's content
 //    letStmt    := 'let' IDENT (':' IDENT)? '=' expr
 //    expr       := ternary
 //    ternary    := or ('?' expr ':' expr)?
@@ -50,6 +58,22 @@ final class DSLParser {
 		tokens = try DSLLexer(source).tokenize()
 	}
 
+	/// Dispatches on a file's leading keyword -- the entry point
+	/// `DSLLibrary.scan` uses (`parseTemplate()` below is kept as a direct
+	/// entry point too, for call sites that only ever expect a node, like
+	/// `DSLSampleDefinitions`).
+	func parseFile() throws -> DSLFile {
+		guard case .identifier(let keyword) = peek() else {
+			throw DSLParseError(message: "Expected 'node', 'module', or 'package', found \(peek())")
+		}
+		switch keyword {
+			case "node": return .node(try parseTemplate())
+			case "module": return .module(try parseModule())
+			case "package": return .package(name: try parsePackageManifest())
+			default: throw DSLParseError(message: "Expected 'node', 'module', or 'package', found '\(keyword)'")
+		}
+	}
+
 	func parseTemplate() throws -> DSLTemplate {
 		try expectIdentifier("node")
 		let name = try expectString()
@@ -68,11 +92,64 @@ final class DSLParser {
 			try expect(.lparen)
 			if !check(.rparen) {
 				repeat {
-					requires.append(try expectAnyIdentifier())
+					requires.append(try expectIdentifierOrString())
 				} while match(.comma)
 			}
 			try expect(.rparen)
 		}
+
+		try expect(.lbrace)
+		var body: [DSLLetStmt] = []
+		var paramDefaults: [String: DSLParamValue] = [:]
+		while checkIdentifier("let") || checkIdentifier("param") {
+			if checkIdentifier("param") {
+				let (paramName, value) = try parseParamDefaultStmt()
+				paramDefaults[paramName] = value
+			} else {
+				body.append(try parseLetStmt())
+			}
+		}
+		try expectIdentifier("return")
+		let returnExpr = try parseExpr()
+		try expect(.rbrace)
+		try expect(.eof)
+
+		return DSLTemplate(name: name, params: params, requires: requires, paramDefaults: paramDefaults, body: body, returnExpr: returnExpr)
+	}
+
+	private func parseModule() throws -> DSLModule {
+		try expectIdentifier("module")
+		let name = try expectString()
+		try expect(.lbrace)
+		var funcs: [DSLFuncDecl] = []
+		while checkIdentifier("func") {
+			funcs.append(try parseFuncDecl())
+		}
+		try expect(.rbrace)
+		try expect(.eof)
+		return DSLModule(name: name, funcs: funcs)
+	}
+
+	private func parseFuncDecl() throws -> DSLFuncDecl {
+		try expectIdentifier("func")
+		let name = try expectAnyIdentifier()
+		try expect(.lparen)
+		var params: [(name: String, type: String)] = []
+		if !check(.rparen) {
+			repeat {
+				let paramName = try expectAnyIdentifier()
+				try expect(.colon)
+				let paramType = try expectAnyIdentifier()
+				params.append((paramName, paramType))
+			} while match(.comma)
+		}
+		try expect(.rparen)
+		// '->' isn't its own token -- the lexer emits plain '-' then '>',
+		// which is exactly .minus followed by .gt (see DSLLexer's
+		// lexPunctuation: '-' never looks ahead for a following '>').
+		try expect(.minus)
+		try expect(.gt)
+		let returnType = try expectAnyIdentifier()
 
 		try expect(.lbrace)
 		var body: [DSLLetStmt] = []
@@ -82,9 +159,45 @@ final class DSLParser {
 		try expectIdentifier("return")
 		let returnExpr = try parseExpr()
 		try expect(.rbrace)
-		try expect(.eof)
 
-		return DSLTemplate(name: name, params: params, requires: requires, body: body, returnExpr: returnExpr)
+		return DSLFuncDecl(name: name, params: params, returnType: returnType, body: body, returnExpr: returnExpr)
+	}
+
+	private func parsePackageManifest() throws -> String {
+		try expectIdentifier("package")
+		let name = try expectString()
+		try expect(.eof)
+		return name
+	}
+
+	private func parseParamDefaultStmt() throws -> (name: String, value: DSLParamValue) {
+		try expectIdentifier("param")
+		guard case .param(let name) = peek() else {
+			throw DSLParseError(message: "Expected '$name' after 'param', found \(peek())")
+		}
+		pos += 1
+		try expect(.colon)
+		let type = try expectAnyIdentifier()
+		try expect(.assign)
+		guard case .number(let text) = peek() else {
+			throw DSLParseError(message: "Expected a numeric literal default for param '$\(name)', found \(peek())")
+		}
+		pos += 1
+
+		switch type {
+			case "float":
+				guard let d = Double(text) else {
+					throw DSLParseError(message: "Invalid float literal '\(text)' for param '$\(name)'")
+				}
+				return (name, .float(ComponentType(d)))
+			case "int":
+				guard let i = Int(text) else {
+					throw DSLParseError(message: "Invalid int literal '\(text)' for param '$\(name)'")
+				}
+				return (name, .int(i))
+			default:
+				throw DSLParseError(message: "Unknown param type '\(type)' for '$\(name)' -- expected 'float' or 'int'")
+		}
 	}
 
 	private func parseParamDecl() throws -> DSLParam {
@@ -298,6 +411,19 @@ final class DSLParser {
 		}
 		pos += 1
 		return name
+	}
+
+	/// Accepts either form for a `requires(...)` entry -- a bare
+	/// identifier (can't contain '-', same restriction as any other
+	/// identifier -- see DSLLexer) or a quoted string (can, matching how
+	/// node/module *names* are written). Lets a `requires()` clause name a
+	/// hyphenated module like "my-helpers" without needing to rename it.
+	private func expectIdentifierOrString() throws -> String {
+		if case .string(let name) = peek() {
+			pos += 1
+			return name
+		}
+		return try expectAnyIdentifier()
 	}
 
 	private func expectString() throws -> String {

@@ -48,14 +48,14 @@ public final class MSLTreeEvaluator {
 	public static func generateSource(for node: any Node) -> String {
 		let context = MSLCodegenContext()
 		let result = node.codegenMSL(into: context)
-		return kernelSource(body: context.body(), resultVariable: result.variableName, functions: context.allFunctions(), resourceRequirements: context.resourceRequirements)
+		return kernelSource(body: context.body(), resultVariable: result.variableName, functions: context.allFunctions(), resourceRequirements: context.resourceRequirements, customModules: context.customModulesMSL())
 	}
 
 	public func evaluate(node: any Node, at coords: [Coordinate]) throws -> [Value] {
 		let context = MSLCodegenContext()
 		let result = node.codegenMSL(into: context)
 
-		let source = Self.kernelSource(body: context.body(), resultVariable: result.variableName, functions: context.allFunctions(), resourceRequirements: context.resourceRequirements)
+		let source = Self.kernelSource(body: context.body(), resultVariable: result.variableName, functions: context.allFunctions(), resourceRequirements: context.resourceRequirements, customModules: context.customModulesMSL())
 		let compileOptions = MTLCompileOptions()
 			// Default compile options use approximate ("fast math") instructions
 			// for things like division/normalize. This evaluator only exists for
@@ -106,8 +106,8 @@ public final class MSLTreeEvaluator {
 		return values
 	}
 
-	private static func kernelSource(body: String, resultVariable: String, functions: String, resourceRequirements: MSLResourceRequirements) -> String {
-		let preamble = mslSharedPreamble(functions: functions, resourceRequirements: resourceRequirements)
+	private static func kernelSource(body: String, resultVariable: String, functions: String, resourceRequirements: MSLResourceRequirements, customModules: String) -> String {
+		let preamble = mslSharedPreamble(functions: functions, resourceRequirements: resourceRequirements, customModules: customModules)
 
 		return """
 		#include <metal_stdlib>

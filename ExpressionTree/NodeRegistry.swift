@@ -57,12 +57,16 @@ public final class NodeRegistry {
 
 	/// Re-scans the bundled + user Nodes folders and rebuilds the registry
 	/// in place -- lets "Reload Custom Nodes" pick up filesystem changes
-	/// without relaunching the app.
+	/// without relaunching the app. Also clears MetalRenderContext's
+	/// pipeline cache -- a DSL node's cache key (its `toString()`) doesn't
+	/// encode a required module's *content*, so without this an edited
+	/// module file could still serve a stale compiled kernel after reload.
 	public func reload() {
 		let result = Self.buildRegistry()
 		registry = result.registry
 		loadIssues = result.issues
 		Self.logIssues(loadIssues)
+		MetalRenderContext.shared.clearPipelineCache()
 	}
 
 	private static func buildRegistry() -> (registry: [String: NodeConstructor], issues: [DSLLoadIssue]) {

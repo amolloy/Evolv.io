@@ -1,0 +1,22 @@
+// Same math as mslLightingHelpersPreamble() (ExpressionTree/MSLCodegen.swift),
+// which the hand-written Swift nodes (ColorGradient, GradientDirection, Bump,
+// ColorGradientCurvature) still use directly via context.require(.lightingHelpers)
+// -- this is a separate, DSL-native copy proving the module/requires() mechanism
+// end-to-end, not a replacement for that Swift path. Required by dsl-color-grad.evolvnode.
+module "lighting" {
+	func avgLum(v: float3) -> float {
+		return (v.x + v.y + v.z) / 3.0
+	}
+
+	func colorGradChannel(gx: float, gy: float, heightFactor: float, lightNormalized: float3, colorTint: float) -> float {
+		let normal = float3(-gx, -gy, 1.0 / heightFactor)
+		let normalLen: float = length(normal)
+		let t: float = dot(normal / normalLen, lightNormalized)
+		return (normalLen < 1e-9) ? 0.5 : colorTint * t
+	}
+
+	func signedPow(v: float3, p: float) -> float3 {
+		let s = select(float3(1.0), float3(-1.0), v < float3(0.0))
+		return s * pow(abs(v), p)
+	}
+}

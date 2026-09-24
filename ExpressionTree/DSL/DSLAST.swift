@@ -56,9 +56,17 @@ struct DSLParam {
 public struct DSLTemplate {
 	let name: String
 	let params: [DSLParam]
-	/// Names matched against DSLCodegenNode._emitMSL's known requirement
-	/// keywords ("lighting", "perlin") -- see MSLResourceRequirements.
+	/// Names a node's body wants resolved -- either the reserved "perlin"
+	/// intrinsic (its table is live-shuffled Swift data, never a text file)
+	/// or a module name resolved by whoever constructs the DSLCodegenNode
+	/// (see DSLLibrary.scan's namespace-aware module resolution).
 	let requires: [String]
+	/// `param $name: type = <literal>` declarations -- a self-contained
+	/// default for a `$name` reference, used when nothing external supplies
+	/// one (see DSLCodegenNode._emitMSL's `effectiveParams` merge). Exists
+	/// because a library-loaded node (unlike the two original
+	/// DSLSampleDefinitions demos) has no Swift caller to inject params.
+	let paramDefaults: [String: DSLParamValue]
 	let body: [DSLLetStmt]
 	let returnExpr: DSLExpr
 }
@@ -66,4 +74,33 @@ public struct DSLTemplate {
 public enum DSLParamValue {
 	case float(ComponentType)
 	case int(Int)
+}
+
+/// A `func name(p0: type, ...) -> type { <let>* return expr }` declaration,
+/// only valid inside a `module` block -- see DSLModule.
+struct DSLFuncDecl {
+	let name: String
+	let params: [(name: String, type: String)]
+	let returnType: String
+	let body: [DSLLetStmt]
+	let returnExpr: DSLExpr
+}
+
+/// A `module "name" { func ... }` file -- a named bag of MSL helper
+/// functions a node can pull in via `requires(name)`, resolved by
+/// DSLLibrary the same way node names are (bare, or namespace-prefixed by
+/// an enclosing `Package.evolvnode`). Public for the same reason
+/// `DSLTemplate` is: it's a parameter type on DSLCodegenNode's public init.
+public struct DSLModule {
+	let name: String
+	let funcs: [DSLFuncDecl]
+}
+
+/// What a single `.evolvnode` file turned out to contain -- exactly one of
+/// these per file (mirrors the original "1:1 file:node" request, extended
+/// to modules and package manifests).
+enum DSLFile {
+	case node(DSLTemplate)
+	case module(DSLModule)
+	case package(name: String)
 }
