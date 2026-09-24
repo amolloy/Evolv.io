@@ -96,12 +96,6 @@ struct MetalRenderRegressionTests {
         try assertGolden(Div([VariableX(), ConstantTriplet(Value(2.0, -3.0, 0.5))]), Value(0.15, -0.1, 0.6))
     }
 
-    /// One component of the divisor is exactly zero, exercising Mod's
-    /// zero-divisor masking branch (not just the plain-fmod path).
-    @Test func mod() throws {
-        try assertGolden(Mod([VariableY(), ConstantTriplet(Value(0.0, 0.3, -0.4))]), Value(-0.4, 0.2, 0.0))
-    }
-
     @Test func absNode() throws {
         try assertGolden(Abs([VariableX()]), Value(repeating: 0.3))
     }
@@ -169,17 +163,6 @@ struct MetalRenderRegressionTests {
         try assertFiniteAndInNoiseRange(GradientDirection([BWNoise([Constant(0.15), Constant(2)]), Constant(0.0), Constant(0.0)]))
     }
 
-    /// Figure 9's inner `color-grad` call, verbatim: `(color-grad (round (+ y
-    /// (log (invert y) 15.5)) x) 3.1 1.86 #(0.95 0.7 0.59) 1.35)`.
-    @Test func colorGradient() throws {
-        let source = Round([
-            Add([VariableY(), Log([Invert([VariableY()]), Constant(15.5)])]),
-            VariableX()
-        ])
-        let node = ColorGradient([source, Constant(3.1), Constant(1.86), ConstantTriplet(Value(0.95, 0.7, 0.59)), Constant(1.35)])
-        try assertGolden(node, Value(0.03680462762713432, 0.024370135739445686, 0.0193475428968668), tolerance: 1e-3)
-    }
-
     /// `source = x²` has constant curvature (2·r² per finite-difference
     /// radius `r`) along x and exactly zero curvature along y (it doesn't
     /// depend on y), independent of the sample coordinate -- so the golden
@@ -234,9 +217,20 @@ struct MetalRenderRegressionTests {
     /// image -- every isolated per-node test above passed throughout,
     /// because none of them nested a color-grad inside another color-grad's
     /// source. Fixed in MSLCodegenContext by sharing one counter across a
-    /// context and every sub-context `emitFunction` creates.
+    /// context and every sub-context `emitFunction` creates. Built via
+    /// DSLCodegenNode (the hand-written ColorGradient Swift class this bug
+    /// was originally found against is gone now that "color-grad" is
+    /// DSL-defined -- see DSLSampleDefinitions.colorGradTemplate) since
+    /// the bug lives in MSLCodegenContext/emitFunction, not in either
+    /// implementation of color-grad's own math.
     @Test func nestedColorGradient() throws {
-        let inner = ColorGradient([
+        func colorGrad(_ children: [any Node]) -> DSLCodegenNode {
+            DSLCodegenNode(template: DSLSampleDefinitions.colorGradTemplate,
+                            params: DSLSampleDefinitions.colorGradParams,
+                            modules: ["lighting": DSLSampleDefinitions.lightingModule],
+                            children: children)
+        }
+        let inner = colorGrad([
             Round([Add([VariableY(), Log([Invert([VariableY()]), Constant(15.5)])]), VariableX()]),
             Constant(3.1), Constant(1.86), ConstantTriplet(Value(0.95, 0.7, 0.59)), Constant(1.35)
         ])
@@ -245,7 +239,7 @@ struct MetalRenderRegressionTests {
                  Log([Invert([VariableY()]), Constant(15.5)])]),
             VariableX()
         ])
-        let outer = ColorGradient([outerSource, Constant(3.1), Constant(1.9), ConstantTriplet(Value(0.95, 0.7, 0.35)), Constant(1.35)])
+        let outer = colorGrad([outerSource, Constant(3.1), Constant(1.9), ConstantTriplet(Value(0.95, 0.7, 0.35)), Constant(1.35)])
         let figure9 = Round([Log([Add([VariableY(), outer]), Constant(0.19)]), VariableX()])
 
         // Coordinates kept away from x=0 (round(_, x) divides by it) and off
@@ -271,16 +265,13 @@ struct MetalRenderRegressionTests {
     }
 }
 
-/// Spike: proves the hand-rolled text DSL in ExpressionTree/DSL/ can express
-/// real node definitions and reproduce the exact behavior of the
-/// hand-written Swift nodes it's modeled on -- checked by reusing the same
-/// golden values as MetalRenderRegressionTests' mod()/colorGradient() above
-/// (one simple node, one that exercises every hard case: a sampled-function
-/// child, a requires() clause, and a dynamic tap-count reduction). Source
-/// text lives in DSLSampleDefinitions.swift -- kept separate from the *real*
-/// "dsl-mod"/"dsl-color-grad" files in Evolv.io/Resources/BundledNodes/
-/// (see DSLLibraryTests below) on purpose, so these parity checks don't
-/// depend on bundle-resource-copying working correctly on the test target.
+/// Golden-value checks against `DSLSampleDefinitions`' embedded copies of
+/// "mod"/"color-grad" (one simple node, one that exercises every hard case:
+/// a sampled-function child, a requires() clause, and a dynamic tap-count
+/// reduction) -- kept separate from the *real*
+/// Evolv.io/Resources/BundledNodes/{mod,color-grad}.evolvnode files (see
+/// DSLLibraryTests below) so these checks don't depend on
+/// bundle-resource-copying working correctly on the test target.
 struct DSLSpikeTests {
     private static let coord = Coordinate(x: 0.3, y: -0.4)
 
@@ -337,15 +328,15 @@ struct DSLLibraryTests {
     @Test func bundledNodesLoadWithoutIssues() throws {
         let (constructors, issues) = DSLLibrary.scan(roots: [Self.bundledNodesDirectory], reservedNames: [])
         #expect(issues.isEmpty, "unexpected load issues: \(issues.map(\.message))")
-        #expect(constructors["dsl-mod"] != nil)
-        #expect(constructors["dsl-color-grad"] != nil)
+        #expect(constructors["mod"] != nil)
+        #expect(constructors["color-grad"] != nil)
     }
 
     /// Same golden value as DSLSpikeTests.dslMod() above -- proves the real
     /// shipped file, not just the embedded test copy, is correct.
-    @Test func bundledDSLModMatchesGoldenValue() throws {
+    @Test func bundledModMatchesGoldenValue() throws {
         let (constructors, _) = DSLLibrary.scan(roots: [Self.bundledNodesDirectory], reservedNames: [])
-        let node = try constructors["dsl-mod"]!([VariableY(), ConstantTriplet(Value(0.0, 0.3, -0.4))])
+        let node = try constructors["mod"]!([VariableY(), ConstantTriplet(Value(0.0, 0.3, -0.4))])
 
         let evaluator = try MSLTreeEvaluator()
         let actual = try evaluator.evaluate(node: node, at: [Coordinate(x: 0.3, y: -0.4)])[0]
@@ -354,10 +345,31 @@ struct DSLLibraryTests {
         #expect(Swift.max(diff.x, Swift.max(diff.y, diff.z)) < 1e-4, "expected \(expected), got \(actual)")
     }
 
+    /// Same golden value as DSLSpikeTests.dslColorGradient() above -- proves
+    /// the real shipped color-grad.evolvnode file, resolving its
+    /// requires(lighting) against the real bundled lighting.evolvnode
+    /// module (not DSLSampleDefinitions' embedded copies of either), is
+    /// correct end-to-end.
+    @Test func bundledColorGradMatchesGoldenValue() throws {
+        let (constructors, issues) = DSLLibrary.scan(roots: [Self.bundledNodesDirectory], reservedNames: [])
+        #expect(issues.isEmpty, "unexpected load issues: \(issues.map(\.message))")
+        let source = Round([
+            Add([VariableY(), Log([Invert([VariableY()]), Constant(15.5)])]),
+            VariableX()
+        ])
+        let node = try constructors["color-grad"]!([source, Constant(3.1), Constant(1.86), ConstantTriplet(Value(0.95, 0.7, 0.59)), Constant(1.35)])
+
+        let evaluator = try MSLTreeEvaluator()
+        let actual = try evaluator.evaluate(node: node, at: [Coordinate(x: 0.3, y: -0.4)])[0]
+        let expected = Value(0.03680462762713432, 0.024370135739445686, 0.0193475428968668)
+        let diff = abs(actual - expected)
+        #expect(Swift.max(diff.x, Swift.max(diff.y, diff.z)) < 1e-3, "expected \(expected), got \(actual)")
+    }
+
     @Test func nameCollidingWithAReservedBuiltinIsReportedNotRegistered() throws {
-        let (constructors, issues) = DSLLibrary.scan(roots: [Self.bundledNodesDirectory], reservedNames: ["dsl-mod"])
-        #expect(constructors["dsl-mod"] == nil)
-        #expect(issues.contains { $0.message.contains("dsl-mod") })
+        let (constructors, issues) = DSLLibrary.scan(roots: [Self.bundledNodesDirectory], reservedNames: ["mod"])
+        #expect(constructors["mod"] == nil)
+        #expect(issues.contains { $0.message.contains("mod") })
     }
 
     @Test func scanRecursesIntoSubfolders() throws {

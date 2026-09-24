@@ -1,8 +1,13 @@
-// Phase 1 of the DSL node library: same math as ColorGradient._emitMSL
-// (ExpressionTree/Nodes/ColorGradient.swift), with the tunables that will
-// become `param $name` defaults in Phase 2 hardcoded as literals for now
-// (0.01/20.0/0.0/4, matching ColorGradient's current debug* statics).
-node "dsl-color-grad"(source: fn, p1, p2, color, p3) requires(lighting) {
+// The active "color-grad" node -- ported off the hand-written
+// ExpressionTree/Nodes/ColorGradient.swift, which has been deleted now
+// that this file replaces it in NodeRegistry (see the "swap dsl-* for the
+// legacy nodes" change). Tunables that were ColorGradient.debugDelta/etc
+// are hardcoded literals here (0.01/20.0/0.0/4) -- there's no live-tuning
+// UI anymore (ColorGradientDebugView was retired alongside this swap;
+// its whole premise -- mutating Swift statics the render path reads live
+// -- doesn't apply to a text file baked at parse time). To tune these now,
+// edit the literals directly and use "Reload Custom Nodes".
+node "color-grad"(source: fn, p1, p2, color, p3) requires(lighting) {
 	let p1Val: float = avgLum(p1)
 	let deltaLocal: float = (abs(p1Val) / 3.1) * 0.01
 

@@ -14,6 +14,11 @@ public final class NodeRegistry {
 	/// specifically so `reload()` (see below) is visible everywhere at once.
 	public static let shared = NodeRegistry()
 
+	// "mod" and "color-grad" are DSL-defined now (see
+	// Evolv.io/Resources/BundledNodes/{mod,color-grad}.evolvnode) --
+	// deliberately not in this list, so DSLLibrary's scan can claim those
+	// names instead of NodeRegistry.buildRegistry() reserving them for a
+	// Swift type that no longer exists.
 	private static let builtinNodeTypes: [any Node.Type] = [
 		Abs.self,
 		Add.self,
@@ -22,7 +27,6 @@ public final class NodeRegistry {
 		Dissolve.self,
 		Div.self,
 		BWNoise.self,
-		ColorGradient.self,
 		ColorGradientCurvature.self,
 		ColorNoise.self,
 		Constant.self,
@@ -32,7 +36,6 @@ public final class NodeRegistry {
 		If.self,
 		Invert.self,
 		Log.self,
-		Mod.self,
 		Mult.self,
 		RotateVector.self,
 		Round.self,

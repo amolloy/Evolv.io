@@ -1,4 +1,7 @@
-node "dsl-mod"(v0, v1) {
+// The active "mod" node -- ported off the hand-written
+// ExpressionTree/Nodes/Mod.swift, which has been deleted now that this
+// file replaces it in NodeRegistry.
+node "mod"(v0, v1) {
 	let isZeroMask: bool3 = v1 == float3(0.0)
 	let safeDivisor = select(v1, float3(1.0), isZeroMask)
 	let remainder = fmod(v0, safeDivisor)

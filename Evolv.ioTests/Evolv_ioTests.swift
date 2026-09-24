@@ -20,7 +20,7 @@ struct Evolv_ioTests {
 struct TreeLayoutTests {
 
 	@Test func tiersMatchDepthInASmallTree() throws {
-		let root = try Parser().parse("(mod X (abs Y))")
+		let root = try Parser().parse("(/ X (abs Y))")
 		let layout = TreeLayout(rootNode: root)
 
 		let byDepth = Dictionary(grouping: layout.nodes, by: \.depth)
@@ -28,12 +28,12 @@ struct TreeLayoutTests {
 		#expect(byDepth[1]?.count == 2)
 		#expect(byDepth[2]?.count == 1)
 
-		#expect(byDepth[0]?.first?.node is Mod)
+		#expect(byDepth[0]?.first?.node is Div)
 		#expect(byDepth[2]?.first?.node is VariableY)
 	}
 
 	@Test func parentIsCenteredOverItsChildren() throws {
-		let root = Add([Add([VariableX(), VariableY()]), Mod([VariableX(), VariableY()])])
+		let root = Add([Add([VariableX(), VariableY()]), Div([VariableX(), VariableY()])])
 		let layout = TreeLayout(rootNode: root)
 
 		let rootLaidOut = try #require(layout.nodes.first { $0.depth == 0 })
@@ -69,7 +69,7 @@ struct TreeLayoutTests {
 		// Deliberately unbalanced: the left branch is two levels deeper than
 		// the right, which is exactly the shape that would expose an overlap
 		// bug across different parents' bands.
-		let deepLeft = Add([Mult([VariableX(), VariableY()]), Mod([VariableX(), VariableY()])])
+		let deepLeft = Add([Mult([VariableX(), VariableY()]), Div([VariableX(), VariableY()])])
 		let shallowRight = Abs([VariableY()])
 		let root = Add([deepLeft, shallowRight])
 		let layout = TreeLayout(rootNode: root)

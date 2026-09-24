@@ -2,21 +2,13 @@
 //  DSLSampleDefinitions.swift
 //  Evolv.io
 //
-//  The two node definitions from the "readable DSL for node authoring"
-//  spike (see DSLCodegenNode.swift), kept in one place so NodeRegistry's
-//  live "dsl-mod"/"dsl-color-grad" registrations and
-//  DSLSpikeTests' parity checks can't drift apart by editing one copy of
-//  the source text and not the other.
-//
-//  Registered under "dsl-"-prefixed names (not "mod"/"color-grad" --
-//  those stay the hand-written production nodes) purely so both versions
-//  can be picked from ContentView's sample list side by side. Nothing
-//  here is meant to survive a decision on whether to pursue the DSL
-//  further; see DSLCodegenNode.swift's header for what's deliberately not
-//  done yet (NodeRegistry integration is real now, but there's still no
-//  file loading, no hot reload, and no fix for Node.name's static-vs-
-//  per-instance tension beyond this spike's placeholder).
-//
+//  Standalone Swift-embedded copies of the "mod"/"color-grad" node
+//  definitions, kept separate from the real, live
+//  Evolv.io/Resources/BundledNodes/{mod,color-grad}.evolvnode files so
+//  DSLSpikeTests' parity checks don't depend on bundle-resource-copying
+//  working correctly on the test target -- see that struct's header for
+//  the full reasoning. Not registered anywhere; these templates are only
+//  ever constructed directly in tests.
 
 enum DSLSampleDefinitions {
 	static let modSource = """
@@ -29,11 +21,10 @@ enum DSLSampleDefinitions {
 	}
 	"""
 
-	// Same shape as ColorGradient._emitMSL (ExpressionTree/Nodes/ColorGradient.swift):
-	// source is a sampled-function child, delta/heightFactor/lightZ/tapCount
-	// are $params standing in for ColorGradient's live-tunable debug statics
-	// (see colorGradParams below), and the per-tap finite-difference loop is
-	// expressed as an `average(...)` reduction instead of Swift-side unrolling.
+	// source is a sampled-function child; delta/heightFactor/lightZ/tapCount
+	// are $params (see colorGradParams below) rather than baked literals,
+	// so this embedded copy can be exercised with the same values the real
+	// bundled file hardcodes without duplicating them as literal text.
 	static let colorGradSource = """
 	node "color-grad"(source: fn, p1, p2, color, p3) requires(lighting) {
 		let p1Val: float = avgLum(p1)
@@ -66,10 +57,9 @@ enum DSLSampleDefinitions {
 	}
 	"""
 
-	/// Matches ColorGradient's current debugDelta/debugHeightFactor/
-	/// debugLightZ/debugTapCount defaults -- not wired to
-	/// ColorGradientDebugView's sliders (that integration is future work,
-	/// only relevant if the DSL is pursued past spike status).
+	/// Matches the literals baked into the real
+	/// Evolv.io/Resources/BundledNodes/color-grad.evolvnode file
+	/// (0.01/20.0/0.0/4).
 	static let colorGradParams: [String: DSLParamValue] = [
 		"delta": .float(0.01),
 		"heightFactor": .float(20.0),
