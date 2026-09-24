@@ -55,15 +55,35 @@ public final class DSLCodegenNode: Node {
 
 	public func _emitMSL(into context: MSLCodegenContext) -> String {
 		for requirement in template.requires {
-			if requirement == "perlin" {
-				// The one reserved intrinsic: its table is live-shuffled
-				// Swift data (see Perlin.swift), so it can never be a plain
-				// text module like everything else here.
-				context.require(.perlinTable)
-			} else if let module = modules[requirement] {
-				context.requireModule(name: requirement, text: emitModuleFunctionsMSL(module))
-			} else {
-				preconditionFailure("'\(template.name)': unresolved requires(\(requirement)) -- no such module")
+			switch requirement {
+				case "perlin":
+					// Reserved intrinsic: its table is live-shuffled Swift
+					// data (see Perlin.swift), so it can never be a plain
+					// text module like everything else here.
+					context.require(.perlinTable)
+				case "lighting":
+					// Also reserved, but for a sharper reason than perlin's:
+					// hand-written nodes (Bump, GradientDirection,
+					// ColorGradientCurvature) still get these same three
+					// functions from the *intrinsic* mslLightingHelpersPreamble
+					// via context.require(.lightingHelpers), not from a
+					// scanned module. A tree can easily contain one of those
+					// alongside a DSL node that also requires(lighting) --
+					// Figure 10 does exactly this (bump + color-grad) -- and
+					// if "lighting" resolved to a *second*, separately-text
+					// module defining the same three function names, the
+					// kernel would get both and fail to compile with
+					// "redefinition of 'avgLum'" (this really happened;
+					// there used to be a bundled lighting.evolvnode module
+					// here). Routing through the same intrinsic guarantees
+					// there's only ever one definition, however many nodes
+					// -- hand-written or DSL -- require it in one tree.
+					context.require(.lightingHelpers)
+				default:
+					guard let module = modules[requirement] else {
+						preconditionFailure("'\(template.name)': unresolved requires(\(requirement)) -- no such module")
+					}
+					context.requireModule(name: requirement, text: emitModuleFunctionsMSL(module))
 			}
 		}
 

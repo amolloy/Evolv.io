@@ -227,7 +227,6 @@ struct MetalRenderRegressionTests {
         func colorGrad(_ children: [any Node]) -> DSLCodegenNode {
             DSLCodegenNode(template: DSLSampleDefinitions.colorGradTemplate,
                             params: DSLSampleDefinitions.colorGradParams,
-                            modules: ["lighting": DSLSampleDefinitions.lightingModule],
                             children: children)
         }
         let inner = colorGrad([
@@ -298,7 +297,6 @@ struct DSLSpikeTests {
         ])
         let node = DSLCodegenNode(template: DSLSampleDefinitions.colorGradTemplate,
                                    params: DSLSampleDefinitions.colorGradParams,
-                                   modules: ["lighting": DSLSampleDefinitions.lightingModule],
                                    children: [source, Constant(3.1), Constant(1.86), ConstantTriplet(Value(0.95, 0.7, 0.59)), Constant(1.35)])
 
         let evaluator = try MSLTreeEvaluator()
@@ -346,10 +344,10 @@ struct DSLLibraryTests {
     }
 
     /// Same golden value as DSLSpikeTests.dslColorGradient() above -- proves
-    /// the real shipped color-grad.evolvnode file, resolving its
-    /// requires(lighting) against the real bundled lighting.evolvnode
-    /// module (not DSLSampleDefinitions' embedded copies of either), is
-    /// correct end-to-end.
+    /// the real shipped color-grad.evolvnode file (not
+    /// DSLSampleDefinitions' embedded copy) is correct end-to-end,
+    /// including its requires(lighting) resolving to the reserved
+    /// intrinsic (see DSLCodegenNode._emitMSL).
     @Test func bundledColorGradMatchesGoldenValue() throws {
         let (constructors, issues) = DSLLibrary.scan(roots: [Self.bundledNodesDirectory], reservedNames: [])
         #expect(issues.isEmpty, "unexpected load issues: \(issues.map(\.message))")

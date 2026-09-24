@@ -105,12 +105,13 @@ public enum DSLLibrary {
 					continue
 				}
 
-				// `perlin` is a reserved intrinsic (see DSLCodegenNode);
-				// everything else must resolve to a scanned module, tried
-				// first in this node's own namespace, then unnamespaced.
+				// `perlin` and `lighting` are reserved intrinsics (see
+				// DSLCodegenNode._emitMSL); everything else must resolve
+				// to a scanned module, tried first in this node's own
+				// namespace, then unnamespaced.
 				var resolvedModules: [String: DSLModule] = [:]
 				var requiresFailed = false
-				for requirement in template.requires where requirement != "perlin" {
+				for requirement in template.requires where requirement != "perlin" && requirement != "lighting" {
 					let qualifiedRequirement = qualify(requirement, fileURL: fileURL)
 					guard let module = modulesByQualifiedName[qualifiedRequirement] ?? modulesByQualifiedName[requirement] else {
 						issues.append(DSLLoadIssue(fileURL: fileURL, message: "requires(\(requirement)): no such module"))
