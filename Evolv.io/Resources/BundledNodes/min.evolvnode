@@ -1,0 +1,3 @@
+node "min"(v0, v1) {
+	return min(v0, v1)
+}

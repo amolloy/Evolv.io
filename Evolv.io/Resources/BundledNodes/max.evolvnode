@@ -1,0 +1,3 @@
+node "max"(v0, v1) {
+	return max(v0, v1)
+}
