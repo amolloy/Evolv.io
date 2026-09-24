@@ -96,6 +96,20 @@ public struct DSLModule {
 	let funcs: [DSLFuncDecl]
 }
 
+/// A module resolved for one particular `requires()` clause -- pairs the
+/// parsed module with the fully-qualified name it was actually registered
+/// under (see `DSLLibrary.scan`'s namespace resolution). That qualified
+/// name, not whatever bare text a `requires()` clause happened to write,
+/// is what a name-mangled MSL prefix gets derived from (see
+/// DSLCodegenNode's `mslModulePrefix`) -- so two different modules that
+/// both happen to be named "helpers" in two different packages still get
+/// distinct prefixes and can never collide, however many of them (or the
+/// "perlin" intrinsic) end up required in one tree.
+public struct DSLResolvedModule {
+	let qualifiedName: String
+	let module: DSLModule
+}
+
 /// What a single `.evolvnode` file turned out to contain -- exactly one of
 /// these per file (mirrors the original "1:1 file:node" request, extended
 /// to modules and package manifests).

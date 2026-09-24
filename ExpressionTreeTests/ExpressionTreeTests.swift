@@ -227,6 +227,7 @@ struct MetalRenderRegressionTests {
         func colorGrad(_ children: [any Node]) -> DSLCodegenNode {
             DSLCodegenNode(template: DSLSampleDefinitions.colorGradTemplate,
                             params: DSLSampleDefinitions.colorGradParams,
+                            modules: ["lighting": DSLSampleDefinitions.lightingModule],
                             children: children)
         }
         let inner = colorGrad([
@@ -297,6 +298,7 @@ struct DSLSpikeTests {
         ])
         let node = DSLCodegenNode(template: DSLSampleDefinitions.colorGradTemplate,
                                    params: DSLSampleDefinitions.colorGradParams,
+                                   modules: ["lighting": DSLSampleDefinitions.lightingModule],
                                    children: [source, Constant(3.1), Constant(1.86), ConstantTriplet(Value(0.95, 0.7, 0.59)), Constant(1.35)])
 
         let evaluator = try MSLTreeEvaluator()
@@ -344,10 +346,11 @@ struct DSLLibraryTests {
     }
 
     /// Same golden value as DSLSpikeTests.dslColorGradient() above -- proves
-    /// the real shipped color-grad.evolvnode file (not
-    /// DSLSampleDefinitions' embedded copy) is correct end-to-end,
-    /// including its requires(lighting) resolving to the reserved
-    /// intrinsic (see DSLCodegenNode._emitMSL).
+    /// the real shipped color-grad.evolvnode file, resolving its
+    /// requires(lighting) against the real bundled lighting.evolvnode
+    /// module (not DSLSampleDefinitions' embedded copies of either), is
+    /// correct end-to-end -- including the name-mangling that makes it
+    /// safe alongside a hand-written node's intrinsic lighting helpers.
     @Test func bundledColorGradMatchesGoldenValue() throws {
         let (constructors, issues) = DSLLibrary.scan(roots: [Self.bundledNodesDirectory], reservedNames: [])
         #expect(issues.isEmpty, "unexpected load issues: \(issues.map(\.message))")
@@ -362,6 +365,88 @@ struct DSLLibraryTests {
         let expected = Value(0.03680462762713432, 0.024370135739445686, 0.0193475428968668)
         let diff = abs(actual - expected)
         #expect(Swift.max(diff.x, Swift.max(diff.y, diff.z)) < 1e-3, "expected \(expected), got \(actual)")
+    }
+
+    /// The exact bug class Figure 10 hit in the real app: a hand-written
+    /// node needing the intrinsic lighting helpers (`Bump`, via
+    /// `context.require(.lightingHelpers)`) combined with a DSL node
+    /// requiring the real, separately-text "lighting" module
+    /// (`color-grad`), in one tree/kernel. Before name-mangling existed
+    /// this failed to compile with "redefinition of 'avgLum'" -- Metal
+    /// throws on that (caught below as a test failure, not a crash), so
+    /// this is a real, mechanical guard against the bug recurring, not
+    /// just a description of what used to go wrong.
+    @Test func handWrittenAndDSLLightingNodesCoexistInOneTree() throws {
+        let (constructors, issues) = DSLLibrary.scan(roots: [Self.bundledNodesDirectory], reservedNames: [])
+        #expect(issues.isEmpty, "unexpected load issues: \(issues.map(\.message))")
+        let colorGradConstructor = try #require(constructors["color-grad"])
+        let colorGrad = try colorGradConstructor([
+            Round([Add([VariableY(), Log([Invert([VariableY()]), Constant(15.5)])]), VariableX()]),
+            Constant(3.1), Constant(1.86), ConstantTriplet(Value(0.95, 0.7, 0.59)), Constant(1.35)
+        ])
+        let bump = Bump([
+            VariableX(),
+            ConstantTriplet(Value(0.5, 0.5, 0.5)),
+            Constant(0.7),
+            ConstantTriplet(Value(0.9, 0.1, 0.1)),
+            ConstantTriplet(Value(0.1, 0.1, 0.9)),
+            Constant(0.3),
+            Constant(0.4),
+            Constant(0.8)
+        ])
+        let combined = Add([colorGrad, bump])
+
+        let evaluator = try MSLTreeEvaluator()
+        let actual = try evaluator.evaluate(node: combined, at: [Coordinate(x: 0.3, y: -0.4)])[0]
+        #expect(actual.x.isFinite && actual.y.isFinite && actual.z.isFinite, "non-finite result: \(actual)")
+    }
+
+    /// The general case, not just the "lighting" one: two independently-
+    /// authored modules that both happen to define a function called
+    /// `helper`, each required by a different node, both in one tree.
+    /// Checks an actual numeric result (not just "didn't crash") to prove
+    /// each node's call really reaches *its own* module's `helper`, not
+    /// the other one's.
+    @Test func twoModulesWithCollidingFunctionNamesCoexistInOneTree() throws {
+        let tempDir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+
+        try """
+        module "module-a" {
+            func helper(v: float3) -> float3 {
+                return v * 2.0
+            }
+        }
+        """.write(to: tempDir.appendingPathComponent("module-a.evolvnode"), atomically: true, encoding: .utf8)
+        try """
+        module "module-b" {
+            func helper(v: float3) -> float3 {
+                return v * 3.0
+            }
+        }
+        """.write(to: tempDir.appendingPathComponent("module-b.evolvnode"), atomically: true, encoding: .utf8)
+        try """
+        node "fixture-uses-a"(v0) requires("module-a") {
+            return helper(v0)
+        }
+        """.write(to: tempDir.appendingPathComponent("fixture-uses-a.evolvnode"), atomically: true, encoding: .utf8)
+        try """
+        node "fixture-uses-b"(v0) requires("module-b") {
+            return helper(v0)
+        }
+        """.write(to: tempDir.appendingPathComponent("fixture-uses-b.evolvnode"), atomically: true, encoding: .utf8)
+
+        let (constructors, issues) = DSLLibrary.scan(roots: [tempDir], reservedNames: [])
+        #expect(issues.isEmpty, "unexpected load issues: \(issues.map(\.message))")
+        let usesA = try #require(constructors["fixture-uses-a"])
+        let usesB = try #require(constructors["fixture-uses-b"])
+        let combined = Add([try usesA([Constant(1.0)]), try usesB([Constant(1.0)])])
+
+        let evaluator = try MSLTreeEvaluator()
+        let actual = try evaluator.evaluate(node: combined, at: [Coordinate(x: 0, y: 0)])[0]
+        // module-a's helper(1) = 2, module-b's helper(1) = 3, combined = 5.
+        #expect(actual == Value(repeating: 5.0))
     }
 
     @Test func nameCollidingWithAReservedBuiltinIsReportedNotRegistered() throws {

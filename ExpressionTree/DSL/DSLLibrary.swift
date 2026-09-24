@@ -105,20 +105,30 @@ public enum DSLLibrary {
 					continue
 				}
 
-				// `perlin` and `lighting` are reserved intrinsics (see
-				// DSLCodegenNode._emitMSL); everything else must resolve
-				// to a scanned module, tried first in this node's own
-				// namespace, then unnamespaced.
-				var resolvedModules: [String: DSLModule] = [:]
+				// `perlin` is the one reserved intrinsic (see
+				// DSLCodegenNode._emitMSL); everything else -- including
+				// "lighting" -- must resolve to a scanned module, tried
+				// first in this node's own namespace, then unnamespaced.
+				// Every module's functions get name-mangled by its own
+				// *qualified* name (see DSLResolvedModule), which is what
+				// lets a DSL module safely coexist with a hand-written
+				// node's own intrinsic lighting helpers (or any other
+				// module) in the same tree without colliding.
+				var resolvedModules: [String: DSLResolvedModule] = [:]
 				var requiresFailed = false
-				for requirement in template.requires where requirement != "perlin" && requirement != "lighting" {
+				for requirement in template.requires where requirement != "perlin" {
 					let qualifiedRequirement = qualify(requirement, fileURL: fileURL)
-					guard let module = modulesByQualifiedName[qualifiedRequirement] ?? modulesByQualifiedName[requirement] else {
+					let resolved: DSLResolvedModule
+					if let module = modulesByQualifiedName[qualifiedRequirement] {
+						resolved = DSLResolvedModule(qualifiedName: qualifiedRequirement, module: module)
+					} else if let module = modulesByQualifiedName[requirement] {
+						resolved = DSLResolvedModule(qualifiedName: requirement, module: module)
+					} else {
 						issues.append(DSLLoadIssue(fileURL: fileURL, message: "requires(\(requirement)): no such module"))
 						requiresFailed = true
 						break
 					}
-					resolvedModules[requirement] = module
+					resolvedModules[requirement] = resolved
 				}
 				guard !requiresFailed else { continue }
 

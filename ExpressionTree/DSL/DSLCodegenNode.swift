@@ -32,10 +32,10 @@ public final class DSLCodegenNode: Node {
 	/// lazily in `_emitMSL`, only when actually rendered, so a bug in an
 	/// unused module can never crash anything that doesn't call it (same
 	/// deferred-until-rendered behavior as a bug in a node's own body).
-	let modules: [String: DSLModule]
+	let modules: [String: DSLResolvedModule]
 	public var children: [any Node]
 
-	public init(template: DSLTemplate, params: [String: DSLParamValue] = [:], modules: [String: DSLModule] = [:], children: [any Node]) {
+	public init(template: DSLTemplate, params: [String: DSLParamValue] = [:], modules: [String: DSLResolvedModule] = [:], children: [any Node]) {
 		precondition(children.count == template.params.count,
 					 "'\(template.name)' expects \(template.params.count) children, got \(children.count)")
 		self.template = template
@@ -54,44 +54,46 @@ public final class DSLCodegenNode: Node {
 	}
 
 	public func _emitMSL(into context: MSLCodegenContext) -> String {
-		for requirement in template.requires {
-			switch requirement {
-				case "perlin":
-					// Reserved intrinsic: its table is live-shuffled Swift
-					// data (see Perlin.swift), so it can never be a plain
-					// text module like everything else here.
-					context.require(.perlinTable)
-				case "lighting":
-					// Also reserved, but for a sharper reason than perlin's:
-					// hand-written nodes (Bump, GradientDirection,
-					// ColorGradientCurvature) still get these same three
-					// functions from the *intrinsic* mslLightingHelpersPreamble
-					// via context.require(.lightingHelpers), not from a
-					// scanned module. A tree can easily contain one of those
-					// alongside a DSL node that also requires(lighting) --
-					// Figure 10 does exactly this (bump + color-grad) -- and
-					// if "lighting" resolved to a *second*, separately-text
-					// module defining the same three function names, the
-					// kernel would get both and fail to compile with
-					// "redefinition of 'avgLum'" (this really happened;
-					// there used to be a bundled lighting.evolvnode module
-					// here). Routing through the same intrinsic guarantees
-					// there's only ever one definition, however many nodes
-					// -- hand-written or DSL -- require it in one tree.
-					context.require(.lightingHelpers)
-				default:
-					guard let module = modules[requirement] else {
-						preconditionFailure("'\(template.name)': unresolved requires(\(requirement)) -- no such module")
-					}
-					context.requireModule(name: requirement, text: emitModuleFunctionsMSL(module))
-			}
-		}
-
 		// External params win over a node's own `param $name = default` --
 		// see DSLTemplate.paramDefaults.
 		let effectiveParams = template.paramDefaults.merging(params) { _, external in external }
 
 		var env: [String: DSLBinding] = ["coord": .literal("coord")]
+
+		for requirement in template.requires {
+			if requirement == "perlin" {
+				// The one reserved intrinsic: its table is live-shuffled
+				// Swift data (see Perlin.swift), so it can never be a
+				// plain text module like everything else here.
+				context.require(.perlinTable)
+				continue
+			}
+			guard let resolved = modules[requirement] else {
+				preconditionFailure("'\(template.name)': unresolved requires(\(requirement)) -- no such module")
+			}
+			// Every function this module defines gets emitted under a
+			// name-mangled prefix (derived from its *qualified* name, not
+			// the bare `requirement` text -- see DSLResolvedModule) and
+			// bound here so this node's own body can still call it by its
+			// plain name. That mangling is what makes this collision-proof:
+			// two modules that both happen to define "avgLum" (one of them
+			// maybe even the same three lighting-helper names a
+			// hand-written node like Bump gets from the *intrinsic*
+			// mslLightingHelpersPreamble) can never produce two MSL
+			// functions with the same name in one kernel, however many
+			// end up required by one tree. This is a real bug that
+			// happened before mangling existed: Figure 10 combines `bump`
+			// (needs the lighting intrinsic) with `color-grad` (used to
+			// require a separately-text "lighting" module defining the
+			// exact same three names) -- "redefinition of 'avgLum'" from
+			// Metal.
+			let prefix = mslModulePrefix(for: resolved.qualifiedName)
+			context.requireModule(name: resolved.qualifiedName, text: emitModuleFunctionsMSL(resolved, prefix: prefix))
+			for funcDecl in resolved.module.funcs {
+				env[funcDecl.name] = .function(prefix + funcDecl.name)
+			}
+		}
+
 		for (decl, child) in zip(template.params, children) {
 			if decl.isFunction {
 				env[decl.name] = .function(context.emitFunction(for: child))
@@ -108,18 +110,45 @@ public final class DSLCodegenNode: Node {
 	}
 }
 
-/// Turns a parsed module's functions into standalone MSL function text.
-/// Each function gets its own fresh `MSLCodegenContext` (so its local `tN`
-/// numbering is independent of whatever tree is calling into it -- exactly
-/// how `MSLCodegenContext.emitFunction` already isolates a node subtree).
-func emitModuleFunctionsMSL(_ module: DSLModule) -> String {
-	module.funcs.map(emitFunctionMSL).joined(separator: "\n\n")
+/// A prefix unique to `qualifiedName`, applied to every function a module
+/// defines so its MSL names can never collide with anything else's --
+/// derived from the module's fully-qualified registration name (not
+/// whatever bare text a `requires()` clause wrote) so two different
+/// modules that both happen to be named "helpers" in two different
+/// packages still get distinct prefixes. Non-identifier characters
+/// (`.`/`-` are both legal in a quoted module name but not in MSL) become
+/// underscores; a leading digit gets an "m_" guard since MSL identifiers
+/// can't start with one.
+func mslModulePrefix(for qualifiedName: String) -> String {
+	var sanitized = String(qualifiedName.map { $0.isLetter || $0.isNumber || $0 == "_" ? $0 : "_" })
+	if let first = sanitized.first, first.isNumber {
+		sanitized = "m_" + sanitized
+	}
+	return sanitized + "__"
 }
 
-private func emitFunctionMSL(_ decl: DSLFuncDecl) -> String {
+/// Turns a parsed module's functions into standalone, name-mangled MSL
+/// function text. Each function gets its own fresh `MSLCodegenContext` (so
+/// its local `tN` numbering is independent of whatever tree is calling
+/// into it -- exactly how `MSLCodegenContext.emitFunction` already
+/// isolates a node subtree) but shares one `siblingBindings` map so one
+/// function in a module can call another by its plain name and still
+/// resolve to the mangled definition.
+func emitModuleFunctionsMSL(_ resolved: DSLResolvedModule, prefix: String) -> String {
+	let siblingBindings: [String: DSLBinding] = Dictionary(
+		uniqueKeysWithValues: resolved.module.funcs.map { ($0.name, .function(prefix + $0.name)) }
+	)
+	return resolved.module.funcs
+		.map { emitFunctionMSL($0, prefix: prefix, siblingBindings: siblingBindings) }
+		.joined(separator: "\n\n")
+}
+
+private func emitFunctionMSL(_ decl: DSLFuncDecl, prefix: String, siblingBindings: [String: DSLBinding]) -> String {
 	let context = MSLCodegenContext()
-	var env: [String: DSLBinding] = [:]
+	var env = siblingBindings
 	for param in decl.params {
+		// A function's own parameter shadows a sibling of the same name,
+		// same as a node's `let` shadowing an outer binding.
 		env[param.name] = .literal(param.name)
 	}
 	let interpreter = DSLInterpreter(context: context, params: [:], env: env)
@@ -129,7 +158,7 @@ private func emitFunctionMSL(_ decl: DSLFuncDecl) -> String {
 	let returnText = interpreter.evaluate(decl.returnExpr)
 	let paramList = decl.params.map { "\($0.type) \($0.name)" }.joined(separator: ", ")
 	return """
-	inline \(decl.returnType) \(decl.name)(\(paramList)) {
+	inline \(decl.returnType) \(prefix)\(decl.name)(\(paramList)) {
 		\(context.body())
 		return \(returnText);
 	}
