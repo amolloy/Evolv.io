@@ -12,6 +12,8 @@
 		B44879612DF60DE9005212B0 /* ExpressionTree.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = B448794E2DF60DE9005212B0 /* ExpressionTree.framework */; };
 		B44879622DF60DE9005212B0 /* ExpressionTree.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = B448794E2DF60DE9005212B0 /* ExpressionTree.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		B4D08EB33065C64D0032F85D /* EvolvNodeFormat.md in Resources */ = {isa = PBXBuildFile; fileRef = B4D08EB13065C64D0032F85D /* EvolvNodeFormat.md */; };
+		B4D08F373065C9ED0032F85D /* Bump.md in Resources */ = {isa = PBXBuildFile; fileRef = B4D08F193065C9ED0032F85D /* Bump.md */; };
+		B4D08F383065C9ED0032F85D /* ColorGradient.md in Resources */ = {isa = PBXBuildFile; fileRef = B4D08F1A3065C9ED0032F85D /* ColorGradient.md */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -76,6 +78,8 @@
 		B4B2EECE304208CA000D0917 /* ProjectSummary.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = ProjectSummary.md; sourceTree = "<group>"; };
 		B4B2EED6304485CF000D0917 /* SimsSiggraph91.pdf */ = {isa = PBXFileReference; lastKnownFileType = image.pdf; path = SimsSiggraph91.pdf; sourceTree = "<group>"; };
 		B4D08EB13065C64D0032F85D /* EvolvNodeFormat.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = EvolvNodeFormat.md; sourceTree = "<group>"; };
+		B4D08F193065C9ED0032F85D /* Bump.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = Bump.md; sourceTree = "<group>"; };
+		B4D08F1A3065C9ED0032F85D /* ColorGradient.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = ColorGradient.md; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -175,6 +179,8 @@
 		B4B2EED7304485CF000D0917 /* Documentation */ = {
 			isa = PBXGroup;
 			children = (
+				B4D08F193065C9ED0032F85D /* Bump.md */,
+				B4D08F1A3065C9ED0032F85D /* ColorGradient.md */,
 				B4B2EECE304208CA000D0917 /* ProjectSummary.md */,
 				B44879432DF60AC7005212B0 /* README.md */,
 				B4D08EB13065C64D0032F85D /* EvolvNodeFormat.md */,
@@ -396,6 +402,8 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				B4D08F373065C9ED0032F85D /* Bump.md in Resources */,
+				B4D08F383065C9ED0032F85D /* ColorGradient.md in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
