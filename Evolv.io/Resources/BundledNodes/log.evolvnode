@@ -1,0 +1,6 @@
+node "log"(v0, v1) {
+	let numerator = log(abs(v0))
+	let denominator = log(abs(v1))
+	let result = numerator / denominator
+	return select(result, float3(0.0), isnan(result))
+}

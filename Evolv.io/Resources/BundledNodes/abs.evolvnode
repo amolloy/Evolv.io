@@ -1,0 +1,3 @@
+node "abs"(v0) {
+	return abs(v0)
+}

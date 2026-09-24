@@ -14,33 +14,27 @@ public final class NodeRegistry {
 	/// specifically so `reload()` (see below) is visible everywhere at once.
 	public static let shared = NodeRegistry()
 
-	// "mod" and "color-grad" are DSL-defined now (see
-	// Evolv.io/Resources/BundledNodes/{mod,color-grad}.evolvnode) --
-	// deliberately not in this list, so DSLLibrary's scan can claim those
-	// names instead of NodeRegistry.buildRegistry() reserving them for a
-	// Swift type that no longer exists.
+	// Almost everything is DSL-defined now (see Evolv.io/Resources/
+	// BundledNodes/*.evolvnode) -- deliberately not in this list, so
+	// DSLLibrary's scan can claim those names instead of
+	// NodeRegistry.buildRegistry() reserving them for a Swift type that no
+	// longer exists. What's left:
+	// - `Constant`/`ConstantTriplet` can't become .evolvnode files at all --
+	//   they're literal syntax the Lisp tokenizer recognizes directly (a
+	//   bare number, `#(...)`), never a name+children shape passed through
+	//   `registry.makeNode`, so there's no "body" a DSL file could write.
+	// - `Bump`/`GradientDirection`/`ColorGradientCurvature` (lighting) and
+	//   `BWNoise`/`ColorNoise`/`WarpedBWNoise`/`WarpedColorNoise` (Perlin
+	//   noise) are still hand-written pending Phases C/D of the "move
+	//   everything to DSL" pass.
 	private static let builtinNodeTypes: [any Node.Type] = [
-		Abs.self,
-		Add.self,
-		And.self,
 		Bump.self,
-		Dissolve.self,
-		Div.self,
 		BWNoise.self,
 		ColorGradientCurvature.self,
 		ColorNoise.self,
 		Constant.self,
 		ConstantTriplet.self,
 		GradientDirection.self,
-		HSVToRGB.self,
-		If.self,
-		Invert.self,
-		Log.self,
-		Mult.self,
-		RotateVector.self,
-		Round.self,
-		VariableX.self,
-		VariableY.self,
 		WarpedBWNoise.self,
 		WarpedColorNoise.self,
 	]

@@ -1,0 +1,3 @@
+node "invert"(v0) {
+	return float3(1.0) - v0
+}

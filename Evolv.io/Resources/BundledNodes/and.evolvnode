@@ -1,0 +1,10 @@
+// Bitwise AND on raw IEEE-754 bit patterns at 32-bit (float) width instead
+// of the CPU's original 64-bit (double) width -- a real semantic
+// difference, not just precision loss, accepted per the original Metal
+// codegen migration.
+node "and"(v0, v1) {
+	let bits0: uint3 = as_type<uint3>(v0)
+	let bits1: uint3 = as_type<uint3>(v1)
+	let resultBits: uint3 = bits0 & bits1
+	return as_type<float3>(resultBits)
+}

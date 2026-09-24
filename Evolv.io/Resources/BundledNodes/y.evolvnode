@@ -1,0 +1,3 @@
+node "y"() {
+	return float3(coord.y)
+}

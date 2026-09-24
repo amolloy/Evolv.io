@@ -1,0 +1,18 @@
+node "hsv-to-rgb"(hsv) {
+	let h: float = fmod(hsv.x, 1.0) * 6.0
+	let s: float = hsv.y
+	let v: float = hsv.z
+	let c: float = v * s
+	let x: float = c * (1.0 - abs(fmod(h, 2.0) - 1.0))
+	let m: float = v - c
+
+	let rgb = (int(h) == 0) ? float3(c, x, 0.0) :
+		(int(h) == 1) ? float3(x, c, 0.0) :
+		(int(h) == 2) ? float3(0.0, c, x) :
+		(int(h) == 3) ? float3(0.0, x, c) :
+		(int(h) == 4) ? float3(x, 0.0, c) :
+		(int(h) == 5) ? float3(c, 0.0, x) :
+		float3(0.0, 0.0, 0.0)
+
+	return rgb + float3(m)
+}

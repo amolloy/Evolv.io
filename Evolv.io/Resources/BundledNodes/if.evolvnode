@@ -1,0 +1,3 @@
+node "if"(condition, thenVal, elseVal) {
+	return select(elseVal, thenVal, condition > float3(0.0))
+}

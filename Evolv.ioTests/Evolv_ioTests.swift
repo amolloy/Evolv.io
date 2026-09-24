@@ -17,6 +17,12 @@ struct Evolv_ioTests {
 
 }
 
+// Builds test trees via `Parser().parse(...)` Lisp text rather than
+// constructing node classes directly -- "+"/"/"/"*"/"abs"/"x"/"y" are all
+// DSL-defined now (see Evolv.io/Resources/BundledNodes/), so there's no
+// Swift type to construct directly any more. This target is app-hosted
+// (see SnapshotDump.swift, which already relies on the same thing), so
+// `Parser()`'s `NodeRegistry.shared` resolves the real bundled files.
 struct TreeLayoutTests {
 
 	@Test func tiersMatchDepthInASmallTree() throws {
@@ -28,12 +34,12 @@ struct TreeLayoutTests {
 		#expect(byDepth[1]?.count == 2)
 		#expect(byDepth[2]?.count == 1)
 
-		#expect(byDepth[0]?.first?.node is Div)
-		#expect(byDepth[2]?.first?.node is VariableY)
+		#expect(byDepth[0]?.first?.node.toString().hasPrefix("(/ ") == true)
+		#expect(byDepth[2]?.first?.node.toString() == "y")
 	}
 
 	@Test func parentIsCenteredOverItsChildren() throws {
-		let root = Add([Add([VariableX(), VariableY()]), Div([VariableX(), VariableY()])])
+		let root = try Parser().parse("(+ (+ x y) (/ x y))")
 		let layout = TreeLayout(rootNode: root)
 
 		let rootLaidOut = try #require(layout.nodes.first { $0.depth == 0 })
@@ -51,9 +57,7 @@ struct TreeLayoutTests {
 		// (contour-based) layout should let loneLeaf sit right next to
 		// wideDeeper -- not pushed out past wideDeeper's full subtree width,
 		// the way the old bounding-box layout would have.
-		let wideDeeper = Abs([Add([VariableX(), VariableY()])])
-		let loneLeaf = VariableY()
-		let root = Add([wideDeeper, loneLeaf])
+		let root = try Parser().parse("(+ (abs (+ x y)) y)")
 		let layout = TreeLayout(rootNode: root)
 
 		let depth1 = layout.nodes.filter { $0.depth == 1 }.sorted { $0.center.x < $1.center.x }
@@ -69,9 +73,7 @@ struct TreeLayoutTests {
 		// Deliberately unbalanced: the left branch is two levels deeper than
 		// the right, which is exactly the shape that would expose an overlap
 		// bug across different parents' bands.
-		let deepLeft = Add([Mult([VariableX(), VariableY()]), Div([VariableX(), VariableY()])])
-		let shallowRight = Abs([VariableY()])
-		let root = Add([deepLeft, shallowRight])
+		let root = try Parser().parse("(+ (+ (* x y) (/ x y)) (abs y))")
 		let layout = TreeLayout(rootNode: root)
 
 		let byDepth = Dictionary(grouping: layout.nodes, by: \.depth)

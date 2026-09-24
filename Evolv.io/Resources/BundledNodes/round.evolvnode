@@ -1,0 +1,6 @@
+// rint (round-to-nearest-even) matches Swift's .rounded(.toNearestOrEven),
+// unlike MSL's round() which rounds ties away from zero.
+node "round"(v0, v1) {
+	let q = rint(v0 / v1)
+	return q * v1
+}

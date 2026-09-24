@@ -1,0 +1,3 @@
+node "dissolve"(v0, w, v1) {
+	return (float3(1.0) - w) * v0 + w * v1
+}
