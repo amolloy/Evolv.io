@@ -74,18 +74,14 @@ final class MetalRenderContext {
 	}
 
 	/// Compiles (or returns the cached pipeline for) `node`'s generated MSL.
-	/// Keyed by `node.toString()` plus ColorGradientCurvature's live debug
-	/// statics -- those are baked into generated MSL as literals (not live
-	/// uniforms; see ColorGradientCurvature._emitMSL), so a value change
-	/// there means a *structurally identical* tree should compile to
-	/// different MSL. Without the statics in the key, changing them would
-	/// silently serve a stale pipeline compiled with the old values --
-	/// wrong output, not just a missed cache optimization. `color-grad`'s
-	/// own tunables don't need this anymore: they're baked into
-	/// color-grad.evolvnode's text now, and any edit there goes through
-	/// NodeRegistry.reload(), which clears this whole cache directly.
+	/// Keyed by `node.toString()` alone -- every node's tunables are baked
+	/// into `.evolvnode` text now (see color-grad-curvature.evolvnode etc.),
+	/// and any edit there goes through NodeRegistry.reload(), which clears
+	/// this whole cache directly, so there's no live-mutable Swift state
+	/// left that could make an identical `toString()` compile to different
+	/// MSL.
 	func pipeline(for node: any Node) throws -> MTLComputePipelineState {
-		let key = "\(node.toString())|\(ColorGradientCurvature.debugDelta)|\(ColorGradientCurvature.debugHeightFactor)|\(ColorGradientCurvature.debugLightZ)|\(ColorGradientCurvature.debugTapCount)"
+		let key = node.toString()
 
 		lock.lock()
 		if let cached = pipelineCache[key] {

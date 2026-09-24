@@ -1,0 +1,29 @@
+// The active "bump" node -- ported off the hand-written
+// ExpressionTree/Nodes/Bump.swift, which has been deleted now that this
+// file replaces it in NodeRegistry. See Bump.md #5/#6 (git history) for
+// the reasoning behind this argument mapping -- it's a best-effort
+// reconstruction of Sims' original semantics, not a confirmed-correct
+// spec. `source`/`multiplier`/`color1`/`color2` are float3-valued;
+// `strength`/`dirX`/`dirY`/`lightHeight` get reduced to a scalar via
+// avgLum before use, same pattern as color-grad's p1/p2/p3.
+node "bump"(source, multiplier, strength, color1, color2, dirX, dirY, lightHeight) requires(lighting) {
+	let strengthVal: float = avgLum(strength)
+	let dirXVal: float = avgLum(dirX)
+	let dirYVal: float = avgLum(dirY)
+	let lightHeightVal: float = avgLum(lightHeight)
+
+	let scaledSource = source * multiplier
+	let scaledLen: float = length(scaledSource)
+	let computedNormal = (scaledLen < 1e-9) ? float3(0.0, 0.0, 1.0) : scaledSource / scaledLen
+
+	let mixedNormal = mix(float3(0.0, 0.0, 1.0), computedNormal, strengthVal)
+	let mixedLen: float = length(mixedNormal)
+
+	let lightRaw = float3(dirXVal, dirYVal, lightHeightVal)
+	let lightLen: float = length(lightRaw)
+
+	let t: float = clamp((dot(mixedNormal / mixedLen, lightRaw / lightLen) + 1.0) * 0.5, 0.0, 1.0)
+	let mixedColor = mix(color1, color2, t)
+
+	return (mixedLen < 1e-9 || lightLen < 1e-9) ? float3(0.5) : mixedColor
+}

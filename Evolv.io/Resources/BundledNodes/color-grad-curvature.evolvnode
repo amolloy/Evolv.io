@@ -1,0 +1,41 @@
+// The active "color-grad-curvature" node -- ported off the hand-written
+// ExpressionTree/Nodes/ColorGradientCurvature.swift, which has been
+// deleted now that this file replaces it in NodeRegistry. Not a Sims
+// primitive -- our own invented variant (see ColorGradient.md #18 in git
+// history), kept as its own node/name so it doesn't clash with
+// color-grad's own sample-expression test coverage.
+//
+// debugDelta/debugHeightFactor/debugLightZ/debugTapCount were live-
+// tunable Swift statics there (never actually mutated at runtime, just
+// baked-in constants -- see git history); now hardcoded literals
+// (0.01/20.0/0.0/4) directly below. To tune, edit the literals and use
+// "Reload Custom Nodes".
+node "color-grad-curvature"(source: fn, p1, p2, color, p3) requires(lighting) {
+	let p1Val: float = avgLum(p1)
+	let deltaLocal: float = (abs(p1Val) / 3.1) * 0.01
+
+	let p3Val: float = avgLum(p3)
+	let heightFactor: float = p3Val * 20.0
+	let lightZ: float = p3Val * 0.0
+
+	let angle: float = avgLum(p2)
+
+	let center = source(coord)
+
+	let curvX = average(i in 1...4) {
+		let radius: float = deltaLocal * (float(i) / float(4))
+		source(coord - float2(radius, 0.0)) + source(coord + float2(radius, 0.0)) - 2.0 * center
+	}
+	let curvY = average(i in 1...4) {
+		let radius: float = deltaLocal * (float(i) / float(4))
+		source(coord - float2(0.0, radius)) + source(coord + float2(0.0, radius)) - 2.0 * center
+	}
+
+	let weightX: float = cos(angle) * cos(angle)
+	let weightY: float = sin(angle) * sin(angle)
+	let curvature = weightX * curvX + weightY * curvY
+
+	let lightMap = color * (heightFactor * curvature + lightZ)
+
+	return signedPow(lightMap, p3Val)
+}

@@ -76,17 +76,18 @@ public final class DSLCodegenNode: Node {
 			// the bare `requirement` text -- see DSLResolvedModule) and
 			// bound here so this node's own body can still call it by its
 			// plain name. That mangling is what makes this collision-proof:
-			// two modules that both happen to define "avgLum" (one of them
-			// maybe even the same three lighting-helper names a
-			// hand-written node like Bump gets from the *intrinsic*
-			// mslLightingHelpersPreamble) can never produce two MSL
-			// functions with the same name in one kernel, however many
-			// end up required by one tree. This is a real bug that
-			// happened before mangling existed: Figure 10 combines `bump`
-			// (needs the lighting intrinsic) with `color-grad` (used to
-			// require a separately-text "lighting" module defining the
-			// exact same three names) -- "redefinition of 'avgLum'" from
-			// Metal.
+			// two independently-authored modules that both happen to
+			// define "avgLum" can never produce two MSL functions with
+			// the same name in one kernel, however many end up required
+			// by one tree. This is a real bug that happened before
+			// mangling existed: Figure 10 combines `bump` (back then a
+			// hand-written node pulling in a fixed intrinsic lighting
+			// preamble) with `color-grad` (required a separately-text
+			// "lighting" module defining the exact same three names) --
+			// "redefinition of 'avgLum'" from Metal. `bump` is a DSL node
+			// requiring this same real module now, but the mangling still
+			// matters: nothing stops two *different* third-party modules
+			// from colliding on a common helper name like this.
 			let prefix = mslModulePrefix(for: resolved.qualifiedName)
 			context.requireModule(name: resolved.qualifiedName, text: emitModuleFunctionsMSL(resolved, prefix: prefix))
 			for funcDecl in resolved.module.funcs {

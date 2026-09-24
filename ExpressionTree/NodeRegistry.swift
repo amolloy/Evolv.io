@@ -14,24 +14,15 @@ public final class NodeRegistry {
 	/// specifically so `reload()` (see below) is visible everywhere at once.
 	public static let shared = NodeRegistry()
 
-	// Almost everything is DSL-defined now (see Evolv.io/Resources/
-	// BundledNodes/*.evolvnode) -- deliberately not in this list, so
-	// DSLLibrary's scan can claim those names instead of
-	// NodeRegistry.buildRegistry() reserving them for a Swift type that no
-	// longer exists. What's left:
-	// - `Constant`/`ConstantTriplet` can't become .evolvnode files at all --
-	//   they're literal syntax the Lisp tokenizer recognizes directly (a
-	//   bare number, `#(...)`), never a name+children shape passed through
-	//   `registry.makeNode`, so there's no "body" a DSL file could write.
-	// - `Bump`/`GradientDirection`/`ColorGradientCurvature` (lighting) are
-	//   still hand-written pending Phase D of the "move everything to DSL"
-	//   pass.
+	// Everything is DSL-defined now (see Evolv.io/Resources/
+	// BundledNodes/*.evolvnode) except these two, which can't become
+	// .evolvnode files at all -- they're literal syntax the Lisp tokenizer
+	// recognizes directly (a bare number, `#(...)`), never a name+children
+	// shape passed through `registry.makeNode`, so there's no "body" a DSL
+	// file could write.
 	private static let builtinNodeTypes: [any Node.Type] = [
-		Bump.self,
-		ColorGradientCurvature.self,
 		Constant.self,
 		ConstantTriplet.self,
-		GradientDirection.self,
 	]
 
 	public private(set) var registry: [String: NodeConstructor]

@@ -33,8 +33,9 @@ private func evolvIoBundledNodesDirectory() -> URL {
 /// Thin, DSL-backed stand-ins for the Swift node classes (VariableX,
 /// VariableY, Add, Mult, Div, Abs, Invert, Round, Log, If, And,
 /// RotateVector, HSVToRGB, Dissolve, BWNoise, ColorNoise, WarpedBWNoise,
-/// WarpedColorNoise) that used to exist and were convenient to build test
-/// trees with -- deleted once their .evolvnode
+/// WarpedColorNoise, Bump, GradientDirection, ColorGradientCurvature) that
+/// used to exist and were convenient to build test trees with -- deleted
+/// once their .evolvnode
 /// equivalents took over `NodeRegistry` (see the "move everything to DSL"
 /// pass). Backed by the real bundled files via `DSLLibrary`, not a
 /// hand-rolled parallel implementation, so a bug in a bundled file would
@@ -72,6 +73,9 @@ enum DSLTestNodes {
     static func colorNoise(_ e0: any Node, _ e1: any Node) -> any Node { make("color-noise", [e0, e1]) }
     static func warpedBWNoise(_ u: any Node, _ v: any Node, _ e2: any Node, _ e3: any Node) -> any Node { make("warped-bw-noise", [u, v, e2, e3]) }
     static func warpedColorNoise(_ u: any Node, _ v: any Node, _ e2: any Node, _ e3: any Node) -> any Node { make("warped-color-noise", [u, v, e2, e3]) }
+    static func gradientDirection(_ source: any Node, _ dirX: any Node, _ dirY: any Node) -> any Node { make("grad-direction", [source, dirX, dirY]) }
+    static func colorGradientCurvature(_ source: any Node, _ p1: any Node, _ p2: any Node, _ color: any Node, _ p3: any Node) -> any Node { make("color-grad-curvature", [source, p1, p2, color, p3]) }
+    static func bump(_ source: any Node, _ multiplier: any Node, _ strength: any Node, _ color1: any Node, _ color2: any Node, _ dirX: any Node, _ dirY: any Node, _ lightHeight: any Node) -> any Node { make("bump", [source, multiplier, strength, color1, color2, dirX, dirY, lightHeight]) }
 }
 
 /// Regression tests for generated MSL, checked against golden values.
@@ -219,7 +223,7 @@ struct MetalRenderRegressionTests {
     /// Range-checked rather than golden-valued: its source is noise, so its
     /// output legitimately varies with the reshuffled permutation table.
     @Test func gradientDirection() throws {
-        try assertFiniteAndInNoiseRange(GradientDirection([DSLTestNodes.bwNoise(Constant(0.15), Constant(2)), Constant(0.0), Constant(0.0)]))
+        try assertFiniteAndInNoiseRange(DSLTestNodes.gradientDirection(DSLTestNodes.bwNoise(Constant(0.15), Constant(2)), Constant(0.0), Constant(0.0)))
     }
 
     /// `source = x²` has constant curvature (2·r² per finite-difference
@@ -233,12 +237,12 @@ struct MetalRenderRegressionTests {
     /// scaled by `heightFactor = 20` gives `t = 0.001875`.
     @Test func colorGradientCurvature() throws {
         let source = DSLTestNodes.mult(DSLTestNodes.x(), DSLTestNodes.x())
-        let node = ColorGradientCurvature([source, Constant(3.1), Constant(0.0), ConstantTriplet(Value(1, 1, 1)), Constant(1.0)])
+        let node = DSLTestNodes.colorGradientCurvature(source, Constant(3.1), Constant(0.0), ConstantTriplet(Value(1, 1, 1)), Constant(1.0))
         try assertGolden(node, Value(0.001875, 0.001875, 0.001875))
     }
 
     @Test func bump() throws {
-        let node = Bump([
+        let node = DSLTestNodes.bump(
             DSLTestNodes.x(),
             ConstantTriplet(Value(0.5, 0.5, 0.5)),
             Constant(0.7),
@@ -247,7 +251,7 @@ struct MetalRenderRegressionTests {
             Constant(0.3),
             Constant(0.4),
             Constant(0.8)
-        ])
+        )
         try assertGolden(node, Value(0.10437603294849396, 0.10000000149011612, 0.8956239223480225), tolerance: 1e-3)
     }
 
@@ -413,8 +417,10 @@ struct DSLLibraryTests {
     /// the real shipped color-grad.evolvnode file, resolving its
     /// requires(lighting) against the real bundled lighting.evolvnode
     /// module (not DSLSampleDefinitions' embedded copies of either), is
-    /// correct end-to-end -- including the name-mangling that makes it
-    /// safe alongside a hand-written node's intrinsic lighting helpers.
+    /// correct end-to-end -- including the name-mangling that keeps its
+    /// module-provided helpers from colliding with any other module a
+    /// sibling node in the same tree might require (see
+    /// `twoDSLNodesSharingTheSameModuleCoexistInOneTree` below).
     @Test func bundledColorGradMatchesGoldenValue() throws {
         let (constructors, issues) = DSLLibrary.scan(roots: [Self.bundledNodesDirectory], reservedNames: [])
         #expect(issues.isEmpty, "unexpected load issues: \(issues.map(\.message))")
@@ -431,16 +437,18 @@ struct DSLLibraryTests {
         #expect(Swift.max(diff.x, Swift.max(diff.y, diff.z)) < 1e-3, "expected \(expected), got \(actual)")
     }
 
-    /// The exact bug class Figure 10 hit in the real app: a hand-written
-    /// node needing the intrinsic lighting helpers (`Bump`, via
-    /// `context.require(.lightingHelpers)`) combined with a DSL node
-    /// requiring the real, separately-text "lighting" module
-    /// (`color-grad`), in one tree/kernel. Before name-mangling existed
-    /// this failed to compile with "redefinition of 'avgLum'" -- Metal
-    /// throws on that (caught below as a test failure, not a crash), so
-    /// this is a real, mechanical guard against the bug recurring, not
-    /// just a description of what used to go wrong.
-    @Test func handWrittenAndDSLLightingNodesCoexistInOneTree() throws {
+    /// The exact bug class Figure 10 hit in the real app: two independent
+    /// nodes (`color-grad`, `bump`) both `requires(lighting)`-ing the real,
+    /// separately-text "lighting" module in one tree/kernel. Before name-
+    /// mangling existed (and before `bump` was itself a DSL node requiring
+    /// that same module rather than a hand-written node pulling in a fixed
+    /// intrinsic preamble defining the same three names), this failed to
+    /// compile with "redefinition of 'avgLum'" -- Metal throws on that
+    /// (caught below as a test failure, not a crash), so this is a real,
+    /// mechanical guard against the bug recurring: requiring the *same*
+    /// module from two different nodes in one tree must splice its
+    /// functions into the kernel exactly once, not twice.
+    @Test func twoDSLNodesSharingTheSameModuleCoexistInOneTree() throws {
         let (constructors, issues) = DSLLibrary.scan(roots: [Self.bundledNodesDirectory], reservedNames: [])
         #expect(issues.isEmpty, "unexpected load issues: \(issues.map(\.message))")
         let colorGradConstructor = try #require(constructors["color-grad"])
@@ -451,7 +459,7 @@ struct DSLLibraryTests {
             ),
             Constant(3.1), Constant(1.86), ConstantTriplet(Value(0.95, 0.7, 0.59)), Constant(1.35)
         ])
-        let bump = Bump([
+        let bump = DSLTestNodes.bump(
             DSLTestNodes.x(),
             ConstantTriplet(Value(0.5, 0.5, 0.5)),
             Constant(0.7),
@@ -460,7 +468,7 @@ struct DSLLibraryTests {
             Constant(0.3),
             Constant(0.4),
             Constant(0.8)
-        ])
+        )
         let combined = DSLTestNodes.add(colorGrad, bump)
 
         let evaluator = try MSLTreeEvaluator()

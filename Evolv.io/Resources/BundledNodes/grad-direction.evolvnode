@@ -1,0 +1,27 @@
+// The active "grad-direction" node -- ported off the hand-written
+// ExpressionTree/Nodes/GradientDirection.swift, which has been deleted
+// now that this file replaces it in NodeRegistry. `delta`/`heightFactor`/
+// `lightZ` were private constants there (0.02/200.0/0.5) -- now baked in
+// directly as literals below. `PreventZero` (a fileprivate helper class
+// synthesized fresh on every _emitMSL call) is inlined here as a plain
+// `select(...)` expression -- it never needed its own node identity, just
+// a place to put "replace exactly-zero with a default".
+node "grad-direction"(source: fn, dirX, dirY) requires(lighting) {
+	let dirXSafe = select(dirX, float3(-0.5), dirX == float3(0.0))
+	let dirYSafe = select(dirY, float3(0.5), dirY == float3(0.0))
+
+	let gx: float = avgLum(source(coord - float2(0.02, 0.0))) - avgLum(source(coord + float2(0.02, 0.0)))
+	let gy: float = avgLum(source(coord - float2(0.0, 0.02))) - avgLum(source(coord + float2(0.0, 0.02)))
+	let surfaceNormal = float3(-gx, -gy, 1.0 / 200.0)
+
+	let lightDx: float = avgLum(dirXSafe)
+	let lightDy: float = avgLum(dirYSafe)
+	let lightDirection = float3(lightDx, lightDy, 0.5)
+
+	let normalLen: float = length(surfaceNormal)
+	let lightLen: float = length(lightDirection)
+
+	let clampedT: float = clamp((dot(surfaceNormal / normalLen, lightDirection / lightLen) + 1.0) * 0.5, 0.0, 1.0)
+
+	return (normalLen < 1e-9 || lightLen < 1e-9) ? float3(0.5) : float3(clampedT)
+}

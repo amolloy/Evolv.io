@@ -13,16 +13,18 @@ public struct MSLValue {
 }
 
 /// Optional GPU-side resources a generated kernel may need bound alongside
-/// its per-tree Params buffer (the shared Perlin permutation table, the
-/// ColorGradient live-tunable uniforms, etc). Nodes that need one call
-/// `context.require(...)` from within `_emitMSL`.
+/// its per-tree Params buffer. Only the Perlin permutation table is left --
+/// its live-shuffled data can never be a `.evolvnode` text file (see
+/// `NodeRegistry`'s `perlin` reserved-intrinsic note) -- everything else
+/// that used to live here (`colorGradientTunables`, `lightingHelpers`) was
+/// retired once its last hand-written Swift caller moved to a DSL
+/// `requires(...)` module instead (see `lighting.evolvnode`). Nodes that
+/// need this call `context.require(.perlinTable)` from within `_emitMSL`.
 public struct MSLResourceRequirements: OptionSet, Sendable {
 	public let rawValue: Int
 	public init(rawValue: Int) { self.rawValue = rawValue }
 
 	public static let perlinTable = MSLResourceRequirements(rawValue: 1 << 0)
-	public static let colorGradientTunables = MSLResourceRequirements(rawValue: 1 << 1)
-	public static let lightingHelpers = MSLResourceRequirements(rawValue: 1 << 2)
 }
 
 /// Accumulates emitted MSL statements while walking a `Node` tree once
@@ -50,10 +52,9 @@ public final class MSLCodegenContext {
 	// text blobs a DSL-defined node's `requires(name)` pulled in (see
 	// DSLCodegenNode._emitMSL / DSLLibrary.swift), keyed by name so the
 	// same module required by two different nodes in one tree is only
-	// spliced into the kernel once. `resourceRequirements` stays a fixed
-	// OptionSet because it's also used by the hand-written Swift nodes
-	// (ColorGradient, Bump, etc.) for their two built-in intrinsics; this
-	// is specifically for everything else.
+	// spliced into the kernel once. `resourceRequirements` stays a separate,
+	// fixed OptionSet purely for the Perlin table intrinsic (never text,
+	// see above); this is for everything else.
 	private var customModuleTexts: [String: String] = [:]
 
 	// Shared across a context and every sub-context `emitFunction` creates
@@ -226,49 +227,15 @@ func mslPerlinPreamble() -> String {
 	"""
 }
 
-/// Shared helpers for the lighting-model nodes (`GradientDirection`,
-/// `ColorGradient`, `Bump`), prepended whenever any node requires
-/// `.lightingHelpers`. `avgLum` matches `averageLuminance()`.
-/// `colorGradChannel` takes an already tap-weighted per-channel gradient --
-/// the tap sampling/weighting itself now lives in `ColorGradient._emitMSL`
-/// (see `debugTapCount`), not here, so the number of samples can vary
-/// without touching this shared helper (light-degenerate case handled by
-/// the caller before calling this, since that guard applies once, not per
-/// channel; only the normal-degenerate guard is per channel). `signedPow`
-/// matches `ColorGradResult`.
-func mslLightingHelpersPreamble() -> String {
-	"""
-	inline float avgLum(float3 v) { return (v.x + v.y + v.z) / 3.0; }
-
-	inline float colorGradChannel(float gx, float gy, float heightFactor, float3 lightNormalized, float colorTint) {
-		float3 normal = float3(-gx, -gy, 1.0 / heightFactor);
-		float normalLen = length(normal);
-		if (normalLen < 1e-9) {
-			return 0.5;
-		}
-		float t = dot(normal / normalLen, lightNormalized);
-		return colorTint * t;
-	}
-
-	inline float3 signedPow(float3 v, float p) {
-		float3 s = select(float3(1.0), float3(-1.0), v < float3(0.0));
-		return s * pow(abs(v), p);
-	}
-	"""
-}
-
-/// Assembles the shared preamble (Perlin table + helpers, lighting helpers,
-/// any `emitFunction`-produced standalone functions) that goes before a
-/// generated kernel's own per-tree function body -- shared by
+/// Assembles the shared preamble (Perlin table, any DSL `requires(...)`
+/// module text, any `emitFunction`-produced standalone functions) that goes
+/// before a generated kernel's own per-tree function body -- shared by
 /// `MSLTreeEvaluator` (parity testing) and `MetalRenderContext` (production
 /// rendering) so the two don't drift.
 func mslSharedPreamble(functions: String, resourceRequirements: MSLResourceRequirements, customModules: String = "") -> String {
 	var preamble = ""
 	if resourceRequirements.contains(.perlinTable) {
 		preamble += mslPerlinPreamble() + "\n\n"
-	}
-	if resourceRequirements.contains(.lightingHelpers) {
-		preamble += mslLightingHelpersPreamble() + "\n\n"
 	}
 	if !customModules.isEmpty {
 		preamble += customModules + "\n\n"
