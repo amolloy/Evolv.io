@@ -22,10 +22,13 @@
 //                  ('requires' '(' (IDENT|STRING) (',' (IDENT|STRING))* ')')?
 //                  '{' (letStmt | paramStmt)* 'return' expr '}'
 //    paramDecl  := IDENT (':' IDENT)?          -- ": fn" marks a sampled child
-//    paramStmt  := 'param' '$' IDENT ':' IDENT '=' NUMBER debugClause?
+//    paramStmt  := 'param' '$' IDENT ':' IDENT '=' signedNumber debugClause?
 //                  -- a self-contained default for a `$name` reference,
 //                  used when nothing external supplies one
-//    debugClause := 'debug' ('toggle' | 'slider' '(' NUMBER ',' NUMBER ')')
+//    debugClause := 'debug' ('toggle' | 'slider' '(' signedNumber ',' signedNumber ')')
+//    signedNumber := '-'? NUMBER          -- a literal sign, not the unary
+//                  '-' expression rule below (the lexer never folds a sign
+//                  into NUMBER itself, so this is handled explicitly)
 //                  -- only valid on a 'float' param; registers it as a live,
 //                  no-recompile-needed uniform NodeDebuggingView can surface
 //                  as a Toggle/Slider (see MSLCodegenContext.registerDebugControl)
@@ -195,23 +198,17 @@ final class DSLParser {
 		try expect(.colon)
 		let type = try expectAnyIdentifier()
 		try expect(.assign)
-		guard case .number(let text) = peek() else {
-			throw DSLParseError(message: "Expected a numeric literal default for param '$\(name)', found \(peek())")
-		}
-		pos += 1
+		let literal = try expectNumberLiteral(context: "default for param '$\(name)'")
 
 		let value: DSLParamValue
 		switch type {
 			case "float":
-				guard let d = Double(text) else {
-					throw DSLParseError(message: "Invalid float literal '\(text)' for param '$\(name)'")
-				}
-				value = .float(ComponentType(d))
+				value = .float(ComponentType(literal))
 			case "int":
-				guard let i = Int(text) else {
-					throw DSLParseError(message: "Invalid int literal '\(text)' for param '$\(name)'")
+				guard literal == literal.rounded() else {
+					throw DSLParseError(message: "Invalid int literal '\(literal)' for param '$\(name)'")
 				}
-				value = .int(i)
+				value = .int(Int(literal))
 			default:
 				throw DSLParseError(message: "Unknown param type '\(type)' for '$\(name)' -- expected 'float' or 'int'")
 		}
@@ -486,10 +483,15 @@ final class DSLParser {
 		return name
 	}
 
-	/// Reads a raw `.number` token as a `Double` -- used for `debug
-	/// slider(min, max)` bounds, which (like a `param` default itself) are
-	/// plain literals, not full expressions.
+	/// Reads a raw (optionally negative) numeric literal as a `Double` --
+	/// used for `debug slider(min, max)` bounds and a `param` default,
+	/// which are plain literals, not full expressions (so `-1.0` here is a
+	/// literal sign, not the unary-minus *expression* `parseUnary` handles
+	/// elsewhere). Negative literals need their own handling because the
+	/// lexer never combines a sign into `.number` itself -- `-1.0` always
+	/// tokenizes as `.minus` followed by `.number("1.0")`.
 	private func expectNumberLiteral(context: String) throws -> Double {
+		let isNegative = match(.minus)
 		guard case .number(let text) = peek() else {
 			throw DSLParseError(message: "Expected a numeric literal for \(context), found \(peek())")
 		}
@@ -497,7 +499,7 @@ final class DSLParser {
 		guard let d = Double(text) else {
 			throw DSLParseError(message: "Invalid numeric literal '\(text)' for \(context)")
 		}
-		return d
+		return isNegative ? -d : d
 	}
 
 	/// Accepts either form for a `requires(...)` entry -- a bare
