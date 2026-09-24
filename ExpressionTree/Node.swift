@@ -13,6 +13,17 @@ public protocol Node: Identifiable where ID == ObjectIdentifier {
 
 	func toString() -> String
 
+	/// The name to show a human (tree-diagram tiles, debug labels, ...) --
+	/// a real protocol requirement, not just an extension default, so it
+	/// dispatches dynamically through `any Node` the same way `toString()`
+	/// does. Matters specifically for `DSLCodegenNode`: every DSL-defined
+	/// node type ("bump", "color-grad", ...) is the same Swift class, so
+	/// `Self.name`/`type(of: node).name` is always the fixed placeholder
+	/// `"dsl"` -- only an instance property can report the real per-file
+	/// name (`template.name`). Defaults to `Self.name`, which is exactly
+	/// right for every hand-written node (one Swift type == one node name).
+	var displayName: String { get }
+
 	/// Emits this node's MSL expression as raw text (e.g. `"v0 + v1"`), given
 	/// that `context` already holds emitted variable names for `children`
 	/// (fetched via `children[i].codegenMSL(into:)`, not this method directly).
@@ -31,6 +42,10 @@ public extension Node {
 	func codegenMSL(into context: MSLCodegenContext) -> MSLValue {
 		context.emit(for: self) { self._emitMSL(into: context) }
 	}
+}
+
+public extension Node {
+	var displayName: String { Self.name }
 }
 
 public extension Node {

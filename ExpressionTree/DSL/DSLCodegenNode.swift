@@ -54,6 +54,12 @@ public final class DSLCodegenNode: Node {
 		return "(\(template.name) \(children.map { $0.toString() }.joined(separator: " ")))"
 	}
 
+	/// Overrides the `Self.name`-based default (always the fixed "dsl"
+	/// placeholder for this class) with the real per-file name -- see
+	/// `Node.displayName`'s doc comment for why this needs to be an
+	/// instance property at all.
+	public var displayName: String { template.name }
+
 	public func _emitMSL(into context: MSLCodegenContext) -> String {
 		// External params win over a node's own `param $name = default` --
 		// see DSLTemplate.paramDefaults.

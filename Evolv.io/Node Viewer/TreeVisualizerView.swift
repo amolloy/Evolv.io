@@ -78,7 +78,7 @@ private struct NodeTileView: View {
 			.frame(width: TreeLayout.tileSize.width, height: TreeLayout.tileSize.width)
 			.clipShape(RoundedRectangle(cornerRadius: 6))
 
-			Text(type(of: node).name)
+			Text(node.displayName)
 				.font(.caption.bold())
 				.lineLimit(1)
 				.padding(.horizontal, 8)
