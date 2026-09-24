@@ -6,7 +6,7 @@
 //
 
 public final class Parser {
-    private let registry = NodeRegistry()
+    private let registry = NodeRegistry.shared
 
     public init() {}
 

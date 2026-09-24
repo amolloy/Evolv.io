@@ -277,11 +277,10 @@ struct MetalRenderRegressionTests {
 /// golden values as MetalRenderRegressionTests' mod()/colorGradient() above
 /// (one simple node, one that exercises every hard case: a sampled-function
 /// child, a requires() clause, and a dynamic tap-count reduction). Source
-/// text lives in DSLSampleDefinitions.swift, shared with NodeRegistry's
-/// live "dsl-mod"/"dsl-color-grad" registrations so this suite can't drift
-/// from what's actually rendered in the app. See DSLCodegenNode.swift's
-/// header comment for what's deliberately still not done (file loading,
-/// hot reload, NodeRegistry's static-vs-per-instance name tension).
+/// text lives in DSLSampleDefinitions.swift -- kept separate from the *real*
+/// "dsl-mod"/"dsl-color-grad" files in Evolv.io/Resources/BundledNodes/
+/// (see DSLLibraryTests below) on purpose, so these parity checks don't
+/// depend on bundle-resource-copying working correctly on the test target.
 struct DSLSpikeTests {
     private static let coord = Coordinate(x: 0.3, y: -0.4)
 
@@ -315,5 +314,90 @@ struct DSLSpikeTests {
         let expected = Value(0.03680462762713432, 0.024370135739445686, 0.0193475428968668)
         let diff = abs(actual - expected)
         #expect(Swift.max(diff.x, Swift.max(diff.y, diff.z)) < 1e-3, "expected \(expected), got \(actual)")
+    }
+}
+
+/// Tests for `DSLLibrary`'s scanning/collision logic itself, plus a check
+/// that the real, shipped `Evolv.io/Resources/BundledNodes/*.evolvnode`
+/// files (not `DSLSampleDefinitions`' embedded copies) parse cleanly and
+/// produce correct output. Locates that real folder via `#filePath` rather
+/// than `Bundle.main` -- this test target may or may not be hosted inside
+/// the app bundle depending on scheme configuration, so `Bundle.main` isn't
+/// a reliable way to find app resources from here, but the source tree's
+/// layout relative to this very file always is.
+struct DSLLibraryTests {
+    private static var bundledNodesDirectory: URL {
+        URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent() // ExpressionTreeTests.swift -> ExpressionTreeTests/
+            .deletingLastPathComponent() // -> repo root
+            .appendingPathComponent("Evolv.io/Resources/BundledNodes")
+    }
+
+    @Test func bundledNodesLoadWithoutIssues() throws {
+        let (constructors, issues) = DSLLibrary.scan(roots: [Self.bundledNodesDirectory], reservedNames: [])
+        #expect(issues.isEmpty, "unexpected load issues: \(issues.map(\.message))")
+        #expect(constructors["dsl-mod"] != nil)
+        #expect(constructors["dsl-color-grad"] != nil)
+    }
+
+    /// Same golden value as DSLSpikeTests.dslMod() above -- proves the real
+    /// shipped file, not just the embedded test copy, is correct.
+    @Test func bundledDSLModMatchesGoldenValue() throws {
+        let (constructors, _) = DSLLibrary.scan(roots: [Self.bundledNodesDirectory], reservedNames: [])
+        let node = try constructors["dsl-mod"]!([VariableY(), ConstantTriplet(Value(0.0, 0.3, -0.4))])
+
+        let evaluator = try MSLTreeEvaluator()
+        let actual = try evaluator.evaluate(node: node, at: [Coordinate(x: 0.3, y: -0.4)])[0]
+        let expected = Value(-0.4, 0.2, 0.0)
+        let diff = abs(actual - expected)
+        #expect(Swift.max(diff.x, Swift.max(diff.y, diff.z)) < 1e-4, "expected \(expected), got \(actual)")
+    }
+
+    @Test func nameCollidingWithAReservedBuiltinIsReportedNotRegistered() throws {
+        let (constructors, issues) = DSLLibrary.scan(roots: [Self.bundledNodesDirectory], reservedNames: ["dsl-mod"])
+        #expect(constructors["dsl-mod"] == nil)
+        #expect(issues.contains { $0.message.contains("dsl-mod") })
+    }
+
+    @Test func scanRecursesIntoSubfolders() throws {
+        let tempDir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+        let subDir = tempDir.appendingPathComponent("Sub")
+        try FileManager.default.createDirectory(at: subDir, withIntermediateDirectories: true)
+
+        try """
+        node "fixture-add"(v0, v1) {
+            return v0 + v1
+        }
+        """.write(to: subDir.appendingPathComponent("fixture-add.evolvnode"), atomically: true, encoding: .utf8)
+
+        let (constructors, issues) = DSLLibrary.scan(roots: [tempDir], reservedNames: [])
+        #expect(issues.isEmpty, "unexpected load issues: \(issues.map(\.message))")
+        #expect(constructors["fixture-add"] != nil)
+    }
+
+    /// Two loose files in the same root both declaring `node "dup"` --
+    /// deterministic scan order (alphabetical by path) means "a.evolvnode"
+    /// wins and "b.evolvnode" is reported, not silently dropped or crashed.
+    @Test func duplicateNameWithinOneRootReportsTheLaterFile() throws {
+        let tempDir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+
+        try """
+        node "dup"(v0) {
+            return v0
+        }
+        """.write(to: tempDir.appendingPathComponent("a.evolvnode"), atomically: true, encoding: .utf8)
+        try """
+        node "dup"(v0, v1) {
+            return v0 + v1
+        }
+        """.write(to: tempDir.appendingPathComponent("b.evolvnode"), atomically: true, encoding: .utf8)
+
+        let (constructors, issues) = DSLLibrary.scan(roots: [tempDir], reservedNames: [])
+        #expect(constructors["dup"] != nil)
+        #expect(issues.count == 1)
+        #expect(issues.first?.fileURL.lastPathComponent == "b.evolvnode")
     }
 }

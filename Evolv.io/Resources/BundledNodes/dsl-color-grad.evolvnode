@@ -1,0 +1,33 @@
+// Phase 1 of the DSL node library: same math as ColorGradient._emitMSL
+// (ExpressionTree/Nodes/ColorGradient.swift), with the tunables that will
+// become `param $name` defaults in Phase 2 hardcoded as literals for now
+// (0.01/20.0/0.0/4, matching ColorGradient's current debug* statics).
+node "dsl-color-grad"(source: fn, p1, p2, color, p3) requires(lighting) {
+	let p1Val: float = avgLum(p1)
+	let deltaLocal: float = (abs(p1Val) / 3.1) * 0.01
+
+	let p3Val: float = avgLum(p3)
+	let heightFactor: float = p3Val * 20.0
+	let lightZ: float = p3Val * 0.0
+
+	let angle: float = avgLum(p2)
+
+	let gx = average(i in 1...4) {
+		let radius: float = deltaLocal * (float(i) / float(4))
+		source(coord - float2(radius, 0.0)) - source(coord + float2(radius, 0.0))
+	}
+	let gy = average(i in 1...4) {
+		let radius: float = deltaLocal * (float(i) / float(4))
+		source(coord - float2(0.0, radius)) - source(coord + float2(0.0, radius))
+	}
+
+	let lightDx: float = cos(angle)
+	let lightDy: float = sin(angle)
+	let lightDir = float3(lightDx, lightDy, lightZ)
+	let lightLen: float = length(lightDir)
+	let lightNormalized = lightDir / lightLen
+
+	let lightMap = (lightLen < 1e-9) ? float3(0.5) : float3(colorGradChannel(gx.x, gy.x, heightFactor, lightNormalized, color.x), colorGradChannel(gx.y, gy.y, heightFactor, lightNormalized, color.y), colorGradChannel(gx.z, gy.z, heightFactor, lightNormalized, color.z))
+
+	return signedPow(lightMap, p3Val)
+}

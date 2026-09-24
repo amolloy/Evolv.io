@@ -6,6 +6,10 @@
 //
 
 import SwiftUI
+import ExpressionTree
+#if os(macOS)
+import AppKit
+#endif
 
 @main
 struct Evolv_ioApp: App {
@@ -19,6 +23,17 @@ struct Evolv_ioApp: App {
             CommandGroup(after: .appInfo) {
                 Toggle("Supersampling", isOn: $supersamplingEnabled)
                 OpenColorGradientDebugButton()
+                Divider()
+                Button("Reload Custom Nodes") {
+                    NodeRegistry.shared.reload()
+                }
+#if os(macOS)
+                Button("Reveal Nodes Folder") {
+                    if let nodesDirectory = DSLLibrary.containerNodesDirectory {
+                        NSWorkspace.shared.activateFileViewerSelecting([nodesDirectory])
+                    }
+                }
+#endif
             }
         }
 
