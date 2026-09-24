@@ -32,8 +32,9 @@ private func evolvIoBundledNodesDirectory() -> URL {
 
 /// Thin, DSL-backed stand-ins for the Swift node classes (VariableX,
 /// VariableY, Add, Mult, Div, Abs, Invert, Round, Log, If, And,
-/// RotateVector, HSVToRGB, Dissolve) that used to exist and were
-/// convenient to build test trees with -- deleted once their .evolvnode
+/// RotateVector, HSVToRGB, Dissolve, BWNoise, ColorNoise, WarpedBWNoise,
+/// WarpedColorNoise) that used to exist and were convenient to build test
+/// trees with -- deleted once their .evolvnode
 /// equivalents took over `NodeRegistry` (see the "move everything to DSL"
 /// pass). Backed by the real bundled files via `DSLLibrary`, not a
 /// hand-rolled parallel implementation, so a bug in a bundled file would
@@ -67,6 +68,10 @@ enum DSLTestNodes {
     static func rotateVector(_ angle: any Node, _ x: any Node, _ y: any Node) -> any Node { make("rotate-vector", [angle, x, y]) }
     static func hsvToRGB(_ hsv: any Node) -> any Node { make("hsv-to-rgb", [hsv]) }
     static func dissolve(_ v0: any Node, _ w: any Node, _ v1: any Node) -> any Node { make("dissolve", [v0, w, v1]) }
+    static func bwNoise(_ e0: any Node, _ e1: any Node) -> any Node { make("bw-noise", [e0, e1]) }
+    static func colorNoise(_ e0: any Node, _ e1: any Node) -> any Node { make("color-noise", [e0, e1]) }
+    static func warpedBWNoise(_ u: any Node, _ v: any Node, _ e2: any Node, _ e3: any Node) -> any Node { make("warped-bw-noise", [u, v, e2, e3]) }
+    static func warpedColorNoise(_ u: any Node, _ v: any Node, _ e2: any Node, _ e3: any Node) -> any Node { make("warped-color-noise", [u, v, e2, e3]) }
 }
 
 /// Regression tests for generated MSL, checked against golden values.
@@ -190,7 +195,7 @@ struct MetalRenderRegressionTests {
     // (see git history); not reproduced here since this suite's job is
     // narrower (catch regressions, not re-prove the translation).
     @Test func bwNoise() throws {
-        try assertGolden(BWNoise([Constant(0.2), Constant(2)]), Value(0.5, 0.5, 0.5))
+        try assertGolden(DSLTestNodes.bwNoise(Constant(0.2), Constant(2)), Value(0.5, 0.5, 0.5))
     }
 
     // colorNoise/warpedBWNoise/warpedColorNoise: unlike bwNoise above, these
@@ -198,15 +203,15 @@ struct MetalRenderRegressionTests {
     // output legitimately varies run to run with the reshuffled permutation
     // table -- range/sanity checks only, see assertFiniteAndInNoiseRange.
     @Test func colorNoise() throws {
-        try assertFiniteAndInNoiseRange(ColorNoise([Constant(0.1), Constant(2)]))
+        try assertFiniteAndInNoiseRange(DSLTestNodes.colorNoise(Constant(0.1), Constant(2)))
     }
 
     @Test func warpedBWNoise() throws {
-        try assertFiniteAndInNoiseRange(WarpedBWNoise([DSLTestNodes.x(), DSLTestNodes.y(), Constant(0.04), Constant(3)]))
+        try assertFiniteAndInNoiseRange(DSLTestNodes.warpedBWNoise(DSLTestNodes.x(), DSLTestNodes.y(), Constant(0.04), Constant(3)))
     }
 
     @Test func warpedColorNoise() throws {
-        try assertFiniteAndInNoiseRange(WarpedColorNoise([DSLTestNodes.mult(DSLTestNodes.x(), Constant(0.2)), DSLTestNodes.y(), Constant(0.1), Constant(2)]))
+        try assertFiniteAndInNoiseRange(DSLTestNodes.warpedColorNoise(DSLTestNodes.mult(DSLTestNodes.x(), Constant(0.2)), DSLTestNodes.y(), Constant(0.1), Constant(2)))
     }
 
     /// The exact sample expression from ContentView's "(grad-direction
@@ -214,7 +219,7 @@ struct MetalRenderRegressionTests {
     /// Range-checked rather than golden-valued: its source is noise, so its
     /// output legitimately varies with the reshuffled permutation table.
     @Test func gradientDirection() throws {
-        try assertFiniteAndInNoiseRange(GradientDirection([BWNoise([Constant(0.15), Constant(2)]), Constant(0.0), Constant(0.0)]))
+        try assertFiniteAndInNoiseRange(GradientDirection([DSLTestNodes.bwNoise(Constant(0.15), Constant(2)), Constant(0.0), Constant(0.0)]))
     }
 
     /// `source = x²` has constant curvature (2·r² per finite-difference

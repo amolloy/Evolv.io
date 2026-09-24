@@ -1,0 +1,8 @@
+node "warped-color-noise"(u, v, e2, e3) requires(perlin) {
+	let v0 = e2 * 50.0
+	return float3(
+		perlinNoise(float2(u.x, v.x) * v0.x, int(e3.x) + 0),
+		perlinNoise(float2(u.y, v.y) * v0.y, int(e3.y) + 1),
+		perlinNoise(float2(u.z, v.z) * v0.z, int(e3.z) + 2)
+	)
+}

@@ -23,20 +23,15 @@ public final class NodeRegistry {
 	//   they're literal syntax the Lisp tokenizer recognizes directly (a
 	//   bare number, `#(...)`), never a name+children shape passed through
 	//   `registry.makeNode`, so there's no "body" a DSL file could write.
-	// - `Bump`/`GradientDirection`/`ColorGradientCurvature` (lighting) and
-	//   `BWNoise`/`ColorNoise`/`WarpedBWNoise`/`WarpedColorNoise` (Perlin
-	//   noise) are still hand-written pending Phases C/D of the "move
-	//   everything to DSL" pass.
+	// - `Bump`/`GradientDirection`/`ColorGradientCurvature` (lighting) are
+	//   still hand-written pending Phase D of the "move everything to DSL"
+	//   pass.
 	private static let builtinNodeTypes: [any Node.Type] = [
 		Bump.self,
-		BWNoise.self,
 		ColorGradientCurvature.self,
-		ColorNoise.self,
 		Constant.self,
 		ConstantTriplet.self,
 		GradientDirection.self,
-		WarpedBWNoise.self,
-		WarpedColorNoise.self,
 	]
 
 	public private(set) var registry: [String: NodeConstructor]
