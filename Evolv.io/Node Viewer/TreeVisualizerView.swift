@@ -8,69 +8,101 @@
 import SwiftUI
 import ExpressionTree
 
-final class DisplayNode: Identifiable {
-	let id: ObjectIdentifier
-	let node: any Node
-	var children: [DisplayNode]?
-
-	init(node: any Node) {
-		self.id = node.id
-		self.node = node
-		if !node.children.isEmpty {
-			self.children = node.children.map { DisplayNode(node: $0) }
-		}
-	}
-}
-
 struct TreeVisualizerView: View {
 	let evaluator: Evaluator
-	let rootNodes: [DisplayNode]
+	let rootNode: any Node
+	let layout: TreeLayout
 
-	@State private var selectedNodeForDetail: DisplayNode?
+	@State private var store = TreeThumbnailStore()
+	@State private var selectedNodeForDetail: LaidOutNode?
 
 	init(evaluator: Evaluator, rootNode: any Node) {
 		self.evaluator = evaluator
-		self.rootNodes = [DisplayNode(node: rootNode)]
+		self.rootNode = rootNode
+		self.layout = TreeLayout(rootNode: rootNode)
 	}
 
 	var body: some View {
-		List(rootNodes, children: \.children) { displayNode in
-			Button(action: {
-				selectedNodeForDetail = displayNode
-			}) {
-				NodeRowView(nodeRenderer: NodeRenderer(node: displayNode.node,
-													   evaluator: evaluator))
+		ScrollView([.horizontal, .vertical]) {
+			ZStack(alignment: .topLeading) {
+				Canvas { context, _ in
+					// Anchor each edge to the tile's top/bottom edge rather than its
+					// center, so the line stays within the empty gap between tiers
+					// and never runs underneath a tile's thumbnail or badge.
+					for laidOut in layout.nodes {
+						guard let parentCenter = laidOut.parentCenter else { continue }
+						let parentEdge = CGPoint(x: parentCenter.x, y: parentCenter.y + TreeLayout.tileSize.height / 2)
+						let childEdge = CGPoint(x: laidOut.center.x, y: laidOut.center.y - TreeLayout.tileSize.height / 2)
+						let midY = (parentEdge.y + childEdge.y) / 2
+
+						var path = Path()
+						path.move(to: parentEdge)
+						path.addLine(to: CGPoint(x: parentEdge.x, y: midY))
+						path.addLine(to: CGPoint(x: childEdge.x, y: midY))
+						path.addLine(to: childEdge)
+
+						context.stroke(path, with: .color(.secondary), lineWidth: 1.5)
+					}
+				}
+				.frame(width: layout.contentSize.width, height: layout.contentSize.height)
+
+				ForEach(layout.nodes) { laidOut in
+					Button {
+						selectedNodeForDetail = laidOut
+					} label: {
+						NodeTileView(node: laidOut.node, image: store.images[laidOut.node.toString()])
+					}
+					.buttonStyle(.plain)
+					.position(laidOut.center)
+				}
 			}
-			.buttonStyle(.plain)
+			.frame(width: layout.contentSize.width, height: layout.contentSize.height)
+			.padding(24)
 		}
 		.navigationTitle("Expression Tree")
-		.sheet(item: $selectedNodeForDetail) { displayNodeToShow in
-			DetailImageView(node: displayNodeToShow.node)
+		.task {
+			await store.renderAll(nodes: layout.nodes, evaluator: evaluator)
+		}
+		.sheet(item: $selectedNodeForDetail) { laidOut in
+			DetailImageView(node: laidOut.node)
 		}
 	}
 }
 
-struct NodeRowView: View {
-	let nodeRenderer: NodeRenderer
+private struct NodeTileView: View {
+	let node: any Node
+	let image: CGImage?
 
 	var body: some View {
-		HStack {
-			Text(type(of: nodeRenderer.node).name)
+		VStack(spacing: 4) {
+			Group {
+				if let image {
+					Image(decorative: image, scale: 1.0, orientation: .up)
+						.resizable()
+				} else {
+					Rectangle()
+						.fill(Color.secondary.opacity(0.15))
+				}
+			}
+			.frame(width: TreeLayout.tileSize.width, height: TreeLayout.tileSize.width)
+			.clipShape(RoundedRectangle(cornerRadius: 6))
+
+			Text(type(of: node).name)
 				.font(.caption.bold())
-				.padding(.horizontal, 8)
-				.padding(.vertical, 4)
-				.background(Color.blue.opacity(0.2), in: Capsule())
-
-			Text(nodeRenderer.node.toString())
-				.font(.caption.monospaced())
 				.lineLimit(1)
-				.truncationMode(.middle)
-
-			Spacer()
-
-			RenderedImageView(nodeRenderer: nodeRenderer)
+				.padding(.horizontal, 8)
+				.padding(.vertical, 3)
+				.background {
+					// Two opaque layers, not one translucent one: `.background`
+					// gives a fully opaque base (so nothing -- like a connector
+					// line -- can ever show through), with the blue tint layered
+					// on top for the same light-wash look as before.
+					Capsule()
+						.fill(.background)
+						.overlay(Capsule().fill(Color.blue.opacity(0.2)))
+				}
 		}
-		.padding(.vertical, 2)
+		.frame(width: TreeLayout.tileSize.width, height: TreeLayout.tileSize.height)
 	}
 }
 

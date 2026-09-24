@@ -89,7 +89,7 @@ struct ContentView: View {
 				.navigationTitle(selectedGroup)
 				.sheet(isPresented: $showingTreeVisualizer) {
 					NavigationStack {
-						TreeVisualizerView(evaluator: Evaluator(size: CGSize(width: 44, height: 44)),
+						TreeVisualizerView(evaluator: Evaluator(size: CGSize(width: 64, height: 64)),
 										   rootNode: node)
 							.toolbar {
 								ToolbarItem(placement: .cancellationAction) {
@@ -99,7 +99,10 @@ struct ContentView: View {
 								}
 							}
 					}
-					.frame(minWidth: 500, minHeight: 500)
+#if os(macOS)
+					.frame(minWidth: 1000, minHeight: 800)
+#endif
+					.presentationSizing(.page)
 				}
 			} else {
 				Text("Select an expression group")
