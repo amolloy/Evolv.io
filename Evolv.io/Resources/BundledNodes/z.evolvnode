@@ -1,0 +1,4 @@
+node "z"() {
+	return float3(0)
+}
+

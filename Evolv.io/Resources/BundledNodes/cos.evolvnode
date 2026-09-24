@@ -1,0 +1,4 @@
+
+node "cos"(v0) {
+	return cos(v0)
+}
