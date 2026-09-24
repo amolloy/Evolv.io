@@ -51,6 +51,7 @@ public enum DSLLibrary {
 
 		for root in roots {
 			let files = evolvNodeFiles(under: root)
+			print("DSL scan: \(files.count) .evolvnode file(s) under \(root.path)")
 
 			// Parse everything once. A parse failure here is reported and
 			// that file just doesn't appear in `parsed` -- module/package
@@ -88,7 +89,10 @@ public enum DSLLibrary {
 			var modulesByQualifiedName: [String: DSLModule] = [:]
 			for (fileURL, file) in parsed {
 				guard case .module(let module) = file else { continue }
-				modulesByQualifiedName[qualify(module.name, fileURL: fileURL)] = module
+				let qualifiedName = qualify(module.name, fileURL: fileURL)
+				modulesByQualifiedName[qualifiedName] = module
+				let funcNames = module.funcs.map(\.name).joined(separator: ", ")
+				print("DSL module loaded: '\(qualifiedName)' (funcs: \(funcNames)) from \(fileURL.lastPathComponent)")
 			}
 
 			for fileURL in files {
@@ -122,9 +126,14 @@ public enum DSLLibrary {
 				constructors[name] = { children in
 					DSLCodegenNode(template: template, modules: resolvedModules, children: children)
 				}
+
+				let argList = template.params.map { $0.isFunction ? "\($0.name):fn" : $0.name }.joined(separator: ", ")
+				let requiresSuffix = template.requires.isEmpty ? "" : " requires(\(template.requires.joined(separator: ", ")))"
+				print("DSL node loaded: '\(name)' (\(template.params.count) args: \(argList))\(requiresSuffix) from \(fileURL.lastPathComponent)")
 			}
 		}
 
+		print("DSL scan complete: \(constructors.count) node(s) registered, \(issues.count) issue(s)")
 		return (constructors, issues)
 	}
 
@@ -163,15 +172,23 @@ public enum DSLLibrary {
 		return nodesDirectory
 	}
 
-	/// The real roots used in production: the app-bundled node library
-	/// (flat -- see the plan's Phase 0 finding on why bundled resources
-	/// can't have subfolders) and the user's container Nodes folder above
-	/// (genuinely recursive, since it's scanned straight off the real
-	/// filesystem rather than through Xcode's resource-copying pipeline).
+	/// The real roots used in production: the app-bundled node library and
+	/// the user's container Nodes folder below. Despite living under
+	/// `Evolv.io/Resources/BundledNodes/` in the source tree, the bundled
+	/// `.evolvnode` files land directly in `Contents/Resources/` in the
+	/// *built* app -- confirmed via the Phase 0 smoke test that Xcode's
+	/// synchronized-group resource copying flattens subfolders rather than
+	/// preserving them, and (re-)confirmed the hard way when this scanned
+	/// `Resources/BundledNodes/` (which never exists) instead of
+	/// `Resources/` itself, silently finding zero files. `resourceURL`
+	/// itself is not recursed into subfolders the way the container root
+	/// is -- there's no bundled subfolder to recurse into now that this
+	/// points at the flattened location, consistent with the "bundled
+	/// content stays flat" decision.
 	public static var productionRoots: [URL] {
 		var roots: [URL] = []
-		if let bundled = Bundle.main.resourceURL?.appendingPathComponent("BundledNodes") {
-			roots.append(bundled)
+		if let resourceURL = Bundle.main.resourceURL {
+			roots.append(resourceURL)
 		}
 		if let container = containerNodesDirectory {
 			roots.append(container)

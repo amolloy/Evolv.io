@@ -15,6 +15,13 @@ import AppKit
 struct Evolv_ioApp: App {
     @AppStorage(UserDefaults.supersamplingEnabledKey) private var supersamplingEnabled = true
 
+    init() {
+        // NodeRegistry.shared is otherwise built lazily on first parse --
+        // touch it here so its load log (and any load issues) always show
+        // up at launch, not only once something happens to render.
+        print("Node registry: \(NodeRegistry.shared.registry.count) node(s) registered")
+    }
+
     var body: some Scene {
         WindowGroup {
             ContentView()
