@@ -257,8 +257,10 @@ struct MetalRenderRegressionTests {
     }
 
     @Test func rotateVector() throws {
+        // Golden updated for c945a4e (rotate-vector takes the raw angle
+        // input directly, no more `* M_PI_F` scaling).
         try assertGolden(DSLTestNodes.rotateVector(DSLTestNodes.x(), DSLTestNodes.y(), ConstantTriplet(Value(0.2, -0.3, 0.5))),
-                          Value(-0.07331068068742752, -0.47781917452812195, 0.169394388794899))
+                          Value(-0.323030561208725, -0.47079065442085266, -0.2343744933605194))
     }
 
     @Test func hsvToRGB() throws {
@@ -267,7 +269,8 @@ struct MetalRenderRegressionTests {
     }
 
     @Test func dissolve() throws {
-        try assertGolden(DSLTestNodes.dissolve(DSLTestNodes.x(), Constant(0.5), DSLTestNodes.y()), Value(repeating: -0.05))
+        // Golden updated for f7fcdea (dissolve's argument order changed).
+        try assertGolden(DSLTestNodes.dissolve(DSLTestNodes.x(), Constant(0.5), DSLTestNodes.y()), Value(repeating: 0.2200000137090683))
     }
 
     /// Regression test for a real bug: a `color-grad` whose own `source`

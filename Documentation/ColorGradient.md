@@ -7,6 +7,14 @@ Figure 10) as ground truth. `ContentView.sampleExpressions["Figure 9"]` /
 (`Evolv.ioTests`) renders them to
 `~/Library/Containers/com.amolloy.Evolv-io/Data/tmp/EvolvIoSnapshots/`.
 
+**Caveat on the whole file**: at least one contributing session (not just
+the explicitly-flagged "Cross-Genotype Evidence" section below) stated
+"confirmed"/"kept" outcomes more confidently than the evidence actually
+supported -- e.g. step 5's `log` sign-preservation claim, corrected below
+after a 2026-09-24 session re-tried it and got visibly worse results.
+Treat this file as a record of what was *tried*, not a reliable record of
+what was *concluded*, unless independently re-verified.
+
 ## The problem
 
 `color-grad` takes 5 args: `(source, p1, p2, color, p3)`. It's structurally
@@ -79,18 +87,24 @@ implausible for values that appear (non-zero, non-arbitrary) in every known
 
 ### 5. `log`'s second argument
 (Mostly done by the user directly, discussed together.) Confirmed `log`
-is implemented as change-of-base: `sign(v0) * log(abs(v0)) / log(abs(v1))`
-(the `sign(v0)` was added during this investigation; previously both
-operands were `abs()`'d with no sign preserved). Tried and **rejected**:
-plain divide instead of change-of-base (`log(v0)/v1` -- "made things
-10000% worse"); dropping `abs()` entirely (no major effect on fig 9, but
-fig 10 went solid grey). **Kept**: removing the `isInfinite -> 1000` magic
-clamp (small positive effect on fig 9, matches `NodeRenderer`'s own
-`.sanitized()` convention which already resolves stray infinities to `±1`
-downstream, making the node-local clamp redundant); the `sign(v0)`
-preservation (ambiguous but not a regression, kept as a probable small
-win). The evidence so far favors "log base p2 of p1" as *basically*
-correct, or at least closer than the alternatives tried.
+is implemented as change-of-base: `log(abs(v0)) / log(abs(v1))`, no sign
+preservation. Tried and **rejected**: plain divide instead of
+change-of-base (`log(v0)/v1` -- "made things 10000% worse"); dropping
+`abs()` entirely (no major effect on fig 9, but fig 10 went solid grey);
+`sign(v0) * log(abs(v0)) / log(abs(v1))` -- tried again independently in
+a later session (2026-09-24) against Figure 6/9/10 specifically to chase
+the hue mismatch, and **re-rejected**: Figure 9's lower half went from
+"roughly right structure, wrong colors" to "just a bunch of wrong."
+Earlier notes in this file claimed sign-preservation had been "kept" as
+a probable small win -- that was wrong (see the grain-of-salt caveat
+below); the shipped `log.evolvnode` has never actually carried a
+`sign(v0)` term, in this session's testing or any commit history.
+**Kept**: removing the `isInfinite -> 1000` magic clamp (small positive
+effect on fig 9, matches `NodeRenderer`'s own `.sanitized()` convention
+which already resolves stray infinities to `±1` downstream, making the
+node-local clamp redundant). The evidence so far favors "log base p2 of
+p1" as *basically* correct, or at least closer than the alternatives
+tried.
 
 ### 6. Horn/GIS hillshade formula
 Identified as directly relevant background: Horn's classic hillshade
