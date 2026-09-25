@@ -30,7 +30,7 @@ enum MCPRenderTool {
         `expression` or `sample` (a name from the app's sample list, e.g. "Figure 9"). \
         With `reference` ("Figure 9", "Figure 10" or "Figure 12"), returns our render and Sims' \
         original side by side (ours left, original right) at the same size, and the framing \
-        defaults to the original's aspect ratio (y from -1 to 1, x scaled to match). \
+        defaults to the original's aspect ratio by cropping the app's -1...1 square (for these wide figures: x from -1 to 1, top and bottom cut off, as in the paper). \
         `crops` adds zoomed re-renders of given coordinate regions (paired with the matching \
         crop of the original when a reference is given).
         """,
@@ -57,10 +57,10 @@ enum MCPRenderTool {
                     "type": .string("integer"),
                     "description": .string("Output height in pixels. Defaults like `width`."),
                 ]),
-                "x_min": .object(["type": .string("number"), "description": .string("Left edge in expression coordinates. Default -aspect (aspect = reference's width/height, else width/height, else 1).")]),
-                "x_max": .object(["type": .string("number"), "description": .string("Right edge. Default +aspect.")]),
-                "y_min": .object(["type": .string("number"), "description": .string("Bottom edge. Default -1.")]),
-                "y_max": .object(["type": .string("number"), "description": .string("Top edge. Default 1.")]),
+                "x_min": .object(["type": .string("number"), "description": .string("Left edge in expression coordinates. Default: the -1...1 square cropped to the output aspect (reference's width/height, else width/height, else 1) -- i.e. -1 for wide images, -aspect for tall ones.")]),
+                "x_max": .object(["type": .string("number"), "description": .string("Right edge. Default: mirror of x_min.")]),
+                "y_min": .object(["type": .string("number"), "description": .string("Bottom edge. Default -1/aspect for wide images, -1 for tall ones.")]),
+                "y_max": .object(["type": .string("number"), "description": .string("Top edge. Default: mirror of y_min.")]),
                 "supersample": .object([
                     "type": .string("integer"),
                     "description": .string("Samples per pixel along each axis (1-8). Default 4, matching the app's Supersampling setting."),
@@ -139,10 +139,14 @@ enum MCPRenderTool {
         } else {
             aspect = 1
         }
-        let xMin = try number(args["x_min"], "x_min") ?? -aspect
-        let xMax = try number(args["x_max"], "x_max") ?? aspect
-        let yMin = try number(args["y_min"], "y_min") ?? -1
-        let yMax = try number(args["y_max"], "y_max") ?? 1
+        // Crop the app's -1...1 square to the aspect rather than widening
+        // it: Sims' published figures cut off the top and bottom.
+        let halfWidth = min(1, aspect)
+        let halfHeight = min(1, 1 / aspect)
+        let xMin = try number(args["x_min"], "x_min") ?? -halfWidth
+        let xMax = try number(args["x_max"], "x_max") ?? halfWidth
+        let yMin = try number(args["y_min"], "y_min") ?? -halfHeight
+        let yMax = try number(args["y_max"], "y_max") ?? halfHeight
         guard xMax > xMin, yMax > yMin else {
             throw Failure(message: "x_max must exceed x_min and y_max must exceed y_min.")
         }

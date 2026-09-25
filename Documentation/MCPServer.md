@@ -117,13 +117,14 @@ the on-screen view (each channel clamped to 0...1). Source:
   reference, the result is one image with **our render on the left and the
   original on the right**, both at the output size (the original is scaled).
 - `x_min`, `x_max`, `y_min`, `y_max` (optional): the coordinate rectangle to
-  render, y running bottom to top. Defaults: y from -1 to 1 and x from
-  -aspect to +aspect, where aspect is the reference's width/height (Figure 9
-  464x367, Figure 10 463x368, Figure 12 780x616 -- all about 1.26), else
-  `width`/`height` if both are given, else 1. So `render(sample: "Figure 9",
-  reference: "Figure 9")` frames the same shape as the original with no
-  cropping. The app's main view always renders the -1...1 square; this
-  rectangle only applies to the tool.
+  render, y running bottom to top. Default: the app's -1...1 square
+  *cropped* to the output aspect ratio -- the reference's width/height
+  (Figure 9 464x367, Figure 10 463x368, Figure 12 780x616, all about 1.26),
+  else `width`/`height` if both are given, else 1. For these wide figures
+  that means x from -1 to 1 and y from about -0.79 to 0.79: the top and
+  bottom are cut off, which is how Sims' figures appear in the paper
+  (widening x instead does *not* match them). A tall aspect would crop the
+  sides instead.
 - `width`, `height` (optional): output pixels. If only one is given the
   other follows the x/y range's aspect; with neither, the reference's own
   pixel size, else 512 tall. Max 4096 per side.
