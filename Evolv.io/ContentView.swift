@@ -101,6 +101,9 @@ struct ContentView: View {
 				}
 			}
 			.frame(minWidth: 200)
+			.onChange(of: selectedGroup, initial: true) { _, newValue in
+				MCPLiveUIState.selectedExpressionIndex = newValue
+			}
 		} detail: {
 			if let selectedGroup {
 				let node = node(for: ContentView.sampleExpressions[selectedGroup].expression)

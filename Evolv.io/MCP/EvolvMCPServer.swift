@@ -115,6 +115,7 @@ actor EvolvMCPServer {
                     ])
                 ),
                 MCPRenderTool.tool,
+                MCPDebugValuesTool.tool,
             ])
         }
 
@@ -133,6 +134,8 @@ actor EvolvMCPServer {
                 return deleteNode(name: rawName)
             case "render":
                 return await MCPRenderTool.call(arguments: params.arguments)
+            case "debug_values":
+                return await MCPDebugValuesTool.call()
             default:
                 return errorResult("Unknown tool: \(params.name)")
             }

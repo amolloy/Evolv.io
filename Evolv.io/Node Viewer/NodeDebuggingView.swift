@@ -142,6 +142,13 @@ struct NodeDebuggingView: View {
 			}
 		}
 		.padding()
+		// Lets the MCP `debug_values` tool read this view's live controls.
+		.onAppear { MCPLiveUIState.debugViewRenderer = nodeRenderer }
+		.onDisappear {
+			if MCPLiveUIState.debugViewRenderer === nodeRenderer {
+				MCPLiveUIState.debugViewRenderer = nil
+			}
+		}
 		.task {
 			await nodeRenderer.render()
 			image = nodeRenderer.cgImage()

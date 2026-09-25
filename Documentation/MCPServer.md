@@ -151,6 +151,27 @@ Supporting change: `Evaluator.render(node:bounds:supersample:)` /
 `CGRect` instead of `scale`; the old `scale:` entry points are now the
 centered-square special case and produce bit-identical output.
 
+### `debug_values()`
+
+Reports what the user is looking at, so an assistant can read back values
+dialed in by hand instead of asking for them. No arguments; returns pretty
+JSON as one text block. Source: `Evolv.io/MCP/MCPDebugValuesTool.swift`.
+
+- `selected_expression`: the sidebar selection (`index`, `display_name`,
+  `expression`, and `original_image` when it has one), or `null`.
+- `debug_view_open`: whether the Debug View sheet is currently showing.
+- `controls`: every `debug toggle`/`debug slider(...)` control the debug view
+  shows, grouped by node type then param name (the same `templateName.param`
+  pairs as its labels). Each has `kind` (`"toggle"` or `"slider"`), `value`
+  (bool for toggles, number for sliders), `default`, `slot_index`, and
+  `min`/`max` for sliders. Empty until the debug view is open and has finished
+  its first render, and whenever the tree declares no debug params.
+
+The UI feeds it through `MCPLiveUIState` (main-actor statics): ContentView
+writes the selected index, and NodeDebuggingView registers its `NodeRenderer`
+(weakly) on appear and clears it on disappear, so values are read live from
+that renderer's `LiveDebugValues` at call time.
+
 ## What's *not* exposed yet
 
 A `list_nodes`/`get_node` read-back tool for the user Nodes folder.
