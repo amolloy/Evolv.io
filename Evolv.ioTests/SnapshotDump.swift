@@ -31,7 +31,7 @@ struct SnapshotDump {
 		var written = 0
 
 		for name in SnapshotDump.testSnapshotKeys {
-			let expression = ContentView.sampleExpressions[name]!
+			let expression = ContentView.sampleExpressions.first { $0.displayName == name }!.expression
 			let node: any Node
 			do {
 				node = try parser.parse(expression)

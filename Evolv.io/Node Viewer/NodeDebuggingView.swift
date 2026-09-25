@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import ImageIO
 import ExpressionTree
 
 struct NodeDebuggingView: View {
@@ -15,43 +16,79 @@ struct NodeDebuggingView: View {
 	@State private var hoverLocation: CGPoint?
 	@State private var debugInfo: [String: String] = [:]
 
-	init(evaluator: Evaluator, expressionTree: any Node) {
+	/// The reference image this expression is trying to reproduce (e.g. one
+	/// of the paper's figures), shown beside the render when present.
+	private let originalImage: CGImage?
+
+	init(evaluator: Evaluator, expressionTree: any Node, originalImageName: String? = nil) {
 		self._nodeRenderer = StateObject(wrappedValue: NodeRenderer(node: expressionTree,
 																	evaluator: evaluator))
+		self.originalImage = originalImageName.flatMap(Self.loadBundledImage(named:))
+	}
+
+	private static func loadBundledImage(named name: String) -> CGImage? {
+		guard let url = Bundle.main.url(forResource: name, withExtension: nil),
+			  let source = CGImageSourceCreateWithURL(url as CFURL, nil) else {
+			print("Could not load original image \"\(name)\" from the app bundle")
+			return nil
+		}
+		return CGImageSourceCreateImageAtIndex(source, 0, nil)
 	}
 
 	var body: some View {
 		VStack(spacing: 20) {
 			if let image = image {
-				GeometryReader { imageGeometry in
-					Image(decorative: image, scale: 1.0, orientation: .up)
-						.interpolation(.none)
-						.contentShape(Rectangle())
-						.gesture(
-							DragGesture(minimumDistance: 0)
-								.onChanged { value in
-									updateDebugInfo(for: value.location, in: imageGeometry.size)
+				HStack(spacing: 20) {
+					GeometryReader { imageGeometry in
+						Image(decorative: image, scale: 1.0, orientation: .up)
+							.resizable()
+							.interpolation(.none)
+							.contentShape(Rectangle())
+							.gesture(
+								DragGesture(minimumDistance: 0)
+									.onChanged { value in
+										updateDebugInfo(for: value.location, in: imageGeometry.size)
+									}
+							)
+							.overlay {
+								if let hoverLocation = hoverLocation, !debugInfo.isEmpty {
+									DebugPopoverView(
+										debugInfo: debugInfo,
+										hoverLocation: hoverLocation,
+										containerSize: imageGeometry.size
+									)
+									.gesture(DragGesture().onEnded { _ in self.hoverLocation = nil })
 								}
-						)
-						.overlay {
-							if let hoverLocation = hoverLocation, !debugInfo.isEmpty {
-								DebugPopoverView(
-									debugInfo: debugInfo,
-									hoverLocation: hoverLocation,
-									containerSize: imageGeometry.size
-								)
-								.gesture(DragGesture().onEnded { _ in self.hoverLocation = nil })
 							}
-						}
-						.contextMenu {
-							Button("Copy Image") {
-								nodeRenderer.copyImageToPasteboard()
+							.contextMenu {
+								Button("Copy Image") {
+									nodeRenderer.copyImageToPasteboard()
+								}
 							}
-						}
-						.clipShape(RoundedRectangle(cornerRadius: 12))
-						.shadow(radius: 5)
+							.clipShape(RoundedRectangle(cornerRadius: 12))
+							.shadow(radius: 5)
+					}
+					.aspectRatio(1, contentMode: .fit) // Constrain the GeometryReader to the image's aspect ratio
+
+					// Same square box as the render so the two read at the same
+					// size; the original keeps its own aspect ratio inside it.
+					if let originalImage {
+						Image(decorative: originalImage, scale: 1.0, orientation: .up)
+							.resizable()
+							.interpolation(.none)
+							.aspectRatio(contentMode: .fit)
+							.frame(maxWidth: .infinity, maxHeight: .infinity)
+							.aspectRatio(1, contentMode: .fit)
+							.overlay(alignment: .topLeading) {
+								Text("Original")
+									.font(.caption.bold())
+									.padding(.horizontal, 6)
+									.padding(.vertical, 2)
+									.background(.regularMaterial, in: Capsule())
+									.padding(8)
+							}
+					}
 				}
-				.aspectRatio(1, contentMode: .fit) // Constrain the GeometryReader to the image's aspect ratio
 
 				ScrollView {
 					// The range sliders Vstack

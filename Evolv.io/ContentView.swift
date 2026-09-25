@@ -142,7 +142,8 @@ struct ContentView: View {
 				.sheet(isPresented: $showingDebugView) {
 					NavigationStack {
 						NodeDebuggingView(evaluator: Evaluator(size: CGSize(width: 512, height: 512)),
-										   expressionTree: node)
+										   expressionTree: node,
+										   originalImageName: Self.sampleExpressions[selectedGroup].originalImageName)
 							.padding()
 							.toolbar {
 								ToolbarItem(placement: .cancellationAction) {
