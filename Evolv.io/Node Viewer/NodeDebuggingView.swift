@@ -20,16 +20,15 @@ struct NodeDebuggingView: View {
 	/// of the paper's figures), shown beside the render when present.
 	private let originalImage: CGImage?
 
-	init(evaluator: Evaluator, expressionTree: any Node, originalImageName: String? = nil) {
+	init(evaluator: Evaluator, expressionTree: any Node, originalImageURL: URL? = nil) {
 		self._nodeRenderer = StateObject(wrappedValue: NodeRenderer(node: expressionTree,
 																	evaluator: evaluator))
-		self.originalImage = originalImageName.flatMap(Self.loadBundledImage(named:))
+		self.originalImage = originalImageURL.flatMap(Self.loadImage(at:))
 	}
 
-	private static func loadBundledImage(named name: String) -> CGImage? {
-		guard let url = Bundle.main.url(forResource: name, withExtension: nil),
-			  let source = CGImageSourceCreateWithURL(url as CFURL, nil) else {
-			print("Could not load original image \"\(name)\" from the app bundle")
+	private static func loadImage(at url: URL) -> CGImage? {
+		guard let source = CGImageSourceCreateWithURL(url as CFURL, nil) else {
+			print("Could not load original image \"\(url.path)\"")
 			return nil
 		}
 		return CGImageSourceCreateImageAtIndex(source, 0, nil)

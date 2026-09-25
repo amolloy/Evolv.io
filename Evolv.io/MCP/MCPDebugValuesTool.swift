@@ -3,7 +3,7 @@
 //  Evolv.io
 //
 //  The MCP `debug_values` tool: reports what the user is currently looking
-//  at -- which of ContentView's sample expressions is selected, and, if the
+//  at -- which genotype is selected in the sidebar, and, if the
 //  debug view is open, the live value of every `debug` toggle/slider it
 //  shows (see LiveDebugValues), grouped by node type and param name. Lets an
 //  assistant read back settings the user dialed in by hand instead of
@@ -19,7 +19,7 @@ import ExpressionTree
 /// dismissed debug view never keeps a stale renderer alive.
 @MainActor
 enum MCPLiveUIState {
-    static var selectedExpressionIndex: Int?
+    static var selectedGenotypeID: String?
     static weak var debugViewRenderer: NodeRenderer?
 }
 
@@ -27,7 +27,7 @@ enum MCPDebugValuesTool {
     static let tool = Tool(
         name: "debug_values",
         description: """
-        Returns the app's current UI state as JSON: which sample expression is selected in the \
+        Returns the app's current UI state as JSON: which genotype is selected in the \
         sidebar, whether the debug view is open, and the live value of every debug toggle/slider \
         the debug view shows, grouped by node type then param name (with each control's kind, \
         range and default). Controls are empty until the debug view is open and has rendered once.
@@ -55,11 +55,11 @@ enum MCPDebugValuesTool {
     private static func snapshot() -> [String: Any] {
         var result: [String: Any] = [:]
 
-        if let index = MCPLiveUIState.selectedExpressionIndex,
-           ContentView.sampleExpressions.indices.contains(index) {
-            let selected = ContentView.sampleExpressions[index]
+        if let id = MCPLiveUIState.selectedGenotypeID,
+           let selected = GenotypeStore.shared.genotype(id: id) {
             var expression: [String: Any] = [
-                "index": index,
+                "id": selected.id,
+                "source": selected.source.rawValue,
                 "display_name": selected.displayName,
                 "expression": selected.expression,
             ]

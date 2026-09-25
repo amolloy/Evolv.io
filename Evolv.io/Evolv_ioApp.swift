@@ -37,10 +37,18 @@ struct Evolv_ioApp: App {
                 Button("Reload Custom Nodes") {
                     NodeRegistry.shared.reload()
                 }
+                Button("Reload Genotypes") {
+                    GenotypeStore.shared.reload()
+                }
 #if os(macOS)
                 Button("Reveal Nodes Folder") {
                     if let nodesDirectory = DSLLibrary.containerNodesDirectory {
                         NSWorkspace.shared.activateFileViewerSelecting([nodesDirectory])
+                    }
+                }
+                Button("Reveal Genotypes Folder") {
+                    if let genotypesDirectory = GenotypeLibrary.containerGenotypesDirectory {
+                        NSWorkspace.shared.activateFileViewerSelecting([genotypesDirectory])
                     }
                 }
 #endif

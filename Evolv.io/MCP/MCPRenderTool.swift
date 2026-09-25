@@ -2,12 +2,12 @@
 //  MCPRenderTool.swift
 //  Evolv.io
 //
-//  The MCP `render` tool: renders an expression (or one of ContentView's
-//  named samples) through the same Parser -> Metal -> CGImage path the app
-//  uses on screen, and returns PNGs as MCP image content -- optionally side
-//  by side with one of Sims' original figures (bundled from
-//  Documentation/OriginalFigure*.gif) at the same size and framing, plus
-//  zoomed crops of both. Exists because the app's sandboxed container is
+//  The MCP `render` tool: renders an expression (or one of the app's
+//  genotypes, see GenotypeStore) through the same Parser -> Metal ->
+//  CGImage path the app uses on screen, and returns PNGs as MCP image
+//  content -- optionally side by side with one of Sims' original figures
+//  (bundled from Documentation/OriginalFigure*.gif) at the same size and
+//  framing, plus zoomed crops of both. Exists because the app's sandboxed container is
 //  otherwise unreadable from outside the app (see Documentation/MCPServer.md).
 //
 
@@ -27,7 +27,7 @@ enum MCPRenderTool {
         description: """
         Renders an Evolv.io expression to a PNG via the app's own Parser + Metal renderer \
         (same color mapping as the on-screen view: each channel clamped to 0...1). Pass either \
-        `expression` or `sample` (a name from the app's sample list, e.g. "Figure 9"). \
+        `expression` or `sample` (a genotype from the app's sidebar, by name or file id, e.g. "Figure 9"). \
         With `reference` ("Figure 9", "Figure 10" or "Figure 12"), returns our render and Sims' \
         original side by side (ours left, original right) at the same size, and the framing \
         defaults to the original's aspect ratio by cropping the app's -1...1 square (for these wide figures: x from -1 to 1, top and bottom cut off, as in the paper). \
@@ -43,7 +43,7 @@ enum MCPRenderTool {
                 ]),
                 "sample": .object([
                     "type": .string("string"),
-                    "description": .string("Name of one of the app's sample expressions (ContentView.sampleExpressions), e.g. \"Figure 9\". Ignored if `expression` is given."),
+                    "description": .string("A genotype from the app's sidebar (bundled or user .evolvgenotype), matched case-insensitively by display name or file id, e.g. \"Figure 9\" or \"11-figure-9\". Ignored if `expression` is given."),
                 ]),
                 "reference": .object([
                     "type": .string("string"),
@@ -105,13 +105,17 @@ enum MCPRenderTool {
             expression = text
             label = "expression"
         } else if case .string(let name)? = args["sample"] {
-            let samples = await MainActor.run { ContentView.sampleExpressions }
-			guard let match = samples.first(where: { $0.displayName.caseInsensitiveCompare(name) == .orderedSame }) else {
-				let available = samples.map { $0.displayName }
-				throw Failure(message: "No sample named \"\(name)\". Available: \(available.sorted().joined(separator: ", "))")
+            let genotypes = await MainActor.run { GenotypeStore.shared.genotypes }
+            let matches = { (genotype: Genotype) in
+                genotype.displayName.caseInsensitiveCompare(name) == .orderedSame
+                    || genotype.id.caseInsensitiveCompare(name) == .orderedSame
             }
-			expression = match.expression
-            label = "sample \"\(match.displayName)\""
+            guard let match = genotypes.first(where: matches) else {
+                let available = genotypes.map { $0.name ?? $0.id }
+                throw Failure(message: "No genotype named \"\(name)\". Available: \(available.joined(separator: ", "))")
+            }
+            expression = match.expression
+            label = "genotype \"\(match.displayName)\""
         } else {
             throw Failure(message: "render requires a string argument \"expression\" or \"sample\".")
         }

@@ -11,97 +11,31 @@ import ExpressionTree
 struct ContentView: View {
 	static let parser = Parser()
 
-	struct TestExpression: Hashable {
-		let name: String?
-		let originalImageName: String?
-		let expression: String
+	private let store = GenotypeStore.shared
 
-		init(name: String? = nil, originalImageName: String? = nil, expression: String) {
-			self.name = name
-			self.originalImageName = originalImageName
-			self.expression = expression
-		}
-
-		var displayName: String {
-			name ?? expression
-		}
-	}
-
-	static let sampleExpressions : [TestExpression] = [
-		TestExpression(expression: "x"),
-		TestExpression(expression: "y"),
-		TestExpression(expression: "(abs x)"),
-		TestExpression(expression: "(mod X (abs Y))"),
-		TestExpression(expression: "(and X Y)"),
-		TestExpression(expression: "(bw-noise .2 2)"),
-		TestExpression(expression: "(color-noise .1 2)"),
-		TestExpression(expression: "(grad-direction (bw-noise .15 2) .0 .0)"),
-		TestExpression(expression: "(warped-color-noise (* X .2) Y .1 2)"),
-		TestExpression(name: "Figure 6", expression:
-		   """
-		   (dissolve (cos (and 0.25 #(0.43 0.73 0.74))) 
-		   (log (+ (warped-bw-noise (min z 11.1) (log (rotate-vector (+ 
-		   (warped-bw-noise (cos x) (dissolve (cos (and 0.25 
-		   #(0.43 0.73 0.74))) (log (+ (warped-bw-noise (max (min z 8.26) 
-		   (/ -0.5 #(0.82 0.39 0.19))) (log (+ (warped-bw-noise 
-		   (cos x) z -0.04 0.89) #(0.82 0.39 0.19)) 
-		   #(0.15 0.34 0.50)) -0.04 -3.0) y) #(0.15 0.34 0.50)) y) -0.04 -3.0)
-		   x) z y) #(0.15 0.34 0.5)) -0.02 -1.79) -0.4) #(-0.09 0.34 0.55))
-		   -0.7) 
-		   """),
-		TestExpression(name: "Figure 9",
-					   originalImageName: "OriginalFigure9.gif",
-					   expression:
-		   """
-		   (round (log (+ y (color-grad (round (+ (abs (round
-		   (log (+ y (color-grad (round (+ y (log (invert y) 15.5))
-		   x) 3.1 1.86 #(0.95 0.7 0.59) 1.35)) 0.19) x)) (log (invert
-		   y) 15.5)) x) 3.1 1.9 #(0.95 0.7 0.35) 1.35)) 0.19) x)
-		   """),
-		TestExpression(name: "Figure 10",
-					   originalImageName: "OriginalFigure10.gif",
-					   expression:
-		   """
-		   (rotate-vector (log(+ y (color-grad (round(+ (abs (round (log #(0.01 0.67 0.86) 0.19)
-		   x)) (hsv-to-rgb (bump (if x 10.7 y) #(0.94 0.01 0.4) 0.78 #(0.18 0.28 0.58) #(0.4 0.92
-		   0.58) 10.6 0.23 0.91))) X) 3.1 1.93 #(0.95 0.7 0.35) 3.03)) -0.03) X #(0.76 0.08 0.24))
-		   """),
-		TestExpression(name: "Figure 12",
-					   originalImageName: "OriginalFigure12.gif",
-					   expression:
-			"""
-			(cos (round (atan (log (invert y) (+ (bump (+ (round x y) y) #(0.46 0.82 0.65) 0.02 
-			#(0.1 0.06 0.1) #(0.99 0.06 0.41) 1.47 8.7 3.7) (color-grad (round (+ y y) (log 
-			(invert x) (+ (invert y) (round (+ y x) (bump (warped-ifs (round y y) y 0.08 0.06
-			7.4 1.65 6.1 0.54 3.1 0.26 0.73 15.8 5.7 8.9 0.49 7.2 15.6 0.98) #(0.46 0.82 0.65) 
-			0.02 #(0.1 0.06 0.1) #(0.99 0.06 0.41) 0.83 8.7 2.6))))) 3.1 6.8 #(0.95 0.7 0.59) 
-			0.57))) #(0.17 0.08 0.75) 0.37) (vector y 0.09 (cos (round y y))))) 
-			""")
-	]
-
-	@State private var selectedGroup: Int? = nil
+	@State private var selectedID: String? = nil
 	@State private var showingTreeVisualizer = false
 	@State private var showingDebugView = false
 
 	var body: some View {
 		NavigationSplitView {
-			List(selection: $selectedGroup) {
-				ForEach(ContentView.sampleExpressions.enumerated(), id:\.element) { idx, te in
-					Text(te.displayName)
-						.tag(idx)
+			List(selection: $selectedID) {
+				ForEach(store.genotypes, id: \.id) { genotype in
+					Text(genotype.displayName)
+						.tag(genotype.id)
 				}
 			}
 			.frame(minWidth: 200)
-			.onChange(of: selectedGroup, initial: true) { _, newValue in
-				MCPLiveUIState.selectedExpressionIndex = newValue
+			.onChange(of: selectedID, initial: true) { _, newValue in
+				MCPLiveUIState.selectedGenotypeID = newValue
 			}
 		} detail: {
-			if let selectedGroup {
-				let node = node(for: ContentView.sampleExpressions[selectedGroup].expression)
+			if let selectedID, let genotype = store.genotype(id: selectedID) {
+				let node = node(for: genotype.expression)
 				let nodeRenderer = NodeRenderer(node: node,
 												 evaluator: Evaluator(size: CGSize(width: 800, height: 800)))
 				RenderedImageView(nodeRenderer: nodeRenderer)
-				.id(selectedGroup)
+				.id(genotype)
 				.contextMenu {
 					Button("Copy Image") {
 						nodeRenderer.copyImageToPasteboard()
@@ -115,7 +49,7 @@ struct ContentView: View {
 				}
 				.clipShape(RoundedRectangle(cornerRadius: 12))
 				.shadow(radius: 5)
-				.navigationTitle(Self.sampleExpressions[selectedGroup].displayName)
+				.navigationTitle(genotype.displayName)
 				.sheet(isPresented: $showingTreeVisualizer) {
 					NavigationStack {
 						TreeVisualizerView(evaluator: Evaluator(size: CGSize(width: 64, height: 64)),
@@ -137,7 +71,7 @@ struct ContentView: View {
 					NavigationStack {
 						NodeDebuggingView(evaluator: Evaluator(size: CGSize(width: 512, height: 512)),
 										   expressionTree: node,
-										   originalImageName: Self.sampleExpressions[selectedGroup].originalImageName)
+										   originalImageURL: genotype.originalImageURL)
 							.padding()
 							.toolbar {
 								ToolbarItem(placement: .cancellationAction) {
@@ -152,7 +86,7 @@ struct ContentView: View {
 #endif
 				}
 			} else {
-				Text("Select an expression group")
+				Text("Select a genotype")
 			}
 		}
 	}

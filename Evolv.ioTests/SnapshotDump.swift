@@ -2,8 +2,9 @@
 //  SnapshotDump.swift
 //  Evolv.ioTests
 //
-//  Renders every sample expression in ContentView to a PNG so you can diff
-//  two runs (e.g. before/after a node change) to see exactly what moved.
+//  Renders the paper-figure genotypes (see GenotypeStore) to PNGs so you
+//  can diff two runs (e.g. before/after a node change) to see exactly what
+//  moved.
 //  Not a pass/fail test -- the run's output directory is printed to the
 //  test log; copy it out and compare against a previous run's copy.
 //
@@ -31,7 +32,7 @@ struct SnapshotDump {
 		var written = 0
 
 		for name in SnapshotDump.testSnapshotKeys {
-			let expression = ContentView.sampleExpressions.first { $0.displayName == name }!.expression
+			let expression = GenotypeStore.shared.genotypes.first { $0.displayName == name }!.expression
 			let node: any Node
 			do {
 				node = try parser.parse(expression)
@@ -53,7 +54,7 @@ struct SnapshotDump {
 			written += 1
 		}
 
-		print("Wrote \(written)/\(ContentView.sampleExpressions.count) snapshots to \(outputDirectory.path)")
+		print("Wrote \(written)/\(SnapshotDump.testSnapshotKeys.count) snapshots to \(outputDirectory.path)")
 	}
 
 	/// The app is sandboxed with no filesystem write entitlement beyond its
