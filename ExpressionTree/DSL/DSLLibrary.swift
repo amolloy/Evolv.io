@@ -16,6 +16,15 @@
 //  its own subtree instead of stacking with the outer one. Loose files
 //  with no enclosing manifest register under their bare declared name.
 //
+//  Modules across roots: a node's `requires(name)` looks in its own root
+//  first (own namespace, then unnamespaced), then falls back to the roots
+//  scanned before it, nearest first -- so a user node can use a bundled
+//  module, but never the other way round. A user module with the same
+//  name shadows the bundled one for user nodes only; `requires(::name)`
+//  skips the node's own root and names the bundled one explicitly. Every
+//  root after the first gets its own mangling key (see `moduleKey`), so a
+//  bundled "lighting" and a user "lighting" can both end up in one tree.
+//
 
 import Foundation
 
@@ -48,8 +57,11 @@ public enum DSLLibrary {
 		var claimedBy: [String: URL] = [:]
 		var claimed = reservedNames
 		var issues: [DSLLoadIssue] = []
+		// Modules from every root already scanned, one table per root in
+		// scan order, keyed by qualified name.
+		var outerRootModules: [[String: DSLResolvedModule]] = []
 
-		for root in roots {
+		for (rootIndex, root) in roots.enumerated() {
 			let files = evolvNodeFiles(under: root)
 			print("DSL scan: \(files.count) .evolvnode file(s) under \(root.path)")
 
@@ -86,11 +98,14 @@ public enum DSLLibrary {
 				return "\(ns).\(bareName)"
 			}
 
-			var modulesByQualifiedName: [String: DSLModule] = [:]
+			var modulesByQualifiedName: [String: DSLResolvedModule] = [:]
 			for (fileURL, file) in parsed {
 				guard case .module(let module) = file else { continue }
 				let qualifiedName = qualify(module.name, fileURL: fileURL)
-				modulesByQualifiedName[qualifiedName] = module
+				modulesByQualifiedName[qualifiedName] = DSLResolvedModule(
+					qualifiedName: moduleKey(qualifiedName, rootIndex: rootIndex),
+					module: module
+				)
 				let funcNames = module.funcs.map(\.name).joined(separator: ", ")
 				print("DSL module loaded: '\(qualifiedName)' (funcs: \(funcNames)) from \(fileURL.lastPathComponent)")
 			}
@@ -108,7 +123,9 @@ public enum DSLLibrary {
 				// `perlin` is the one reserved intrinsic (see
 				// DSLCodegenNode._emitMSL); everything else -- including
 				// "lighting" -- must resolve to a scanned module, tried
-				// first in this node's own namespace, then unnamespaced.
+				// first in this node's own namespace, then unnamespaced,
+				// first in this root, then in earlier roots (see the
+				// header comment; `::name` skips this root).
 				// Every module's functions get name-mangled by its own
 				// *qualified* name (see DSLResolvedModule), which is what
 				// lets a DSL module safely coexist with a hand-written
@@ -117,12 +134,14 @@ public enum DSLLibrary {
 				var resolvedModules: [String: DSLResolvedModule] = [:]
 				var requiresFailed = false
 				for requirement in template.requires where requirement != "perlin" {
-					let qualifiedRequirement = qualify(requirement, fileURL: fileURL)
 					let resolved: DSLResolvedModule
-					if let module = modulesByQualifiedName[qualifiedRequirement] {
-						resolved = DSLResolvedModule(qualifiedName: qualifiedRequirement, module: module)
-					} else if let module = modulesByQualifiedName[requirement] {
-						resolved = DSLResolvedModule(qualifiedName: requirement, module: module)
+					if let module = resolveModule(
+						requirement,
+						qualified: qualify(requirement, fileURL: fileURL),
+						ownRoot: modulesByQualifiedName,
+						outerRoots: outerRootModules
+					) {
+						resolved = module
 					} else {
 						issues.append(DSLLoadIssue(fileURL: fileURL, message: "requires(\(requirement)): no such module"))
 						requiresFailed = true
@@ -142,10 +161,42 @@ public enum DSLLibrary {
 				let requiresSuffix = template.requires.isEmpty ? "" : " requires(\(template.requires.joined(separator: ", ")))"
 				print("DSL node loaded: '\(name)' (\(template.params.count) args: \(argList))\(requiresSuffix) from \(fileURL.lastPathComponent)")
 			}
+
+			outerRootModules.append(modulesByQualifiedName)
 		}
 
 		print("DSL scan complete: \(constructors.count) node(s) registered, \(issues.count) issue(s)")
 		return (constructors, issues)
+	}
+
+	/// One `requires()` entry -> the module it names, or nil. `qualified`
+	/// is `requirement` in the requiring node's own namespace. `::name`
+	/// skips `ownRoot` and matches `name` exactly in the earlier roots.
+	private static func resolveModule(
+		_ requirement: String,
+		qualified: String,
+		ownRoot: [String: DSLResolvedModule],
+		outerRoots: [[String: DSLResolvedModule]]
+	) -> DSLResolvedModule? {
+		if requirement.hasPrefix("::") {
+			let name = String(requirement.dropFirst(2))
+			return outerRoots.reversed().lazy.compactMap { $0[name] }.first
+		}
+		for table in [ownRoot] + outerRoots.reversed() {
+			if let module = table[qualified] ?? table[requirement] {
+				return module
+			}
+		}
+		return nil
+	}
+
+	/// The name a module's MSL mangling prefix and per-kernel dedup are
+	/// keyed on. The first root (the bundled library in production) keeps
+	/// the plain qualified name; each later root gets its own "rootN."
+	/// prefix so a same-named module there is never mistaken for the
+	/// first root's one when both are required in one tree.
+	private static func moduleKey(_ qualifiedName: String, rootIndex: Int) -> String {
+		rootIndex == 0 ? qualifiedName : "root\(rootIndex).\(qualifiedName)"
 	}
 
 	private static func evolvNodeFiles(under root: URL) -> [URL] {

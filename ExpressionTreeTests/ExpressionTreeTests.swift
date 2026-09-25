@@ -739,6 +739,120 @@ struct DSLLibraryTests {
         #expect(issues.contains { $0.message.contains("nonexistent-module") })
     }
 
+    /// Two roots standing in for bundled + user, each with a module named
+    /// "scale-helpers" whose `scaleIt` differs (x2 bundled, x3 user). Shared
+    /// by the cross-root module tests below.
+    private func writeTwoRootModuleFixture(bundled: URL, user: URL) throws {
+        for dir in [bundled, user] {
+            try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        }
+        try """
+        module "scale-helpers" {
+            func scaleIt(v: float3) -> float3 {
+                return v * 2.0
+            }
+        }
+        """.write(to: bundled.appendingPathComponent("scale-helpers.evolvnode"), atomically: true, encoding: .utf8)
+        try """
+        module "scale-helpers" {
+            func scaleIt(v: float3) -> float3 {
+                return v * 3.0
+            }
+        }
+        """.write(to: user.appendingPathComponent("scale-helpers.evolvnode"), atomically: true, encoding: .utf8)
+    }
+
+    /// A user node can `requires()` a module that only exists in an
+    /// earlier (bundled) root -- the plain fallback, no `::` needed.
+    @Test func userNodeRequiresBundledModule() throws {
+        let tempDir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+        let bundled = tempDir.appendingPathComponent("bundled")
+        let user = tempDir.appendingPathComponent("user")
+        try writeTwoRootModuleFixture(bundled: bundled, user: user)
+        try FileManager.default.removeItem(at: user.appendingPathComponent("scale-helpers.evolvnode"))
+        try """
+        node "fixture-user-scale"(v0) requires("scale-helpers") {
+            return scaleIt(v0)
+        }
+        """.write(to: user.appendingPathComponent("fixture-user-scale.evolvnode"), atomically: true, encoding: .utf8)
+
+        let (constructors, issues) = DSLLibrary.scan(roots: [bundled, user], reservedNames: [])
+        #expect(issues.isEmpty, "unexpected load issues: \(issues.map(\.message))")
+        let constructor = try #require(constructors["fixture-user-scale"])
+        let node = try constructor([Constant(1.0)])
+
+        let evaluator = try MSLTreeEvaluator()
+        let actual = try evaluator.evaluate(node: node, at: [Coordinate(x: 0, y: 0)])[0]
+        #expect(actual == Value(repeating: 2.0))
+    }
+
+    /// A same-named user module shadows the bundled one for user nodes;
+    /// `requires(::name)` reaches past it to the bundled one; a bundled
+    /// node never sees the user module. All three in one tree, so this
+    /// also proves the two "scale-helpers" get distinct MSL prefixes.
+    @Test func userModuleShadowsBundledAndColonColonReachesBundled() throws {
+        let tempDir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+        let bundled = tempDir.appendingPathComponent("bundled")
+        let user = tempDir.appendingPathComponent("user")
+        try writeTwoRootModuleFixture(bundled: bundled, user: user)
+        try """
+        node "fixture-bundled-scale"(v0) requires("scale-helpers") {
+            return scaleIt(v0)
+        }
+        """.write(to: bundled.appendingPathComponent("fixture-bundled-scale.evolvnode"), atomically: true, encoding: .utf8)
+        try """
+        node "fixture-user-scale"(v0) requires("scale-helpers") {
+            return scaleIt(v0)
+        }
+        """.write(to: user.appendingPathComponent("fixture-user-scale.evolvnode"), atomically: true, encoding: .utf8)
+        try """
+        node "fixture-user-explicit-bundled"(v0) requires(::"scale-helpers") {
+            return scaleIt(v0)
+        }
+        """.write(to: user.appendingPathComponent("fixture-user-explicit-bundled.evolvnode"), atomically: true, encoding: .utf8)
+
+        let (constructors, issues) = DSLLibrary.scan(roots: [bundled, user], reservedNames: [])
+        #expect(issues.isEmpty, "unexpected load issues: \(issues.map(\.message))")
+        let bundledScale = try #require(constructors["fixture-bundled-scale"])
+        let userScale = try #require(constructors["fixture-user-scale"])
+        let explicitBundled = try #require(constructors["fixture-user-explicit-bundled"])
+        let bundledNode = try bundledScale([Constant(1.0)])
+        let userNode = try userScale([Constant(1.0)])
+        let explicitNode = try explicitBundled([Constant(1.0)])
+
+        let evaluator = try MSLTreeEvaluator()
+        let origin = [Coordinate(x: 0, y: 0)]
+        #expect(try evaluator.evaluate(node: bundledNode, at: origin)[0] == Value(repeating: 2.0))
+        #expect(try evaluator.evaluate(node: userNode, at: origin)[0] == Value(repeating: 3.0))
+        #expect(try evaluator.evaluate(node: explicitNode, at: origin)[0] == Value(repeating: 2.0))
+
+        // bundled x2 + user x3 + explicit-bundled x2, all in one kernel.
+        let combined = DSLTestNodes.add(DSLTestNodes.add(bundledNode, userNode), explicitNode)
+        let actual = try evaluator.evaluate(node: combined, at: origin)[0]
+        #expect(actual == Value(repeating: 7.0))
+    }
+
+    /// `::name` only looks in earlier roots: in the first root there are
+    /// none, so it's reported unresolved even when the module is right there.
+    @Test func colonColonRequiresIsUnresolvedInFirstRoot() throws {
+        let tempDir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+        let bundled = tempDir.appendingPathComponent("bundled")
+        let user = tempDir.appendingPathComponent("user")
+        try writeTwoRootModuleFixture(bundled: bundled, user: user)
+        try """
+        node "fixture-bundled-explicit"(v0) requires(::"scale-helpers") {
+            return scaleIt(v0)
+        }
+        """.write(to: bundled.appendingPathComponent("fixture-bundled-explicit.evolvnode"), atomically: true, encoding: .utf8)
+
+        let (constructors, issues) = DSLLibrary.scan(roots: [bundled, user], reservedNames: [])
+        #expect(constructors["fixture-bundled-explicit"] == nil)
+        #expect(issues.contains { $0.message.contains("::scale-helpers") })
+    }
+
     /// `param $factor: float = 2.0` with no external override -- resolved
     /// purely from the file's own default (the only path a library-loaded
     /// node can take, since NodeRegistry's constructor closures have no

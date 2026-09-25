@@ -19,7 +19,9 @@
 //
 //    file       := nodeDecl | moduleDecl | packageDecl   -- one per file
 //    nodeDecl   := 'node' STRING '(' paramDecl (',' paramDecl)* ')'
-//                  ('requires' '(' (IDENT|STRING) (',' (IDENT|STRING))* ')')?
+//                  ('requires' '(' requirement (',' requirement)* ')')?
+//    requirement := ('::')? (IDENT|STRING)  -- '::' = look only in library
+//                  roots scanned before this file's own (see DSLLibrary.scan)
 //                  '{' (letStmt | paramStmt)* 'return' expr '}'
 //    paramDecl  := IDENT (':' IDENT)?          -- ": fn" marks a sampled child
 //    paramStmt  := 'param' '$' IDENT ':' IDENT '=' signedNumber debugClause?
@@ -507,7 +509,16 @@ final class DSLParser {
 	/// identifier -- see DSLLexer) or a quoted string (can, matching how
 	/// node/module *names* are written). Lets a `requires()` clause name a
 	/// hyphenated module like "my-helpers" without needing to rename it.
+	///
+	/// A leading `::` (two colon tokens) is kept as part of the returned
+	/// name -- `::lighting` / `::"my-helpers"` -- and tells DSLLibrary.scan
+	/// to skip this file's own root and look only in the roots scanned
+	/// before it (the bundled library, for a user node).
 	private func expectIdentifierOrString() throws -> String {
+		if check(.colon), pos + 1 < tokens.count, tokens[pos + 1] == .colon {
+			pos += 2
+			return "::" + (try expectIdentifierOrString())
+		}
 		if case .string(let name) = peek() {
 			pos += 1
 			return name
