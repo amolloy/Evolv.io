@@ -125,6 +125,13 @@ the on-screen view (each channel clamped to 0...1). Source:
   bottom are cut off, which is how Sims' figures appear in the paper
   (widening x instead does *not* match them). A tall aspect would crop the
   sides instead.
+  With a reference, that box is further corrected per figure
+  (`referenceAlignment` in `MCPRenderTool.swift`), because the scanned
+  originals aren't exactly centered on the origin: Figure 9 is shifted
+  +0.0172 in x and y and its framing is 2% tighter (x from about -0.96 to 1.0) (measured by edge cross-correlation;
+  about a 4 px offset at 464x367). Figures 10 and 12 are uncalibrated for
+  now. Crops of the reference always use the reference's own corrected
+  framing, even when you pass an explicit x/y range.
 - `width`, `height` (optional): output pixels. If only one is given the
   other follows the x/y range's aspect; with neither, the reference's own
   pixel size, else 512 tall. Max 4096 per side.

@@ -123,7 +123,7 @@ enum MCPRenderTool {
         }
 
         // Reference
-        var reference: (name: String, image: CGImage)?
+        var reference: Reference?
         if case .string(let name)? = args["reference"] {
             reference = try loadReference(named: name)
         }
@@ -141,12 +141,11 @@ enum MCPRenderTool {
         }
         // Crop the app's -1...1 square to the aspect rather than widening
         // it: Sims' published figures cut off the top and bottom.
-        let halfWidth = min(1, aspect)
-        let halfHeight = min(1, 1 / aspect)
-        let xMin = try number(args["x_min"], "x_min") ?? -halfWidth
-        let xMax = try number(args["x_max"], "x_max") ?? halfWidth
-        let yMin = try number(args["y_min"], "y_min") ?? -halfHeight
-        let yMax = try number(args["y_max"], "y_max") ?? halfHeight
+        let defaultFraming = reference?.framing ?? croppedSquare(aspect: aspect)
+        let xMin = try number(args["x_min"], "x_min") ?? defaultFraming.minX
+        let xMax = try number(args["x_max"], "x_max") ?? defaultFraming.maxX
+        let yMin = try number(args["y_min"], "y_min") ?? defaultFraming.minY
+        let yMax = try number(args["y_max"], "y_max") ?? defaultFraming.maxY
         guard xMax > xMin, yMax > yMin else {
             throw Failure(message: "x_max must exceed x_min and y_max must exceed y_min.")
         }
@@ -218,7 +217,7 @@ enum MCPRenderTool {
             try validate(width: cropWidth, height: cropHeight)
             let rendered = try renderImage(node: node, bounds: crop, width: cropWidth, height: cropHeight, supersample: supersample)
             var text = "Crop \(index): x \(crop.minX)...\(crop.maxX), y \(crop.minY)...\(crop.maxY), \(cropWidth)x\(cropHeight)."
-            if let reference, let referenceCrop = cropReference(reference.image, to: crop, within: bounds) {
+            if let reference, let referenceCrop = cropReference(reference.image, to: crop, within: reference.framing) {
                 text += " Left: our re-render. Right: the same region of the original, upscaled."
                 content.append(.text(text: text, annotations: nil, _meta: nil))
                 content.append(try png(sideBySide(rendered.image, referenceCrop, width: cropWidth, height: cropHeight)))
@@ -253,20 +252,49 @@ enum MCPRenderTool {
 
     // MARK: - Reference figures
 
-    private static let referenceFigures = ["9", "10", "12"]
+    private struct Reference {
+        let name: String
+        let image: CGImage
+        /// The expression-coordinate rectangle the original shows.
+        let framing: CGRect
+    }
+
+    /// Per-figure correction to `croppedSquare`: the scanned originals
+    /// aren't perfectly centered/scaled on the origin. Figure 9's values
+    /// were measured by edge cross-correlation against our render (~4px
+    /// offset at 464x367, best match with the framing ~2% tighter); the others are
+    /// uncalibrated until our renders resemble them closely enough to measure.
+    private static let referenceAlignment: [String: (offset: CGPoint, zoom: Double)] = [
+        "9": (CGPoint(x: 0.0172, y: 0.0172), 0.98),
+        "10": (.zero, 1),
+        "12": (.zero, 1),
+    ]
+
+    /// The app's -1...1 square cropped (never widened) to `aspect` --
+    /// Sims' published figures cut off the top and bottom.
+    private static func croppedSquare(aspect: Double) -> CGRect {
+        let halfWidth = min(1, aspect)
+        let halfHeight = min(1, 1 / aspect)
+        return CGRect(x: -halfWidth, y: -halfHeight, width: 2 * halfWidth, height: 2 * halfHeight)
+    }
 
     /// Accepts "Figure 9", "figure9", "9", "OriginalFigure9", "OriginalFigure9.gif".
-    private static func loadReference(named rawName: String) throws -> (name: String, image: CGImage) {
+    private static func loadReference(named rawName: String) throws -> Reference {
         let digits = rawName.filter(\.isNumber)
-        guard referenceFigures.contains(digits) else {
-            throw Failure(message: "Unknown reference \"\(rawName)\". Available: \(referenceFigures.map { "Figure \($0)" }.joined(separator: ", ")).")
+        guard let alignment = referenceAlignment[digits] else {
+            throw Failure(message: "Unknown reference \"\(rawName)\". Available: \(referenceAlignment.keys.sorted { Int($0)! < Int($1)! }.map { "Figure \($0)" }.joined(separator: ", ")).")
         }
         guard let url = Bundle.main.url(forResource: "OriginalFigure\(digits)", withExtension: "gif"),
               let source = CGImageSourceCreateWithURL(url as CFURL, nil),
               let image = CGImageSourceCreateImageAtIndex(source, 0, nil) else {
             throw Failure(message: "OriginalFigure\(digits).gif is missing from the app bundle.")
         }
-        return ("Figure \(digits)", image)
+        let square = croppedSquare(aspect: Double(image.width) / Double(image.height))
+        let halfWidth = square.width / 2 * alignment.zoom
+        let halfHeight = square.height / 2 * alignment.zoom
+        let framing = CGRect(x: alignment.offset.x - halfWidth, y: alignment.offset.y - halfHeight,
+                             width: 2 * halfWidth, height: 2 * halfHeight)
+        return Reference(name: "Figure \(digits)", image: image, framing: framing)
     }
 
     /// The part of `reference` (which spans `framing`) covering `region`,
