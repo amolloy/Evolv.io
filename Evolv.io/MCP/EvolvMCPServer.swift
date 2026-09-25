@@ -2,8 +2,8 @@
 //  EvolvMCPServer.swift
 //  Evolv.io
 //
-//  An in-process MCP server exposing Evolv.io's user-editable Nodes folder
-//  to external tools (e.g. an AI coding assistant) that can't reach the
+//  An in-process MCP server exposing Evolv.io's user-editable Nodes and
+//  Genotypes folders to external tools (e.g. an AI coding assistant) that can't reach the
 //  app's own sandboxed container over the filesystem -- the app itself has
 //  no such restriction on its own container, so writes/reloads routed
 //  through here sidestep the TCC wall entirely. Loopback-only; not meant
@@ -116,7 +116,7 @@ actor EvolvMCPServer {
                 ),
                 MCPRenderTool.tool,
                 MCPDebugValuesTool.tool,
-            ])
+            ] + MCPGenotypeTools.tools)
         }
 
         await server.withMethodHandler(CallTool.self) { params in
@@ -137,6 +137,9 @@ actor EvolvMCPServer {
             case "debug_values":
                 return await MCPDebugValuesTool.call()
             default:
+                if let result = await MCPGenotypeTools.call(name: params.name, arguments: params.arguments) {
+                    return result
+                }
                 return errorResult("Unknown tool: \(params.name)")
             }
         }

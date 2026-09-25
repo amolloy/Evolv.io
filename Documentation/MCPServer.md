@@ -7,8 +7,9 @@ process, and macOS sandboxes Evolv.io's container (`~/Library/Containers/
 com.amolloy.Evolv-io/`) so *no other process* -- not a plain shell, not even
 Finder driven by AppleScript -- can read or write into it without the user
 personally clicking through a picker. That means an assistant can't hot-edit
-`.evolvnode` files into the app's user Nodes folder, and can't read back
-rendered snapshots, by normal file-tool means.
+`.evolvnode` files into the app's user Nodes folder (or `.evolvgenotype`
+files into its Genotypes folder), and can't read back rendered snapshots, by
+normal file-tool means.
 
 The app itself has no such restriction on its own container. So instead of
 fighting the sandbox, the app exposes an MCP server on `127.0.0.1:4848`
@@ -109,8 +110,10 @@ the sandbox the same way `write_node` does. Colors are mapped exactly like
 the on-screen view (each channel clamped to 0...1). Source:
 `Evolv.io/MCP/MCPRenderTool.swift`.
 
-- `expression` *or* `sample`: an s-expression, or the name of one of
-  `ContentView.sampleExpressions` (e.g. `"Figure 9"`, case-insensitive).
+- `expression` *or* `sample`: an s-expression, or one of the app's
+  genotypes (bundled or user, see `list_genotypes`), matched
+  case-insensitively by display name or id (e.g. `"Figure 9"` or
+  `"11-figure-9"`).
 - `reference` (optional): `"Figure 9"`, `"Figure 10"` or `"Figure 12"` --
   Sims' originals, `Documentation/OriginalFigure{9,10,12}.gif`, which ship in
   the app bundle (they're in the app target's Resources build phase). With a
@@ -157,8 +160,9 @@ Reports what the user is looking at, so an assistant can read back values
 dialed in by hand instead of asking for them. No arguments; returns pretty
 JSON as one text block. Source: `Evolv.io/MCP/MCPDebugValuesTool.swift`.
 
-- `selected_expression`: the sidebar selection (`index`, `display_name`,
-  `expression`, and `original_image` when it has one), or `null`.
+- `selected_expression`: the sidebar selection (`id`, `source` of
+  `"bundled"` or `"user"`, `display_name`, `expression`, and
+  `original_image` when it has one), or `null`.
 - `debug_view_open`: whether the Debug View sheet is currently showing.
 - `controls`: every `debug toggle`/`debug slider(...)` control the debug view
   shows, grouped by node type then param name (the same `templateName.param`
@@ -168,9 +172,41 @@ JSON as one text block. Source: `Evolv.io/MCP/MCPDebugValuesTool.swift`.
   its first render, and whenever the tree declares no debug params.
 
 The UI feeds it through `MCPLiveUIState` (main-actor statics): ContentView
-writes the selected index, and NodeDebuggingView registers its `NodeRenderer`
+writes the selected genotype's id, and NodeDebuggingView registers its `NodeRenderer`
 (weakly) on appear and clears it on disappear, so values are read live from
 that renderer's `LiveDebugValues` at call time.
+
+### `list_genotypes()`
+
+Lists every genotype in the sidebar, in sidebar order, as pretty JSON:
+`genotypes` (each with `id`, `source`, `expression`, the file's full
+`content`, and `name`/`original_image` when the header sets them) and
+`load_issues` (`file`, `message`). The format is described in
+[EvolvGenotypeFormat.md](EvolvGenotypeFormat.md). Source:
+`Evolv.io/MCP/MCPGenotypeTools.swift`, like the two tools below.
+
+### `write_genotype(name, content)`
+
+Writes an `.evolvgenotype` file into the user Genotypes folder
+(`GenotypeLibrary.containerGenotypesDirectory`, what **Reveal Genotypes
+Folder** opens) and reloads `GenotypeStore`, so the sidebar updates at once.
+
+- `name`: bare file name, `.evolvgenotype` appended if missing, `/` and `..`
+  rejected. It becomes the genotype's id. Reusing a bundled id is reported
+  as a collision and the user file is ignored (bundled wins).
+- `content`: the full file, overwriting any existing user file of that name.
+- Returns `isError: true`, after writing, if the file has load issues, its
+  expression doesn't parse with the current node registry, or its
+  `original_image` can't be found.
+
+Bundled genotypes (`Evolv.io/Resources/BundledGenotypes/`) aren't touched;
+port a good user genotype there by hand to ship it.
+
+### `delete_genotype(name)`
+
+Deletes a user `.evolvgenotype` file and reloads the list. Same `name`
+rules; `isError: true` if there's no such user file. Bundled genotypes can't
+be deleted this way.
 
 ## What's *not* exposed yet
 
