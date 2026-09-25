@@ -53,51 +53,52 @@ struct NodeDebuggingView: View {
 				}
 				.aspectRatio(1, contentMode: .fit) // Constrain the GeometryReader to the image's aspect ratio
 
-				// The range sliders Vstack
-				VStack {
-					RangeSliderView(label: "Red",
-									value: redBinding(),
-									in: nodeRenderer.minValue.x...nodeRenderer.maxValue.x)
+				ScrollView {
+					// The range sliders Vstack
+					VStack {
+						RangeSliderView(label: "Red",
+										value: redBinding(),
+										in: nodeRenderer.minValue.x...nodeRenderer.maxValue.x)
 
-					RangeSliderView(label: "Green",
-									value: greenBinding(),
-									in: nodeRenderer.minValue.y...nodeRenderer.maxValue.y)
+						RangeSliderView(label: "Green",
+										value: greenBinding(),
+										in: nodeRenderer.minValue.y...nodeRenderer.maxValue.y)
 
-					RangeSliderView(label: "Blue",
-									value: blueBinding(),
-									in: nodeRenderer.minValue.z...nodeRenderer.maxValue.z)
-				}
-				.padding()
-				.background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16))
-
-				// Live toggle/slider controls any DSL node in this tree
-				// declared via `debug slider(...)`/`debug toggle` -- see
-				// LiveDebugValues. Nil until the first render completes, and
-				// stays nil forever if this tree declares none.
-				if let liveDebugValues = nodeRenderer.liveDebugValues {
-					VStack(alignment: .leading, spacing: 8) {
-						ForEach(Array(liveDebugValues.slots.enumerated()), id: \.offset) { index, slot in
-							switch slot.kind {
-								case .toggle:
-									Toggle(debugControlLabel(for: slot), isOn: liveRerendering(liveDebugValues.toggleBinding(at: index)))
-								case .slider(let minBound, let maxBound):
-									HStack {
-										Text(debugControlLabel(for: slot))
-											.font(.caption.bold())
-											.frame(width: 110, alignment: .leading)
-										Slider(value: liveRerendering(liveDebugValues.floatBinding(at: index)),
-											   in: Float(minBound)...Float(maxBound))
-										Text(String(format: "%.3f", liveDebugValues.values[index]))
-											.font(.caption.monospaced())
-											.frame(width: 54)
-									}
-							}
-						}
+						RangeSliderView(label: "Blue",
+										value: blueBinding(),
+										in: nodeRenderer.minValue.z...nodeRenderer.maxValue.z)
 					}
 					.padding()
 					.background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16))
-				}
 
+					// Live toggle/slider controls any DSL node in this tree
+					// declared via `debug slider(...)`/`debug toggle` -- see
+					// LiveDebugValues. Nil until the first render completes, and
+					// stays nil forever if this tree declares none.
+					if let liveDebugValues = nodeRenderer.liveDebugValues {
+						VStack(alignment: .leading, spacing: 8) {
+							ForEach(Array(liveDebugValues.slots.enumerated()), id: \.offset) { index, slot in
+								switch slot.kind {
+									case .toggle:
+										Toggle(debugControlLabel(for: slot), isOn: liveRerendering(liveDebugValues.toggleBinding(at: index)))
+									case .slider(let minBound, let maxBound):
+										HStack {
+											Text(debugControlLabel(for: slot))
+												.font(.caption.bold())
+												.frame(width: 110, alignment: .leading)
+											Slider(value: liveRerendering(liveDebugValues.floatBinding(at: index)),
+												   in: Float(minBound)...Float(maxBound))
+											Text(String(format: "%.3f", liveDebugValues.values[index]))
+												.font(.caption.monospaced())
+												.frame(width: 54)
+										}
+								}
+							}
+						}
+						.padding()
+						.background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16))
+					}
+				}
 			} else {
 				ProgressView("Rendering...")
 					.frame(maxWidth: .infinity, maxHeight: .infinity)
