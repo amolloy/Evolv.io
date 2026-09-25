@@ -7,6 +7,9 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		B438F63A30660BDF004CAF1A /* OriginalFigure9.gif in Resources */ = {isa = PBXBuildFile; fileRef = B438F63730660BDF004CAF1A /* OriginalFigure9.gif */; };
+		B438F63B30660BDF004CAF1A /* OriginalFigure10.gif in Resources */ = {isa = PBXBuildFile; fileRef = B438F63830660BDF004CAF1A /* OriginalFigure10.gif */; };
+		B438F63C30660BDF004CAF1A /* OriginalFigure12.gif in Resources */ = {isa = PBXBuildFile; fileRef = B438F63930660BDF004CAF1A /* OriginalFigure12.gif */; };
 		B44879442DF60ACB005212B0 /* README.md in Resources */ = {isa = PBXBuildFile; fileRef = B44879432DF60AC7005212B0 /* README.md */; };
 		B44879572DF60DE9005212B0 /* ExpressionTree.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = B448794E2DF60DE9005212B0 /* ExpressionTree.framework */; };
 		B44879612DF60DE9005212B0 /* ExpressionTree.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = B448794E2DF60DE9005212B0 /* ExpressionTree.framework */; };
@@ -71,6 +74,9 @@
 
 /* Begin PBXFileReference section */
 		B438F6363065FC17004CAF1A /* MCPServer.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = MCPServer.md; sourceTree = "<group>"; };
+		B438F63730660BDF004CAF1A /* OriginalFigure9.gif */ = {isa = PBXFileReference; lastKnownFileType = image.gif; path = OriginalFigure9.gif; sourceTree = "<group>"; };
+		B438F63830660BDF004CAF1A /* OriginalFigure10.gif */ = {isa = PBXFileReference; lastKnownFileType = image.gif; path = OriginalFigure10.gif; sourceTree = "<group>"; };
+		B438F63930660BDF004CAF1A /* OriginalFigure12.gif */ = {isa = PBXFileReference; lastKnownFileType = image.gif; path = OriginalFigure12.gif; sourceTree = "<group>"; };
 		B44879182DF60A68005212B0 /* Evolv.io.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Evolv.io.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		B44879262DF60A69005212B0 /* Evolv.ioTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = Evolv.ioTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		B44879302DF60A69005212B0 /* Evolv.ioUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = Evolv.ioUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -182,6 +188,9 @@
 		B4B2EED7304485CF000D0917 /* Documentation */ = {
 			isa = PBXGroup;
 			children = (
+				B438F63730660BDF004CAF1A /* OriginalFigure9.gif */,
+				B438F63830660BDF004CAF1A /* OriginalFigure10.gif */,
+				B438F63930660BDF004CAF1A /* OriginalFigure12.gif */,
 				B438F6363065FC17004CAF1A /* MCPServer.md */,
 				B4D08F193065C9ED0032F85D /* Bump.md */,
 				B4D08F1A3065C9ED0032F85D /* ColorGradient.md */,
@@ -387,6 +396,9 @@
 			files = (
 				B4D08EB33065C64D0032F85D /* EvolvNodeFormat.md in Resources */,
 				B44879442DF60ACB005212B0 /* README.md in Resources */,
+				B438F63A30660BDF004CAF1A /* OriginalFigure9.gif in Resources */,
+				B438F63B30660BDF004CAF1A /* OriginalFigure10.gif in Resources */,
+				B438F63C30660BDF004CAF1A /* OriginalFigure12.gif in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

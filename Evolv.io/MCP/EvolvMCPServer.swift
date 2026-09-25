@@ -114,6 +114,7 @@ actor EvolvMCPServer {
                         "required": .array([.string("name")]),
                     ])
                 ),
+                MCPRenderTool.tool,
             ])
         }
 
@@ -130,6 +131,8 @@ actor EvolvMCPServer {
                     return errorResult("delete_node requires string argument \"name\".")
                 }
                 return deleteNode(name: rawName)
+            case "render":
+                return await MCPRenderTool.call(arguments: params.arguments)
             default:
                 return errorResult("Unknown tool: \(params.name)")
             }

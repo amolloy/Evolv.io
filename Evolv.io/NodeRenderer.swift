@@ -106,14 +106,22 @@ class NodeRenderer: ObservableObject {
 	}
 
 	func cgImage() -> CGImage? {
-		let width = Int(evaluator.size.width)
-		let height = Int(evaluator.size.height)
+		Self.cgImage(data: data,
+					 width: Int(evaluator.size.width),
+					 height: Int(evaluator.size.height),
+					 displayMin: displayMin,
+					 displayMax: displayMax)
+	}
 
+	/// Maps raw render output to 8-bit RGB, clamping `displayMin...displayMax`
+	/// to 0...255 -- shared with the MCP `render` tool so its PNGs match what
+	/// the app shows on screen.
+	nonisolated static func cgImage(data: [Value], width: Int, height: Int,
+									displayMin: Value = .zero, displayMax: Value = .one) -> CGImage? {
 		let bytesPerPixel = 3
 		let bitsPerComponent = 8
 		let bytesPerRow = bytesPerPixel * width
 
-		let displayMin = self.displayMin
 		let range = displayMax - displayMin
 
 		var pixelData = [UInt8](repeating: 0, count: width * height * bytesPerPixel)

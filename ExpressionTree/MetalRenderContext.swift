@@ -10,6 +10,7 @@
 //  is the entry point callers use; this type is the machinery behind it.
 //
 
+import CoreGraphics
 import Metal
 
 enum MetalRenderError: Error, LocalizedError {
@@ -27,8 +28,10 @@ enum MetalRenderError: Error, LocalizedError {
 private struct RenderParams {
 	var width: UInt32
 	var height: UInt32
-	var scale: Float
 	var supersample: UInt32
+	/// (xMin, yMin, xSpan, ySpan) of the coordinate rectangle the image
+	/// covers -- `scale: s` is just the centered square (-s, -s, 2s, 2s).
+	var bounds: SIMD4<Float>
 }
 
 /// Shared across every `Evaluator` instance (and so every `NodeRenderer`) in
@@ -133,6 +136,16 @@ final class MetalRenderContext {
 	/// correctly wherever nobody's watching sliders (the main canvas,
 	/// thumbnails, etc).
 	func render(node: any Node, width: Int, height: Int, scale: ComponentType, supersample: Int, liveDebugValues: MTLBuffer? = nil) throws -> [Value] {
+		try render(node: node, width: width, height: height,
+				   bounds: CGRect(x: -scale, y: -scale, width: 2 * scale, height: 2 * scale),
+				   supersample: supersample, liveDebugValues: liveDebugValues)
+	}
+
+	/// Same as `render(node:width:height:scale:...)`, but over an arbitrary
+	/// coordinate rectangle -- `bounds.minX...maxX` across, `minY...maxY` from
+	/// bottom to top -- instead of the centered `[-scale, scale]` square.
+	/// Used by the MCP `render` tool to match a reference figure's framing.
+	func render(node: any Node, width: Int, height: Int, bounds: CGRect, supersample: Int, liveDebugValues: MTLBuffer? = nil) throws -> [Value] {
 		let compiledTree = try compiled(for: node)
 		let pipeline = compiledTree.pipeline
 		let pixelCount = width * height
@@ -140,7 +153,8 @@ final class MetalRenderContext {
 		guard let outputBuffer = device.makeBuffer(length: pixelCount * MemoryLayout<SIMD4<Float>>.stride, options: .storageModeShared) else {
 			throw MetalRenderError.bufferAllocationFailed
 		}
-		var params = RenderParams(width: UInt32(width), height: UInt32(height), scale: Float(scale), supersample: UInt32(supersample))
+		var params = RenderParams(width: UInt32(width), height: UInt32(height), supersample: UInt32(supersample),
+								  bounds: SIMD4<Float>(Float(bounds.minX), Float(bounds.minY), Float(bounds.width), Float(bounds.height)))
 		guard let paramsBuffer = device.makeBuffer(bytes: &params, length: MemoryLayout<RenderParams>.stride, options: .storageModeShared) else {
 			throw MetalRenderError.bufferAllocationFailed
 		}
@@ -184,8 +198,8 @@ final class MetalRenderContext {
 		struct Params {
 			uint width;
 			uint height;
-			float scale;
 			uint supersample;
+			float4 bounds; // xMin, yMin, xSpan, ySpan
 		};
 
 		\(preamble)\(mslSanitizeFunction())
@@ -203,14 +217,14 @@ final class MetalRenderContext {
 
 			float widthF = float(params.width);
 			float heightF = float(params.height);
-			float scaleFactor = 2.0 * params.scale;
-			float scaleOffset = scaleFactor / 2.0;
-			float dx = scaleFactor / widthF;
-			float dy = scaleFactor / heightF;
+			float xSpan = params.bounds.z;
+			float ySpan = params.bounds.w;
+			float dx = xSpan / widthF;
+			float dy = ySpan / heightF;
 			uint supersample = params.supersample;
 
-			float yc = (float(int(params.height) - 1 - int(gid.y)) + 0.5) / heightF * scaleFactor - scaleOffset;
-			float xc = (float(gid.x) + 0.5) / widthF * scaleFactor - scaleOffset;
+			float yc = (float(int(params.height) - 1 - int(gid.y)) + 0.5) / heightF * ySpan + params.bounds.y;
+			float xc = (float(gid.x) + 0.5) / widthF * xSpan + params.bounds.x;
 
 			float3 accumulated = float3(0.0);
 			for (uint sy = 0; sy < supersample; sy++) {

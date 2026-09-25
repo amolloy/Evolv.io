@@ -35,6 +35,18 @@ public final class Evaluator {
 											  liveDebugValues: liveDebugValues)
 	}
 
+	/// Like `render(node:scale:...)`, but over an arbitrary coordinate
+	/// rectangle (x across, y bottom-to-top) rather than the centered
+	/// `[-scale, scale]` square -- see `MetalRenderContext.render(node:width:height:bounds:...)`.
+	public func render(node: any Node, bounds: CGRect, supersample: Int, liveDebugValues: MTLBuffer? = nil) throws -> [Value] {
+		try MetalRenderContext.shared.render(node: node,
+											  width: Int(context.size.width),
+											  height: Int(context.size.height),
+											  bounds: bounds,
+											  supersample: supersample,
+											  liveDebugValues: liveDebugValues)
+	}
+
 	/// The `MTLDevice` behind the shared render pipeline -- exposed so app-
 	/// target code (e.g. `LiveDebugValues`) can allocate its own buffers
 	/// against the same device `render(...)` ultimately submits work to.

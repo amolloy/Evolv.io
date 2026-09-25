@@ -101,15 +101,51 @@ registry, so a node removed this way disappears from the app immediately.
   that folder).
 - On success, reports the new total registered-node count.
 
+### `render(...)`
+
+Renders an expression through the app's own `Parser` + Metal pipeline and
+returns PNGs as MCP image content -- no filesystem involved, so it sidesteps
+the sandbox the same way `write_node` does. Colors are mapped exactly like
+the on-screen view (each channel clamped to 0...1). Source:
+`Evolv.io/MCP/MCPRenderTool.swift`.
+
+- `expression` *or* `sample`: an s-expression, or the name of one of
+  `ContentView.sampleExpressions` (e.g. `"Figure 9"`, case-insensitive).
+- `reference` (optional): `"Figure 9"`, `"Figure 10"` or `"Figure 12"` --
+  Sims' originals, `Documentation/OriginalFigure{9,10,12}.gif`, which ship in
+  the app bundle (they're in the app target's Resources build phase). With a
+  reference, the result is one image with **our render on the left and the
+  original on the right**, both at the output size (the original is scaled).
+- `x_min`, `x_max`, `y_min`, `y_max` (optional): the coordinate rectangle to
+  render, y running bottom to top. Defaults: y from -1 to 1 and x from
+  -aspect to +aspect, where aspect is the reference's width/height (Figure 9
+  464x367, Figure 10 463x368, Figure 12 780x616 -- all about 1.26), else
+  `width`/`height` if both are given, else 1. So `render(sample: "Figure 9",
+  reference: "Figure 9")` frames the same shape as the original with no
+  cropping. The app's main view always renders the -1...1 square; this
+  rectangle only applies to the tool.
+- `width`, `height` (optional): output pixels. If only one is given the
+  other follows the x/y range's aspect; with neither, the reference's own
+  pixel size, else 512 tall. Max 4096 per side.
+- `supersample` (optional, 1-8, default 4): samples per pixel per axis,
+  matching the app's Supersampling setting.
+- `crops` (optional): an array of `{x_min, x_max, y_min, y_max}` regions.
+  Each is **re-rendered** at `width` pixels across (not upscaled), and, with
+  a reference, paired with the same region cut from the original (that half
+  *is* upscaled, and assumes the main framing is how the original lines up).
+
+The result starts with a text block giving the actual size, framing, and
+the raw min/max of the render output per channel (handy for spotting values
+the 0...1 display clamp is hiding), then one image per render.
+
+Supporting change: `Evaluator.render(node:bounds:supersample:)` /
+`MetalRenderContext.render(node:width:height:bounds:...)` take an arbitrary
+`CGRect` instead of `scale`; the old `scale:` entry points are now the
+centered-square special case and produce bit-identical output.
+
 ## What's *not* exposed yet
 
-Only `write_node` and `delete_node` exist today. Rendering a tree and getting pixels back
-(solving the *other* half of the original problem -- reading
-`SnapshotDump`'s PNGs out of the sandboxed container) was discussed but not
-built; if that becomes worth doing, `EvolvMCPServer.swift` is the place to
-add a `render` tool (parse an expression via `Parser`, render via
-`NodeRenderer`, return the PNG as `Tool.Content.image` directly over MCP,
-no filesystem involved). Same for a `list_nodes`/`get_node` read-back tool.
+A `list_nodes`/`get_node` read-back tool for the user Nodes folder.
 
 ## Implementation notes, if extending this
 
@@ -119,8 +155,8 @@ no filesystem involved). Same for a `list_nodes`/`get_node` read-back tool.
   project deliberately avoided adding NIO as a second new dependency and
   hand-rolled a minimal HTTP/1.1 bridge with `Network.framework`
   (`NWListener`/`NWConnection`) instead -- one request per connection, no
-  keep-alive, no chunked transfer-encoding, no SSE. That's why the tool is
-  `write_node` and not something streaming.
+  keep-alive, no chunked transfer-encoding, no SSE. That's why every tool
+  returns its whole result in one response and nothing streams.
 - `NWListener(using: parameters, on: port)` and setting
   `parameters.requiredLocalEndpoint` to the same host:port are redundant and
   throw `EINVAL` -- bind the port via `requiredLocalEndpoint` only and use
