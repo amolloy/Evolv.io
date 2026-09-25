@@ -14,8 +14,10 @@ node "color-grad"(source: fn, p1, p2, color, p3) requires(lighting) {
 	param $debugBlurWidth: float = 0.5913 debug slider(0.0, 2.0)
 	param $debugDiffDistance: float = 2.0 debug slider(0.0, 2.0)
 
+	param $debugDivisor: float = 3.1 debug slider (0.0, 20.0)
+
 	let p1Val: float = avgLum(p1)
-	let deltaLocal: float = (abs(p1Val) / 3.1) * $debugDelta
+	let deltaLocal: float = (abs(p1Val) / $debugDivisor) * $debugDelta
 
 	let p3Val: float = avgLum(p3)
 	let gain: float = p3Val * $debugGain
