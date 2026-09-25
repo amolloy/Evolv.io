@@ -1,0 +1,1 @@
+(warped-color-noise (* X .2) Y .1 2)

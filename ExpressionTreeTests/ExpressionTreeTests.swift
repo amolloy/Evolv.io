@@ -969,3 +969,98 @@ struct DSLLibraryTests {
         #expect(actual == Value(repeating: 6.0))
     }
 }
+
+/// Tests for `GenotypeLibrary`'s `.evolvgenotype` parsing and scanning, plus
+/// a check that the real shipped `Evolv.io/Resources/BundledGenotypes/`
+/// files load cleanly and in sidebar order (located via `#filePath`, like
+/// `DSLLibraryTests`).
+struct GenotypeLibraryTests {
+    private static var bundledGenotypesDirectory: URL {
+        URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Evolv.io/Resources/BundledGenotypes")
+    }
+
+    private static let fileURL = URL(fileURLWithPath: "/tmp/fixture.evolvgenotype")
+
+    @Test func bareExpressionHasNoHeader() throws {
+        let (genotype, warnings) = try GenotypeLibrary.parse("(abs x)\n", fileURL: Self.fileURL, source: .user)
+        #expect(genotype.id == "fixture")
+        #expect(genotype.name == nil)
+        #expect(genotype.originalImageName == nil)
+        #expect(genotype.expression == "(abs x)")
+        #expect(genotype.displayName == "(abs x)")
+        #expect(warnings.isEmpty)
+    }
+
+    @Test func headerSetsNameAndOriginalImage() throws {
+        let text = """
+        ---
+        # a comment
+        name: "Figure 9: the ribbon"
+        original_image: OriginalFigure9.gif
+        ---
+        (round
+          (log y) x)
+        """
+        let (genotype, warnings) = try GenotypeLibrary.parse(text, fileURL: Self.fileURL, source: .bundled)
+        #expect(genotype.name == "Figure 9: the ribbon")
+        #expect(genotype.originalImageName == "OriginalFigure9.gif")
+        #expect(genotype.expression == "(round\n  (log y) x)")
+        #expect(genotype.displayName == "Figure 9: the ribbon")
+        #expect(genotype.source == .bundled)
+        #expect(warnings.isEmpty)
+    }
+
+    @Test func unknownKeyWarnsButLoads() throws {
+        let (genotype, warnings) = try GenotypeLibrary.parse("---\ncolour: red\n---\nx", fileURL: Self.fileURL, source: .user)
+        #expect(genotype.expression == "x")
+        #expect(warnings.count == 1)
+        #expect(warnings.first?.contains("colour") == true)
+    }
+
+    @Test func malformedFilesAreRejected() {
+        #expect(throws: GenotypeParseError.self) {
+            try GenotypeLibrary.parse("---\nname: x\nx", fileURL: Self.fileURL, source: .user)
+        }
+        #expect(throws: GenotypeParseError.self) {
+            try GenotypeLibrary.parse("---\nname: x\n---\n  \n", fileURL: Self.fileURL, source: .user)
+        }
+        #expect(throws: GenotypeParseError.self) {
+            try GenotypeLibrary.parse("---\njust words\n---\nx", fileURL: Self.fileURL, source: .user)
+        }
+    }
+
+    /// A user file with a bundled file's id is reported and skipped (the
+    /// bundled one wins); bundled files come first, each root sorted by name.
+    @Test func bundledWinsAndOrderIsBundledThenUser() throws {
+        let tempDir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+        let bundled = tempDir.appendingPathComponent("bundled")
+        let user = tempDir.appendingPathComponent("user")
+        for dir in [bundled, user] {
+            try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        }
+        try "y".write(to: bundled.appendingPathComponent("02-b.evolvgenotype"), atomically: true, encoding: .utf8)
+        try "x".write(to: bundled.appendingPathComponent("01-a.evolvgenotype"), atomically: true, encoding: .utf8)
+        try "(abs x)".write(to: user.appendingPathComponent("01-a.evolvgenotype"), atomically: true, encoding: .utf8)
+        try "(abs y)".write(to: user.appendingPathComponent("00-mine.evolvgenotype"), atomically: true, encoding: .utf8)
+        try "not a genotype".write(to: user.appendingPathComponent("notes.txt"), atomically: true, encoding: .utf8)
+
+        let (genotypes, issues) = GenotypeLibrary.scan(roots: [(bundled, .bundled), (user, .user)])
+        #expect(genotypes.map(\.id) == ["01-a", "02-b", "00-mine"])
+        #expect(genotypes.map(\.source) == [.bundled, .bundled, .user])
+        #expect(genotypes.first?.expression == "x")
+        #expect(issues.count == 1)
+        #expect(issues.first?.fileURL.deletingLastPathComponent().lastPathComponent == "user")
+    }
+
+    @Test func bundledGenotypesLoadInSidebarOrder() throws {
+        let (genotypes, issues) = GenotypeLibrary.scan(roots: [(Self.bundledGenotypesDirectory, .bundled)])
+        #expect(issues.isEmpty, "unexpected load issues: \(issues.map(\.message))")
+        #expect(genotypes.map(\.displayName).prefix(3) == ["x", "y", "(abs x)"])
+        #expect(genotypes.suffix(4).map(\.displayName) == ["Figure 6", "Figure 9", "Figure 10", "Figure 12"])
+        #expect(genotypes.first { $0.name == "Figure 9" }?.originalImageName == "OriginalFigure9.gif")
+    }
+}
