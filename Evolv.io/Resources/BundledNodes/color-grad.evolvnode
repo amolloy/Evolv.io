@@ -1,33 +1,48 @@
+// Promoted from the experimental color-grad-slope variant (see
+// Documentation/ColorGradient.md, section 19).
+//   p1: filter radius scale (delta = p1/3.1 * $debugDelta)
+//   p2: light angle in radians
+//   color: divides the result per channel (not multiplies)
+//   p3: slope gain only (gain = p3 * $debugGain)
+// Box-blurs source over a 5x5 grid, takes one central difference of the
+// blurred field, and returns the raw (unnormalized) directional slope.
 node "color-grad"(source: fn, p1, p2, color, p3) requires(lighting) {
-	param $debugDelta: float = 0.01 debug slider(0.0, 1.0)
-	param $debugHeightFactor: float = 20.0 debug slider(0.0, 100.0)
-	param $debugLightZ: float = 0.0 debug slider(0.0, 2.0)
+	param $debugDelta: float = 0.01089 debug slider(0.0, 0.2)
+	param $debugGain: float = 1.845 debug slider(0.0, 20.0)
+	param $debugBlur: float = 1.0 debug toggle
+	// Blur half-width and difference half-distance, as fractions of delta.
+	param $debugBlurWidth: float = 0.5913 debug slider(0.0, 2.0)
+	param $debugDiffDistance: float = 2.0 debug slider(0.0, 2.0)
 
 	let p1Val: float = avgLum(p1)
 	let deltaLocal: float = (abs(p1Val) / 3.1) * $debugDelta
 
 	let p3Val: float = avgLum(p3)
-	let heightFactor: float = p3Val * $debugHeightFactor
-	let lightZ: float = p3Val * $debugLightZ
+	let gain: float = p3Val * $debugGain
 
 	let angle: float = avgLum(p2)
 
-	let gx = average(i in 1...4) {
-		let radius: float = deltaLocal * (float(i) / float(4))
-		source(coord - float2(radius, 0.0)) - source(coord + float2(radius, 0.0))
+	let blurHalfWidth: float = ($debugBlur != 0.0) ? deltaLocal * $debugBlurWidth : 0.0
+	let diff: float = deltaLocal * $debugDiffDistance
+
+	let gx = average(j in 0...4) {
+		average(k in 0...4) {
+			let s: float = blurHalfWidth / 2.0
+			let o: float2 = float2(float(k - 2) * s, float(j - 2) * s)
+			source(coord + o - float2(diff, 0.0)) - source(coord + o + float2(diff, 0.0))
+		}
 	}
-	let gy = average(i in 1...4) {
-		let radius: float = deltaLocal * (float(i) / float(4))
-		source(coord - float2(0.0, radius)) - source(coord + float2(0.0, radius))
+	let gy = average(j in 0...4) {
+		average(k in 0...4) {
+			let s: float = blurHalfWidth / 2.0
+			let o: float2 = float2(float(k - 2) * s, float(j - 2) * s)
+			source(coord + o - float2(0.0, diff)) - source(coord + o + float2(0.0, diff))
+		}
 	}
 
 	let lightDx: float = cos(angle)
 	let lightDy: float = sin(angle)
-	let lightDir = float3(lightDx, lightDy, lightZ)
-	let lightLen: float = length(lightDir)
-	let lightNormalized = lightDir / lightLen
+	let lightMap = -(gx * lightDx + gy * lightDy) * gain
 
-	let lightMap = (lightLen < 1e-9) ? float3(0.5) : float3(colorGradChannel(gx.x, gy.x, heightFactor, lightNormalized, color.x), colorGradChannel(gx.y, gy.y, heightFactor, lightNormalized, color.y), colorGradChannel(gx.z, gy.z, heightFactor, lightNormalized, color.z))
-
-	return signedPow(lightMap, p3Val)
+	return lightMap / color
 }

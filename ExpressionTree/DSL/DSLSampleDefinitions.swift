@@ -8,7 +8,9 @@
 //  DSLSpikeTests' parity checks don't depend on bundle-resource-copying
 //  working correctly on the test target -- see that struct's header for
 //  the full reasoning. Not registered anywhere; these templates are only
-//  ever constructed directly in tests.
+//  ever constructed directly in tests. The embedded "color-grad" is the
+//  older height-field version; the shipped file has since been replaced by
+//  the blurred-slope version, but this copy stays as DSL feature coverage.
 
 enum DSLSampleDefinitions {
 	static let modSource = """

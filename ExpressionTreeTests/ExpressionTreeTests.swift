@@ -417,8 +417,11 @@ struct DSLLibraryTests {
         #expect(Swift.max(diff.x, Swift.max(diff.y, diff.z)) < 1e-4, "expected \(expected), got \(actual)")
     }
 
-    /// Same golden value as DSLSpikeTests.dslColorGradient() above -- proves
-    /// the real shipped color-grad.evolvnode file, resolving its
+    /// Golden value for the real shipped color-grad.evolvnode file (the
+    /// blurred-slope version, with its debug param defaults) on the same
+    /// tree as DSLSpikeTests.dslColorGradient() above -- which still checks
+    /// the older embedded copy, so the two values now differ. Proves the
+    /// real file, resolving its
     /// requires(lighting) against the real bundled lighting.evolvnode
     /// module (not DSLSampleDefinitions' embedded copies of either), is
     /// correct end-to-end -- including the name-mangling that keeps its
@@ -436,7 +439,7 @@ struct DSLLibraryTests {
 
         let evaluator = try MSLTreeEvaluator()
         let actual = try evaluator.evaluate(node: node, at: [Coordinate(x: 0.3, y: -0.4)])[0]
-        let expected = Value(0.03680462762713432, 0.024370135739445686, 0.0193475428968668)
+        let expected = Value(0.03257068991661072, 0.044203080236911774, 0.05244433134794235)
         let diff = abs(actual - expected)
         #expect(Swift.max(diff.x, Swift.max(diff.y, diff.z)) < 1e-3, "expected \(expected), got \(actual)")
     }
