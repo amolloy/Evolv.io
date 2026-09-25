@@ -518,6 +518,40 @@ its own debug statics -- the view's sliders tune `ColorGradient`'s, not
 editing its statics directly, or extending the view if that's wanted
 later.
 
+### 19. `color-grad-slope`: area blur + raw slope, p3 as gain only, color as divisor [bundled as a separate experimental node; Figure 9 judged much closer]
+
+Worked out on 2026-09-24/25 by rendering Figure 9 side by side with the
+reference through the in-app MCP `render` tool, iterating on user nodes, and
+never changing the figure's expression (only the node name). Steps, each
+judged against the reference:
+
+1. **Delta ×3 (0.03) and output divided by `color` instead of multiplied.**
+   Gave thick black-cored tubes with gold rims; Andy judged it the closest
+   yet. The reasoning: under the enclosing `log(_, 0.19)`, a channel is
+   bright where `|y + CG|` is near 0 and black where it is >= 1, so black
+   stroke cores need `|CG| > 1` (stock output peaks at about 0.92) and the
+   gold-center/blue-loops layout needs blue to get the most tint.
+2. **p3 given one job (slope gain) instead of three.** It had been height
+   factor, lightZ scale and signed-power exponent (#14). Figure 9 can't tell
+   these apart (p3 = 1.35 in both calls); on Figure 10 only the
+   height-only version formed vertical columns.
+3. **5×5 box blur of `source` (half-width delta/2) before one central
+   difference at ±delta/2**, instead of #17's point taps along each axis.
+4. **Unnormalized slope**: `-(gx·cos p2 + gy·sin p2) · p3 · gain` instead of
+   `dot(normalize(N), L)`. With the normalized normal, even tiny steps near
+   x=0 (where `round(_, x)` spacing shrinks) saturated into full-contrast
+   ribs; with raw slope and gain 2 plus the blur, the center column above
+   the X becomes a smooth blue-to-white ramp like Sims'. Gain 1 washes out,
+   gain 3+ brings the ribs back, and gain 2 without the blur also ribs.
+
+Still wrong: the background bands are grey (Sims: cream/yellow/purple with
+green/magenta slivers at band edges), some fine parallel strokes in the
+lower side bands are missing, and Figure 10 is not improved. Bundled as
+`color-grad-slope.evolvnode` with debug sliders (`debugDelta`, `debugGain`,
+`debugBlur` toggle, `debugBlurWidth`, `debugDiffDistance`; the last two are
+fractions of delta) and a `"Figure 9 (color-grad-slope)"` sample in
+`ContentView`. `color-grad` itself is unchanged.
+
 ## Current state of the code (as of this writing)
 
 - `ColorGradient.swift`: back to the exact pre-#18 (#17) implementation --
