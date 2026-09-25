@@ -106,11 +106,12 @@ enum MCPRenderTool {
             label = "expression"
         } else if case .string(let name)? = args["sample"] {
             let samples = await MainActor.run { ContentView.sampleExpressions }
-            guard let match = samples.first(where: { $0.key.caseInsensitiveCompare(name) == .orderedSame }) else {
-                throw Failure(message: "No sample named \"\(name)\". Available: \(samples.keys.sorted().joined(separator: ", "))")
+			guard let match = samples.first(where: { $0.displayName.caseInsensitiveCompare(name) == .orderedSame }) else {
+				let available = samples.map { $0.displayName }
+				throw Failure(message: "No sample named \"\(name)\". Available: \(available.sorted().joined(separator: ", "))")
             }
-            expression = match.value
-            label = "sample \"\(match.key)\""
+			expression = match.expression
+            label = "sample \"\(match.displayName)\""
         } else {
             throw Failure(message: "render requires a string argument \"expression\" or \"sample\".")
         }
