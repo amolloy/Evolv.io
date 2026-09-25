@@ -20,6 +20,11 @@ struct Evolv_ioApp: App {
         // touch it here so its load log (and any load issues) always show
         // up at launch, not only once something happens to render.
         print("Node registry: \(NodeRegistry.shared.registry.count) node(s) registered")
+
+        // Always on (not just DEBUG) -- Debug builds are too slow to
+        // iterate against comfortably even with Metal, so this needs to
+        // run against whatever configuration is actually being used.
+        Task { await EvolvMCPServer.shared.start() }
     }
 
     var body: some Scene {
