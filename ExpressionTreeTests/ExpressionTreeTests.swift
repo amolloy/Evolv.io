@@ -67,7 +67,7 @@ enum DSLTestNodes {
     static func log(_ a: any Node, _ b: any Node) -> any Node { make("log", [a, b]) }
     static func ifNode(_ condition: any Node, _ thenVal: any Node, _ elseVal: any Node) -> any Node { make("if", [condition, thenVal, elseVal]) }
     static func and(_ a: any Node, _ b: any Node) -> any Node { make("and", [a, b]) }
-    static func rotateVector(_ angle: any Node, _ x: any Node, _ y: any Node) -> any Node { make("rotate-vector", [angle, x, y]) }
+    static func rotateVector(_ v: any Node, _ angle: any Node, _ axis: any Node) -> any Node { make("rotate-vector", [v, angle, axis]) }
     static func hsvToRGB(_ hsv: any Node) -> any Node { make("hsv-to-rgb", [hsv]) }
     static func dissolve(_ v0: any Node, _ w: any Node, _ v1: any Node) -> any Node { make("dissolve", [v0, w, v1]) }
     static func bwNoise(_ e0: any Node, _ e1: any Node) -> any Node { make("bw-noise", [e0, e1]) }
@@ -257,10 +257,11 @@ struct MetalRenderRegressionTests {
     }
 
     @Test func rotateVector() throws {
-        // Golden updated for c945a4e (rotate-vector takes the raw angle
-        // input directly, no more `* M_PI_F` scaling).
+        // Golden updated when rotate-vector became a Rodrigues rotation of
+        // its first argument (v = x, angle = y * 0.5, axis = the triplet);
+        // the result keeps v's length, |(0.3, 0.3, 0.3)|.
         try assertGolden(DSLTestNodes.rotateVector(DSLTestNodes.x(), DSLTestNodes.y(), ConstantTriplet(Value(0.2, -0.3, 0.5))),
-                          Value(-0.323030561208725, -0.47079065442085266, -0.2343744933605194))
+                          Value(0.3726271688938141, 0.2631259858608246, 0.24882473051548004))
     }
 
     @Test func hsvToRGB() throws {

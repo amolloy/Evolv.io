@@ -552,7 +552,49 @@ lower side bands are missing, and Figure 10 is not improved. Bundled as
 fractions of delta) and a `"Figure 9 (color-grad-slope)"` sample in
 `ContentView`. `color-grad` itself is unchanged.
 
+### 20. Figure 10: Rodrigues `rotate-vector` and a luminance-only slope [shipped 2026-09-27]
+
+Worked out on Figure 10 with the MCP `render` tool against the reference,
+never changing the expression. Two changes, both judged a clear win on
+Figure 10 and slightly closer on Figure 9:
+
+1. **`rotate-vector` rotates its first argument.** The old node computed
+   `cos(a)·b + sin(a)·c`, which Figure 10 calls as
+   `(rotate-vector <log stage> X #(0.76 0.08 0.24))`. That gives
+   `cos(L)·x + sin(L)·c`, which is odd in x: the left half went black and the
+   right half washed out pink. Rendering the tree without `rotate-vector`
+   already showed Sims' horizon, centre glow and spindles. The node is now a
+   Rodrigues rotation of `v` (arg 1) about `axis` (arg 3) by `angle` (arg 2)
+   × `$debugScale` (default 0.5 rad per unit), which preserves `v`'s length.
+   Swept 0.25–π for angle = X / axis = triplet and the swap (angle =
+   triplet, axis = X); by mean colour over a 3×3 grid of regions, every
+   length-preserving variant roughly halves the error (0.345 → 0.14–0.18)
+   and the scale barely matters. Rotating the triplet by the log stage
+   instead is flat magenta and clearly wrong.
+2. **`color-grad` lights the luminance slope.** `gx`/`gy` are still float3
+   differences of the blurred `source`, but they are averaged across
+   channels (`avgLum`) before the directional slope, then divided by
+   `color` per channel as before. This only differs from per-channel when
+   `source` differs per channel: Figure 10's source does (`round(log
+   #(0.01 0.67 0.86) ...)` plus `hsv-to-rgb`), Figure 9's mostly does not.
+   Per-channel slopes split Figure 10's streaks into pure R/G/B lines;
+   luminance-only turns them gold/brown/cream with lavender below the
+   horizon on the right (region error 0.153 → 0.135). On Figure 9 it removes
+   the rainbow fringes on the lower diagonal rays (score unchanged, 0.093).
+   This partly reverses #8's per-channel win, which was measured on the
+   older normalized-normal implementation.
+
+Still wrong on Figure 10: fewer, wider streaks with zigzag edges where Sims
+has many thin tapered spindles, and a black L-shaped bar along y=0 (left)
+and x=0 (below the horizon) that comes from `bump` (see Bump.md): its
+source-as-normal reading turns `(if x 10.7 y)` into a lower-left-quadrant
+switch. A height-field reading of `bump` removed the bar in a probe.
+
 ## Current state of the code (as of this writing)
+
+> Superseded in part by #20: `color-grad` is now the blurred-slope node of
+> #19 with a luminance-only slope, and `rotate-vector` is a Rodrigues
+> rotation. The bullets below describe the older Swift-era implementation.
 
 - `ColorGradient.swift`: back to the exact pre-#18 (#17) implementation --
   `PerChannelLightMapResult` (per-channel, #8's foundation) extended per

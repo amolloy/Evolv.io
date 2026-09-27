@@ -1,5 +1,15 @@
-node "rotate-vector"(angle, x, y) {
-	let c = cos(angle)
-	let s = sin(angle)
-	return c * x + s * y
+// Rotates the color vector v about axis by angle (Rodrigues' formula), so
+// v's length is preserved. Figure 10 calls it as
+// (rotate-vector <color> X #(0.76 0.08 0.24)): the angle varies across the
+// image and the constant triplet is the axis. The angle argument is reduced
+// to a scalar with avgLum and scaled by $debugScale radians per unit.
+// See ColorGradient.md, section 20.
+node "rotate-vector"(v, angle, axis) requires(lighting) {
+	param $debugScale: float = 0.5 debug slider(0.0, 6.2832)
+	let th: float = avgLum(angle) * $debugScale
+	let axisLen: float = length(axis)
+	let k = (axisLen < 1e-9) ? float3(0.57735) : axis / axisLen
+	let c: float = cos(th)
+	let s: float = sin(th)
+	return v * c + cross(k, v) * s + k * dot(k, v) * (1.0 - c)
 }

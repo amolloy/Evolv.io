@@ -5,7 +5,9 @@
 //   color: divides the result per channel (not multiplies)
 //   p3: slope gain only (gain = p3 * $debugGain)
 // Box-blurs source over a 5x5 grid, takes one central difference of the
-// blurred field, and returns the raw (unnormalized) directional slope.
+// blurred field, averages that difference across the three channels
+// (luminance slope, not per-channel), and returns the raw (unnormalized)
+// directional slope divided by color. See ColorGradient.md, section 20.
 node "color-grad"(source: fn, p1, p2, color, p3) requires(lighting) {
 	param $debugDelta: float = 0.01089 debug slider(0.0, 0.2)
 	param $debugGain: float = 1.845 debug slider(0.0, 20.0)
@@ -44,7 +46,7 @@ node "color-grad"(source: fn, p1, p2, color, p3) requires(lighting) {
 
 	let lightDx: float = cos(angle)
 	let lightDy: float = sin(angle)
-	let lightMap = -(gx * lightDx + gy * lightDy) * gain
+	let lightMap: float = -(avgLum(gx) * lightDx + avgLum(gy) * lightDy) * gain
 
 	return lightMap / color
 }
