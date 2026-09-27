@@ -1,29 +1,25 @@
-// The active "bump" node -- ported off the hand-written
-// ExpressionTree/Nodes/Bump.swift, which has been deleted now that this
-// file replaces it in NodeRegistry. See Bump.md #5/#6 (git history) for
-// the reasoning behind this argument mapping -- it's a best-effort
-// reconstruction of Sims' original semantics, not a confirmed-correct
-// spec. `source`/`multiplier`/`color1`/`color2` are float3-valued;
-// `strength`/`dirX`/`dirY`/`lightHeight` get reduced to a scalar via
-// avgLum before use, same pattern as color-grad's p1/p2/p3.
-node "bump"(source, multiplier, strength, color1, color2, dirX, dirY, lightHeight) requires(lighting) {
+// Height-field bump: differentiates source (scaled per channel by
+// multiplier, then reduced to luminance) with a central difference, builds
+// the normal (-strength*gx, -strength*gy, 1), lights it from
+// (dirX, dirY, lightHeight), and blends color1 -> color2 by the result.
+// The argument mapping is still a best-effort reconstruction (Bump.md #5/#6);
+// the change in Bump.md #7 is only the maths: reading source as a normal
+// turned Figure 10's (if x 10.7 y) into a lower-left-quadrant switch and a
+// black bar along y = 0.
+node "bump"(source: fn, multiplier, strength, color1, color2, dirX, dirY, lightHeight) requires(lighting) {
+	param $debugDelta: float = 0.01 debug slider(0.0, 0.2)
 	let strengthVal: float = avgLum(strength)
-	let dirXVal: float = avgLum(dirX)
-	let dirYVal: float = avgLum(dirY)
-	let lightHeightVal: float = avgLum(lightHeight)
-
-	let scaledSource = source * multiplier
-	let scaledLen: float = length(scaledSource)
-	let computedNormal = (scaledLen < 1e-9) ? float3(0.0, 0.0, 1.0) : scaledSource / scaledLen
-
-	let mixedNormal = mix(float3(0.0, 0.0, 1.0), computedNormal, strengthVal)
-	let mixedLen: float = length(mixedNormal)
-
-	let lightRaw = float3(dirXVal, dirYVal, lightHeightVal)
+	let d: float = $debugDelta
+	let hxp: float = avgLum(source(coord + float2(d, 0.0)) * multiplier)
+	let hxm: float = avgLum(source(coord - float2(d, 0.0)) * multiplier)
+	let hyp: float = avgLum(source(coord + float2(0.0, d)) * multiplier)
+	let hym: float = avgLum(source(coord - float2(0.0, d)) * multiplier)
+	let gx: float = (hxp - hxm) / (2.0 * d)
+	let gy: float = (hyp - hym) / (2.0 * d)
+	let n = normalize(float3(-gx * strengthVal, -gy * strengthVal, 1.0))
+	let lightRaw = float3(avgLum(dirX), avgLum(dirY), avgLum(lightHeight))
 	let lightLen: float = length(lightRaw)
-
-	let t: float = clamp((dot(mixedNormal / mixedLen, lightRaw / lightLen) + 1.0) * 0.5, 0.0, 1.0)
-	let mixedColor = mix(color1, color2, t)
-
-	return (mixedLen < 1e-9 || lightLen < 1e-9) ? float3(0.5) : mixedColor
+	let l = (lightLen < 1e-9) ? float3(0.0, 0.0, 1.0) : lightRaw / lightLen
+	let t: float = clamp((dot(n, l) + 1.0) * 0.5, 0.0, 1.0)
+	return mix(color1, color2, t)
 }

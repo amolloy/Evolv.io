@@ -210,6 +210,27 @@ well-supported independent of whether `source`-as-normal turns out to be
 right, so it's worth keeping even if this particular render doesn't look
 like Sims' spikes either.
 
+### 7. Height field with #6's argument mapping [shipped 2026-09-27]
+With the Rodrigues `rotate-vector` and luminance-slope `color-grad`
+(ColorGradient.md #20) in place, #6's source-as-normal reading was the
+cause of Figure 10's most obvious artifact: a solid black horizontal bar
+along y = 0 for x < 0, plus a short dark vertical at x = 0 below the
+horizon. `normalize(v, v, v)` only sees the sign of `(if x 10.7 y)`, so
+`bump` output one color in the lower-left quadrant and another everywhere
+else; that step went through `round(_, X)` and `color-grad`'s slope
+into the bar. Sims has no seam at either place.
+
+Kept #6's argument mapping but went back to differentiating `source`:
+`h = avgLum(source * multiplier)`, central difference at `$debugDelta`
+(0.01), normal `normalize(-strength*gx, -strength*gy, 1)`, light
+`normalize(dirX, dirY, lightHeight)`, `t = (dot + 1) / 2`, then
+`mix(color1, color2, t)`. On Figure 10 the left half becomes one constant
+(the plane `y`) and the right half another (the constant 10.7): no y = 0
+seam, and the bar and vertical disappear. The left/right level difference
+that remains fits Sims' horizon sitting slightly higher on the left. Light
+direction and strength were not swept; the roles of positions 2, 3 and
+6-8 are still guesses.
+
 ## Open threads / not yet resolved
 
 - **Per #6**: does the reordered mapping actually render better, even

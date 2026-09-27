@@ -253,7 +253,9 @@ struct MetalRenderRegressionTests {
             Constant(0.4),
             Constant(0.8)
         )
-        try assertGolden(node, Value(0.10437603294849396, 0.10000000149011612, 0.8956239223480225), tolerance: 1e-3)
+        // Golden updated when bump became a height field: h = 0.5x, so
+        // gx = 0.5 and the normal is normalize(-0.35, 0, 1).
+        try assertGolden(node, Value(0.2218643758167541, 0.10000000149011612, 0.7781356241832459), tolerance: 1e-3)
     }
 
     @Test func rotateVector() throws {
