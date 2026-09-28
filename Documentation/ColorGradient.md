@@ -537,6 +537,22 @@ judged against the reference:
    height-only version formed vertical columns.
 3. **5×5 box blur of `source` (half-width delta/2) before one central
    difference at ±delta/2**, instead of #17's point taps along each axis.
+   *Why* (added 2026-09-28; the original notes recorded the change but not
+   the reason, so this is pieced together from this file): `source` in
+   Figures 9 and 10 is quantized by `round(_, x)`, so it is a staircase. A
+   point difference across a step is zero everywhere except a spike 2·delta
+   wide, and widening delta only widens a flat-topped step. Neither can give
+   Sims' rounded tubes with soft crossings ("The Step-Function Problem"
+   under Key Structural Findings). Pre-filtering the source over a small
+   area turns each step into a ramp, so the slope rises and falls smoothly
+   across the edge. `p1` = 3.1 matching the radius of Sims' own
+   `(blur <source> 3.1)` in Figure 13 was read as a hint that `color-grad`
+   filters over a neighbourhood too. The deciding evidence was step 4:
+   gain 2 without the blur brings back hard ribs in Figure 9's centre
+   column, and with the blur it becomes Sims' smooth blue-to-white ramp.
+   A 2026-09-28 sweep (step size ×0.5–×4, blur width 0–1.5) found that
+   blur width mostly changes line thickness. It barely moves Figure 10's
+   dark fraction, 0.18–0.22 against Sims' 0.50.
 4. **Unnormalized slope**: `-(gx·cos p2 + gy·sin p2) · p3 · gain` instead of
    `dot(normalize(N), L)`. With the normalized normal, even tiny steps near
    x=0 (where `round(_, x)` spacing shrinks) saturated into full-contrast
