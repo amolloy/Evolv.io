@@ -1,7 +1,8 @@
 // Promoted from the experimental color-grad-slope variant (see
 // Documentation/ColorGradient.md, section 19).
 //   p1: filter radius scale (delta = p1/3.1 * $debugDelta)
-//   p2: light angle in radians
+//   p2: light angle in radians, measured from -x (light = (-cos p2, sin p2);
+//       see ColorGradient.md, section 21)
 //   color: divides the result per channel (not multiplies)
 //   p3: slope gain only (gain = p3 * $debugGain)
 // Box-blurs source over a 5x5 grid, takes one central difference of the
@@ -44,7 +45,7 @@ node "color-grad"(source: fn, p1, p2, color, p3) requires(lighting) {
 		}
 	}
 
-	let lightDx: float = cos(angle)
+	let lightDx: float = -cos(angle)
 	let lightDy: float = sin(angle)
 	let lightMap: float = -(avgLum(gx) * lightDx + avgLum(gy) * lightDy) * gain
 

@@ -590,6 +590,29 @@ and x=0 (below the horizon) that comes from `bump` (see Bump.md): its
 source-as-normal reading turns `(if x 10.7 y)` into a lower-left-quadrant
 switch. A height-field reading of `bump` removed the bar in a probe.
 
+### 21. Light x component mirrored: Figure 10 was upside down [shipped 2026-09-27]
+
+After #20 and Bump.md #7, our Figure 10 looked upside down, and flipping
+the image vertically did score better against the reference. Cause: with
+the height-field `bump`, Figure 10's `color-grad` source depends only on x,
+so `CG` is x-only and proportional to `∂S/∂x · lightDx`. The image is
+`log(y + CG, -0.03)` rotated by an x-only angle, and `|y − CG| = |(−y) + CG|`,
+so any sign flip of `CG` is an exact vertical flip of Figure 10. Three
+candidates, scored by mean colour over a 3×3 grid of regions / 58×46
+downsample RMSE:
+
+| variant | Fig 10 | Fig 9 |
+| --- | --- | --- |
+| before | 0.127 / 0.277 | 0.093 / 0.280 |
+| negate the output | 0.123 / 0.246 | 0.137 / 0.282 |
+| light x mirrored, `(-cos p2, sin p2)` | 0.123 / 0.246 | 0.094 / 0.268 |
+| angle from the y axis, `(sin p2, cos p2)` | 0.174 / 0.285 | 0.098 / 0.273 |
+
+Negating flips Figure 10 but damages Figure 9. Mirroring the light's x
+component flips Figure 10 exactly and leaves Figure 9 about the same (it
+moves which edge of some strokes is gold vs dark). Shipped that: the light
+angle is now effectively `π − p2`.
+
 ## Current state of the code (as of this writing)
 
 > Superseded in part by #20: `color-grad` is now the blurred-slope node of
