@@ -14,6 +14,7 @@
 		B44879572DF60DE9005212B0 /* ExpressionTree.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = B448794E2DF60DE9005212B0 /* ExpressionTree.framework */; };
 		B44879612DF60DE9005212B0 /* ExpressionTree.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = B448794E2DF60DE9005212B0 /* ExpressionTree.framework */; };
 		B44879622DF60DE9005212B0 /* ExpressionTree.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = B448794E2DF60DE9005212B0 /* ExpressionTree.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		B4C609B53069EAAD001B5E35 /* OriginalFigure13.gif in Resources */ = {isa = PBXBuildFile; fileRef = B4C609B43069EAAD001B5E35 /* OriginalFigure13.gif */; };
 		B4D08EB33065C64D0032F85D /* EvolvNodeFormat.md in Resources */ = {isa = PBXBuildFile; fileRef = B4D08EB13065C64D0032F85D /* EvolvNodeFormat.md */; };
 		B4D08F373065C9ED0032F85D /* Bump.md in Resources */ = {isa = PBXBuildFile; fileRef = B4D08F193065C9ED0032F85D /* Bump.md */; };
 		B4D08F383065C9ED0032F85D /* ColorGradient.md in Resources */ = {isa = PBXBuildFile; fileRef = B4D08F1A3065C9ED0032F85D /* ColorGradient.md */; };
@@ -85,6 +86,7 @@
 		B44879562DF60DE9005212B0 /* ExpressionTreeTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = ExpressionTreeTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		B4B2EECE304208CA000D0917 /* ProjectSummary.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = ProjectSummary.md; sourceTree = "<group>"; };
 		B4B2EED6304485CF000D0917 /* SimsSiggraph91.pdf */ = {isa = PBXFileReference; lastKnownFileType = image.pdf; path = SimsSiggraph91.pdf; sourceTree = "<group>"; };
+		B4C609B43069EAAD001B5E35 /* OriginalFigure13.gif */ = {isa = PBXFileReference; lastKnownFileType = image.gif; path = OriginalFigure13.gif; sourceTree = "<group>"; };
 		B4D08EB13065C64D0032F85D /* EvolvNodeFormat.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = EvolvNodeFormat.md; sourceTree = "<group>"; };
 		B4D08F193065C9ED0032F85D /* Bump.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = Bump.md; sourceTree = "<group>"; };
 		B4D08F1A3065C9ED0032F85D /* ColorGradient.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = ColorGradient.md; sourceTree = "<group>"; };
@@ -188,15 +190,16 @@
 		B4B2EED7304485CF000D0917 /* Documentation */ = {
 			isa = PBXGroup;
 			children = (
+				B4D08F193065C9ED0032F85D /* Bump.md */,
+				B4D08F1A3065C9ED0032F85D /* ColorGradient.md */,
+				B4D08EB13065C64D0032F85D /* EvolvNodeFormat.md */,
+				B438F6363065FC17004CAF1A /* MCPServer.md */,
 				B438F63730660BDF004CAF1A /* OriginalFigure9.gif */,
 				B438F63830660BDF004CAF1A /* OriginalFigure10.gif */,
 				B438F63930660BDF004CAF1A /* OriginalFigure12.gif */,
-				B438F6363065FC17004CAF1A /* MCPServer.md */,
-				B4D08F193065C9ED0032F85D /* Bump.md */,
-				B4D08F1A3065C9ED0032F85D /* ColorGradient.md */,
+				B4C609B43069EAAD001B5E35 /* OriginalFigure13.gif */,
 				B4B2EECE304208CA000D0917 /* ProjectSummary.md */,
 				B44879432DF60AC7005212B0 /* README.md */,
-				B4D08EB13065C64D0032F85D /* EvolvNodeFormat.md */,
 				B4B2EED6304485CF000D0917 /* SimsSiggraph91.pdf */,
 			);
 			path = Documentation;
@@ -396,6 +399,7 @@
 			files = (
 				B4D08EB33065C64D0032F85D /* EvolvNodeFormat.md in Resources */,
 				B44879442DF60ACB005212B0 /* README.md in Resources */,
+				B4C609B53069EAAD001B5E35 /* OriginalFigure13.gif in Resources */,
 				B438F63A30660BDF004CAF1A /* OriginalFigure9.gif in Resources */,
 				B438F63B30660BDF004CAF1A /* OriginalFigure10.gif in Resources */,
 				B438F63C30660BDF004CAF1A /* OriginalFigure12.gif in Resources */,

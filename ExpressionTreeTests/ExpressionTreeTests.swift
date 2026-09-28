@@ -286,8 +286,10 @@ struct MetalRenderRegressionTests {
     }
 
     @Test func hsvToRGB() throws {
+        // Golden updated when hsv-to-rgb began reading hue in sextants
+        // (0...6): h = 0.05 is 3 degrees, nearly pure red.
         try assertGolden(DSLTestNodes.hsvToRGB(ConstantTriplet(Value(0.05, 0.8, 0.9))),
-                          Value(0.8999999761581421, 0.3960000276565552, 0.18000000715255737))
+                          Value(0.9, 0.216, 0.18))
     }
 
     @Test func dissolve() throws {
@@ -1083,7 +1085,8 @@ struct GenotypeLibraryTests {
         let (genotypes, issues) = GenotypeLibrary.scan(roots: [(Self.bundledGenotypesDirectory, .bundled)])
         #expect(issues.isEmpty, "unexpected load issues: \(issues.map(\.message))")
         #expect(genotypes.map(\.displayName).prefix(3) == ["x", "y", "(abs x)"])
-        #expect(genotypes.suffix(4).map(\.displayName) == ["Figure 6", "Figure 9", "Figure 10", "Figure 12"])
+        #expect(genotypes.suffix(5).map(\.displayName) == ["Figure 6", "Figure 9", "Figure 10", "Figure 12", "Figure 13"])
+        #expect(genotypes.first { $0.name == "Figure 13" }?.originalImageName == "OriginalFigure13.gif")
         #expect(genotypes.first { $0.name == "Figure 9" }?.originalImageName == "OriginalFigure9.gif")
     }
 }

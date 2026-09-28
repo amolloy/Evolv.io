@@ -1,5 +1,10 @@
+// Hue is read in sextants (0...6, one unit per 60 degrees), not 0...1.
+// Figure 13's hsv-to-rgb inputs are noise near 0.51: as 0...1 hue that is
+// teal, which gives salmon/teal where Sims has brown/blue; as sextants it is
+// orange (R > G > B), which gives the brown/blue family. Figure 10 is almost
+// unchanged.
 node "hsv-to-rgb"(hsv) {
-	let h: float = fmod(hsv.x, 1.0) * 6.0
+	let h: float = fmod(hsv.x, 6.0)
 	let s: float = hsv.y
 	let v: float = hsv.z
 	let c: float = v * s
