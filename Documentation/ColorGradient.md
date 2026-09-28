@@ -560,7 +560,7 @@ Figure 10 and slightly closer on Figure 9:
 
 1. **`rotate-vector` rotates its first argument.** The old node computed
    `cos(a)·b + sin(a)·c`, which Figure 10 calls as
-   `(rotate-vector <log stage> X #(0.76 0.08 0.24))`. That gives
+   `(rotate-vector <log stage> x #(0.76 0.08 0.24))`. That gives
    `cos(L)·x + sin(L)·c`, which is odd in x: the left half went black and the
    right half washed out pink. Rendering the tree without `rotate-vector`
    already showed Sims' horizon, centre glow and spindles. The node is now a
