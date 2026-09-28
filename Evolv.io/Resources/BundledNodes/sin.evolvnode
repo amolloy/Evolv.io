@@ -1,0 +1,3 @@
+node "sin"(v0) {
+	return sin(v0)
+}

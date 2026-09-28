@@ -1,0 +1,29 @@
+// blur: Gaussian blur of source with a radius in *pixels*, as in Sims'
+// Figure 13, (blur <source> 3.1). The CM-2 held one pixel per processor,
+// so a blur there is a neighbour average in pixel units (repeated 3x3
+// averages approach a Gaussian). Our coordinates are resolution-independent
+// (-1...1 across the width), so a pixel is 2 / $debugImageWidth, with 256
+// (a 64K-processor CM-2 as a 256x256 grid) as the default.
+//   radius: Gaussian sigma = radius * $debugSigmaScale pixels.
+// Sampled on a 5x5 grid spanning +/-2 sigma; weights are normalized.
+node "blur"(source: fn, radius) {
+	param $debugImageWidth: float = 256.0 debug slider(64.0, 1024.0)
+	param $debugSigmaScale: float = 0.5 debug slider(0.0, 2.0)
+	let px: float = 2.0 / $debugImageWidth
+	let sigma: float = abs((radius.x + radius.y + radius.z) / 3.0) * $debugSigmaScale * px
+	let step: float = sigma * 2.0 / 2.0
+	let invTwoSigma2: float = (sigma > 1e-9) ? 1.0 / (2.0 * sigma * sigma) : 0.0
+	let wsum: float = average(j in 0...4) {
+		average(k in 0...4) {
+			let o: float2 = float2(float(k - 2) * step, float(j - 2) * step)
+			exp(-dot(o, o) * invTwoSigma2)
+		}
+	}
+	let acc = average(j in 0...4) {
+		average(k in 0...4) {
+			let o: float2 = float2(float(k - 2) * step, float(j - 2) * step)
+			source(coord + o) * exp(-dot(o, o) * invTwoSigma2)
+		}
+	}
+	return acc / wsum
+}

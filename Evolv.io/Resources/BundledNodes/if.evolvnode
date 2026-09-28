@@ -1,3 +1,8 @@
+// Per channel: thenVal where condition > 0.5, else elseVal. The threshold
+// was 0 until Figure 13, whose condition is hsv-to-rgb of noise: that is
+// never negative, so a 0 threshold made the whole embossed branch a
+// constant. 0.5 is the middle of the 0...1 color range; Figure 10's
+// (if x 10.7 y) scores the same either way.
 node "if"(condition, thenVal, elseVal) {
-	return select(elseVal, thenVal, condition > float3(0.0))
+	return select(elseVal, thenVal, condition > float3(0.5))
 }

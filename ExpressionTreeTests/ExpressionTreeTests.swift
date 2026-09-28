@@ -65,6 +65,9 @@ enum DSLTestNodes {
     static func invert(_ a: any Node) -> any Node { make("invert", [a]) }
     static func round(_ a: any Node, _ b: any Node) -> any Node { make("round", [a, b]) }
     static func log(_ a: any Node, _ b: any Node) -> any Node { make("log", [a, b]) }
+    static func sine(_ v0: any Node) -> any Node { make("sin", [v0]) }
+    static func subtract(_ v0: any Node, _ v1: any Node) -> any Node { make("-", [v0, v1]) }
+    static func blur(_ source: any Node, _ radius: any Node) -> any Node { make("blur", [source, radius]) }
     static func ifNode(_ condition: any Node, _ thenVal: any Node, _ elseVal: any Node) -> any Node { make("if", [condition, thenVal, elseVal]) }
     static func and(_ a: any Node, _ b: any Node) -> any Node { make("and", [a, b]) }
     static func rotateVector(_ v: any Node, _ angle: any Node, _ axis: any Node) -> any Node { make("rotate-vector", [v, angle, axis]) }
@@ -178,8 +181,24 @@ struct MetalRenderRegressionTests {
     }
 
     @Test func ifNode() throws {
+        // The threshold is 0.5, so x = 0.3 takes the else branch.
         try assertGolden(DSLTestNodes.ifNode(DSLTestNodes.x(), ConstantTriplet(Value(1.0, 2.0, 3.0)), ConstantTriplet(Value(-1.0, -2.0, -3.0))),
+                          Value(-1.0, -2.0, -3.0))
+        try assertGolden(DSLTestNodes.ifNode(Constant(0.7), ConstantTriplet(Value(1.0, 2.0, 3.0)), ConstantTriplet(Value(-1.0, -2.0, -3.0))),
                           Value(1.0, 2.0, 3.0))
+    }
+
+    @Test func sine() throws {
+        try assertGolden(DSLTestNodes.sine(DSLTestNodes.x()), Value(repeating: 0.29552020666133955))
+    }
+
+    @Test func subtract() throws {
+        try assertGolden(DSLTestNodes.subtract(DSLTestNodes.x(), DSLTestNodes.y()), Value(repeating: 0.7))
+    }
+
+    /// A symmetric, normalized kernel leaves a linear ramp unchanged.
+    @Test func blurOfRamp() throws {
+        try assertGolden(DSLTestNodes.blur(DSLTestNodes.x(), Constant(3.1)), Value(repeating: 0.3))
     }
 
     /// `and` does bitwise AND on raw IEEE-754 bit patterns at 32-bit width
