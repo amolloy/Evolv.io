@@ -237,8 +237,13 @@ public final class MSLCodegenContext {
 		// Nested functions this subtree needed must be defined before this
 		// wrapper (which calls them), so bubble them up first.
 		extraFunctions.append(contentsOf: subContext.extraFunctions)
+		// noinline: a sampling node calls its source function once per tap
+		// (blur: 25, grad-direction: 4), so nesting them multiplies the
+		// copies when inlined -- blur inside grad-direction over Figure 13's
+		// noise took 40-60 s to compile. As real calls, each subtree is
+		// compiled once.
 		extraFunctions.append("""
-		inline float3 \(name)(float2 coord, constant float* debugValues) {
+		__attribute__((noinline)) float3 \(name)(float2 coord, constant float* debugValues) {
 			\(subContext.body())
 			return \(result.variableName);
 		}
