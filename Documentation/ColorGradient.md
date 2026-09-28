@@ -613,6 +613,26 @@ component flips Figure 10 exactly and leaves Figure 9 about the same (it
 moves which edge of some strokes is gold vs dark). Shipped that: the light
 angle is now effectively `π − p2`.
 
+### 22. p3 is the colour exponent, not the gain: Figure 10's blue band [shipped 2026-09-28]
+
+On the left of Figure 10 (+y), Sims has one cream band a little above the
+x axis and a smooth fade to dark above it. Ours had a yellow band there and
+then a sharp bright blue line higher up. On that column `CG` is nearly
+constant, about (-0.13, -0.17, -0.33): dividing by `#(0.95 0.7 0.35)` makes
+blue 2.7× red. `log(|y + CG|, -0.03)` spikes wherever a channel of `y + CG`
+crosses zero, so red and green spiked at y ≈ 0.13–0.17 and blue at y ≈ 0.33.
+In Sims' image the three channels cross close together around y ≈ 0.1.
+
+Softening the colour (÷ √color, ÷ color^¼, × color, no colour) removes the
+blue line but drains Figure 9's gold and blue, which needs the full
+divide. The one per-figure difference in the calls is p3 (1.35 in Figure 9,
+3.03 in Figure 10), so the result is now `slope / color^(1/p3)`. To avoid
+giving p3 two jobs, p3 is no longer the gain: the gain is the fixed
+`$debugGain` = 2.49 (Figure 9's old `1.35 × 1.845`). Figure 9 looks as it
+did with p3 as gain. In Figure 10 the band sits at y ≈ 0.07 (Sims ≈ 0.1),
+and the centre zigzags flatten, closer to Sims' straight spindles. Fixed
+gains of 3.5 and 5 darkened Figure 9.
+
 ## Current state of the code (as of this writing)
 
 > Superseded in part by #20: `color-grad` is now the blurred-slope node of
