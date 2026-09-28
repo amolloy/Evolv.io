@@ -49,6 +49,12 @@ final class LiveDebugValues: ObservableObject {
 		buffer.contents().bindMemory(to: Float.self, capacity: slots.count)[index] = newValue
 	}
 
+	/// The value slot `index` started with -- its `debug` annotation's
+	/// default, which is what a reset returns it to.
+	func defaultValue(at index: Int) -> Float {
+		Float(slots[index].defaultValue)
+	}
+
 	/// For a `.slider(min:max:)` slot.
 	func floatBinding(at index: Int) -> Binding<Float> {
 		Binding(

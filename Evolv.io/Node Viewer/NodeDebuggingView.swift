@@ -114,11 +114,11 @@ struct NodeDebuggingView: View {
 					if let liveDebugValues = nodeRenderer.liveDebugValues {
 						VStack(alignment: .leading, spacing: 8) {
 							ForEach(Array(liveDebugValues.slots.enumerated()), id: \.offset) { index, slot in
-								switch slot.kind {
-									case .toggle:
-										Toggle(debugControlLabel(for: slot), isOn: liveRerendering(liveDebugValues.toggleBinding(at: index)))
-									case .slider(let minBound, let maxBound):
-										HStack {
+								HStack {
+									switch slot.kind {
+										case .toggle:
+											Toggle(debugControlLabel(for: slot), isOn: liveRerendering(liveDebugValues.toggleBinding(at: index)))
+										case .slider(let minBound, let maxBound):
 											Text(debugControlLabel(for: slot))
 												.font(.caption.bold())
 												.frame(width: 110, alignment: .leading)
@@ -127,7 +127,8 @@ struct NodeDebuggingView: View {
 											Text(String(format: "%.3f", liveDebugValues.values[index]))
 												.font(.caption.monospaced())
 												.frame(width: 54)
-										}
+									}
+									resetButton(for: liveDebugValues, at: index)
 								}
 							}
 						}
@@ -209,6 +210,20 @@ struct NodeDebuggingView: View {
 				}
 			}
 		)
+	}
+
+	/// Puts a live control back to the value it had at launch, re-rendering
+	/// like any other change; disabled while it's already there.
+	private func resetButton(for liveDebugValues: LiveDebugValues, at index: Int) -> some View {
+		let defaultValue = liveDebugValues.defaultValue(at: index)
+		return Button {
+			liveRerendering(liveDebugValues.floatBinding(at: index)).wrappedValue = defaultValue
+		} label: {
+			Image(systemName: "arrow.counterclockwise")
+		}
+		.buttonStyle(.borderless)
+		.help("Reset to \(String(format: "%.3f", defaultValue))")
+		.disabled(liveDebugValues.values[index] == defaultValue)
 	}
 
 	private func debugControlLabel(for slot: DebugControlSlot) -> String {
