@@ -681,6 +681,23 @@ full divide the best of the three columns (current, full divide, Karl),
 so it shipped. With p3 = 1.35 and gain 2.49 = 1.35 × 1.845, Figure 9's
 inner call gives exactly the pre-#22 golden value again.
 
+### 24. p3 is the gain again [shipped 2026-09-29]
+
+Andy doubts Karl's `color-grad` took an argument it never used, so p3
+gets a job again: the gain. The fixed `$debugGain` = 2.49 is replaced by
+`gain = avgLum(p3) * $debugGainFactor`, with the new debug factor
+defaulting to 1.0 (slider −10 to 10). Everything else from #23 stays:
+luminance slope, full `÷ color`.
+
+Unlike the pre-#22 gain (`p3 × 1.845`), there is no fixed multiplier, so
+with the factor at 1.0 the gain is p3 itself: Figure 9's drops from 2.49
+to 1.35, and Figure 10's rises from 2.49 to 3.03. In Andy's side-by-side
+this made very little visual difference. It is kept for the role it
+gives p3, not for a change in the renders.
+
+The result is linear in the gain, so the bundled golden value
+(`bundledColorGradMatchesGoldenValue`, p3 = 1.35) scales by 1.35 / 2.49.
+
 ## Current state of the code (as of this writing)
 
 > Superseded in part by #20: `color-grad` is now the blurred-slope node of

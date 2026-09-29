@@ -4,9 +4,8 @@
 //   p2: light angle in radians, measured from -x (light = (-cos p2, sin p2);
 //       see ColorGradient.md, section 21)
 //   color: divides the result per channel (result / color)
-//   p3: unused. It stays in the signature so Sims' expressions parse
-//       exactly. The slope gain is the fixed $debugGain (2.49, Figure 9's
-//       old p3 * 1.845).
+//   p3: gain (slope * p3 * $debugGainFactor; see ColorGradient.md,
+//       section 24)
 // Box-blurs source over a 5x5 grid, takes one central difference of the
 // blurred field, averages that difference across the three channels
 // (luminance slope, not per-channel), and returns the raw (unnormalized)
@@ -18,9 +17,12 @@
 // mean saturation to 0.121 (Karl's print: 0.119; the exponent gave 0.051)
 // and leaves Figure 9's structure, edges and values unchanged. Known cost:
 // a thin cyan line on Figure 10's upper left at y ~ 0.15.
+//
+// p3 is the gain again since section 24, replacing the fixed 2.49. With
+// the factor at 1.0, Figure 9's gain is 1.35 and Figure 10's is 3.03.
 node "color-grad"(source: fn, p1, p2, color, p3) requires(lighting) {
 	param $debugDelta: float = 0.01089 debug slider(0.0, 0.2)
-	param $debugGain: float = 2.49 debug slider(0.0, 20.0)
+	param $debugGainFactor: float = 1.0 debug slider(-10.0, 10.0)
 	param $debugBlur: float = 1.0 debug toggle
 	// Blur half-width and difference half-distance, as fractions of delta.
 	param $debugBlurWidth: float = 0.5913 debug slider(0.0, 2.0)
@@ -31,7 +33,7 @@ node "color-grad"(source: fn, p1, p2, color, p3) requires(lighting) {
 	let p1Val: float = avgLum(p1)
 	let deltaLocal: float = (abs(p1Val) / $debugDivisor) * $debugDelta
 
-	let gain: float = $debugGain
+	let gain: float = avgLum(p3) * $debugGainFactor
 
 	let angle: float = avgLum(p2)
 
