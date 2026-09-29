@@ -14,6 +14,7 @@ struct TreeVisualizerView: View {
 	let layout: TreeLayout
 
 	@State private var store = TreeThumbnailStore()
+	@State private var debugNode: LaidOutNode?
 
 	init(evaluator: Evaluator, rootNode: any Node) {
 		self.evaluator = evaluator
@@ -47,6 +48,11 @@ struct TreeVisualizerView: View {
 
 				ForEach(layout.nodes) { laidOut in
 					NodeTileView(node: laidOut.node, image: store.images[laidOut.node.toString()])
+						.contextMenu {
+							Button("Show Debug View") {
+								debugNode = laidOut
+							}
+						}
 						.position(laidOut.center)
 				}
 			}
@@ -56,6 +62,24 @@ struct TreeVisualizerView: View {
 		.navigationTitle("Expression Tree")
 		.task {
 			await store.renderAll(nodes: layout.nodes, evaluator: evaluator)
+		}
+		.sheet(item: $debugNode) { laidOut in
+			NavigationStack {
+				NodeDebuggingView(evaluator: Evaluator(size: CGSize(width: 512, height: 512)),
+								   expressionTree: laidOut.node)
+					.padding()
+					.navigationTitle(laidOut.node.displayName)
+					.toolbar {
+						ToolbarItem(placement: .cancellationAction) {
+							Button("Done") {
+								debugNode = nil
+							}
+						}
+					}
+			}
+#if os(macOS)
+			.frame(minWidth: 1000, minHeight: 800)
+#endif
 		}
 	}
 }
