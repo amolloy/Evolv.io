@@ -281,10 +281,11 @@ struct MetalRenderRegressionTests {
 
     @Test func rotateVector() throws {
         // Golden updated when rotate-vector became a Rodrigues rotation of
-        // its first argument (v = x, angle = y * 0.5, axis = the triplet);
+        // its first argument (v = x, angle = y * scale, axis = the triplet),
+        // and again when the angle scale went from 0.5 to 0.2 rad per unit;
         // the result keeps v's length, |(0.3, 0.3, 0.3)|.
         try assertGolden(DSLTestNodes.rotateVector(DSLTestNodes.x(), DSLTestNodes.y(), ConstantTriplet(Value(0.2, -0.3, 0.5))),
-                          Value(0.3726271688938141, 0.2631259858608246, 0.24882473051548004))
+                          Value(0.33035580992724445, 0.2870700279433525, 0.2800996927951137))
     }
 
     @Test func hsvToRGB() throws {

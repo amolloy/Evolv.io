@@ -2,10 +2,12 @@
 // v's length is preserved. Figure 10 calls it as
 // (rotate-vector <color> X #(0.76 0.08 0.24)): the angle varies across the
 // image and the constant triplet is the axis. The angle argument is reduced
-// to a scalar with avgLum and scaled by $debugScale radians per unit.
+// to a scalar with avgLum and scaled by $debugScale radians per unit. The
+// scale was 0.5 until the Figure 10 colour probes, which settled on 0.2;
+// the slider now runs -pi...pi so the rotation direction can be flipped.
 // See ColorGradient.md, section 20.
 node "rotate-vector"(v, angle, axis) requires(lighting) {
-	param $debugScale: float = 0.5 debug slider(0.0, 6.2832)
+	param $debugScale: float = 0.2 debug slider(-3.1416, 3.1416)
 	let th: float = avgLum(angle) * $debugScale
 	let axisLen: float = length(axis)
 	let k = (axisLen < 1e-9) ? float3(0.57735) : axis / axisLen

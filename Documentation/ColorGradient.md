@@ -581,7 +581,8 @@ Figure 10 and slightly closer on Figure 9:
    right half washed out pink. Rendering the tree without `rotate-vector`
    already showed Sims' horizon, centre glow and spindles. The node is now a
    Rodrigues rotation of `v` (arg 1) about `axis` (arg 3) by `angle` (arg 2)
-   × `$debugScale` (default 0.5 rad per unit), which preserves `v`'s length.
+   × `$debugScale` (default 0.5 rad per unit; 0.2 since the Figure 10
+   colour probes of 2026-09-28), which preserves `v`'s length.
    Swept 0.25–π for angle = X / axis = triplet and the swap (angle =
    triplet, axis = X); by mean colour over a 3×3 grid of regions, every
    length-preserving variant roughly halves the error (0.345 → 0.14–0.18)
