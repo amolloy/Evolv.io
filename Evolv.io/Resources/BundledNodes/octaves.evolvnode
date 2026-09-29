@@ -1,0 +1,35 @@
+// Fractal (octave) sum of perlinNoise, shared by the four noise nodes.
+// Their last argument is an octave count, not a random seed: every noise
+// sample in Sims' 1991 Figure 4 (4f bw-noise, 4g color-noise, 4i
+// warped-color-noise) passes 2 there, which reads as a held-fixed setting.
+// Two octaves also match those samples better than one (4h, the
+// grad-direction of bw-noise, most clearly), and in Figure 13 they turn the
+// if layer's nested rings into Sims' worms. See Documentation/Figure13.md.
+//
+// Octave i is signed noise at 2^i times the frequency with weight 0.5^i,
+// for i below max(floor(octaves), 1), up to 8. The sum is divided by
+// sqrt(sum of squared weights) so its spread matches a single octave, then
+// mapped back to (s + 1) / 2 like perlinNoise. Each octave uses its own
+// permutation offset (seed + 7i).
+module "octaves" {
+	func octaveTerm(p: float2, seed: int, i: float, octaves: float) -> float2 {
+		let w: float = (i < octaves) ? pow(0.5, i) : 0.0
+		let n: float = (w > 0.0) ? perlinNoise(p * pow(2.0, i), seed) * 2.0 - 1.0 : 0.0
+		return float2(n * w, w * w)
+	}
+
+	func octaveNoise(p: float2, seed: int, e3: float) -> float {
+		let octaves: float = max(floor(e3), 1.0)
+		let t0: float2 = octaveTerm(p, seed + 0, 0.0, octaves)
+		let t1: float2 = octaveTerm(p, seed + 7, 1.0, octaves)
+		let t2: float2 = octaveTerm(p, seed + 14, 2.0, octaves)
+		let t3: float2 = octaveTerm(p, seed + 21, 3.0, octaves)
+		let t4: float2 = octaveTerm(p, seed + 28, 4.0, octaves)
+		let t5: float2 = octaveTerm(p, seed + 35, 5.0, octaves)
+		let t6: float2 = octaveTerm(p, seed + 42, 6.0, octaves)
+		let t7: float2 = octaveTerm(p, seed + 49, 7.0, octaves)
+		let s: float = t0.x + t1.x + t2.x + t3.x + t4.x + t5.x + t6.x + t7.x
+		let w2: float = t0.y + t1.y + t2.y + t3.y + t4.y + t5.y + t6.y + t7.y
+		return (s / sqrt(w2) + 1.0) * 0.5
+	}
+}

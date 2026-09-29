@@ -188,8 +188,9 @@ struct MetalRenderRegressionTests {
                           Value(1.0, 2.0, 3.0))
     }
 
+    /// sin has period 2 and a 0...1 output: (sin(pi * 0.3) + 1) / 2.
     @Test func sine() throws {
-        try assertGolden(DSLTestNodes.sine(DSLTestNodes.x()), Value(repeating: 0.29552020666133955))
+        try assertGolden(DSLTestNodes.sine(DSLTestNodes.x()), Value(repeating: 0.9045084971874737))
     }
 
     @Test func subtract() throws {
@@ -212,7 +213,8 @@ struct MetalRenderRegressionTests {
     // Note: this specific coordinate (0.3, -0.4) times bw-noise's internal
     // *50 scale lands exactly on a Perlin grid vertex (3.0, -4.0), where
     // fade(0)=0 collapses the interpolation to a trivial 0.5 regardless of
-    // the permutation table's contents -- a valid golden value (it does
+    // the permutation table's contents (the second octave, at twice the
+    // frequency, lands on the vertex (6.0, -8.0) too) -- a valid golden value (it does
     // still catch crashes, wrong offset math, missing-table compile errors)
     // but not a discriminating one for the hash/gradient math itself. Real
     // coverage for that lived in the original parity suite's noiseSafeCoordinates
