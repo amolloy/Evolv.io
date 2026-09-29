@@ -471,7 +471,8 @@ struct DSLLibraryTests {
         // with the gain fixed at 2.49, then again when the full ÷ color
         // came back and p3 became unused (ColorGradient.md section 23).
         // Gain 2.49 = 1.35 * 1.845, so this is the pre-exponent value again.
-        let expected = Value(-0.03257068991661072, -0.044203080236911774, -0.05244433134794235)
+        // Scaled by 1.35 / 2.49 when p3 became the gain again (section 24).
+        let expected = Value(-0.017658807786114245, -0.02396552542965096, -0.02843367362237838)
         let diff = abs(actual - expected)
         #expect(Swift.max(diff.x, Swift.max(diff.y, diff.z)) < 1e-3, "expected \(expected), got \(actual)")
     }
