@@ -468,8 +468,10 @@ struct DSLLibraryTests {
         let actual = try evaluator.evaluate(node: node, at: [Coordinate(x: 0.3, y: -0.4)])[0]
         // Negated when color-grad's light x component was mirrored (gy is 0 here).
         // Updated when p3 became the colour exponent only (÷ color^(1/p3))
-        // with the gain fixed at 2.49.
-        let expected = Value(-0.03213074566695516, -0.04028672498975478, -0.04572555884163772)
+        // with the gain fixed at 2.49, then again when the full ÷ color
+        // came back and p3 became unused (ColorGradient.md section 23).
+        // Gain 2.49 = 1.35 * 1.845, so this is the pre-exponent value again.
+        let expected = Value(-0.03257068991661072, -0.044203080236911774, -0.05244433134794235)
         let diff = abs(actual - expected)
         #expect(Swift.max(diff.x, Swift.max(diff.y, diff.z)) < 1e-3, "expected \(expected), got \(actual)")
     }

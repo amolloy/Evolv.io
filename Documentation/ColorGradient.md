@@ -650,6 +650,37 @@ did with p3 as gain. In Figure 10 the band sits at y ≈ 0.07 (Sims ≈ 0.1),
 and the centre zigzags flatten, closer to Sims' straight spindles. Fixed
 gains of 3.5 and 5 darkened Figure 9.
 
+### 23. Full colour divide again; p3 unused: the Figure 10 colour probe [shipped 2026-09-29]
+
+After #22, Figure 10 was nearly grey. The Figure 10 colour probe
+(`cg-full`, used by the `figure-10-colour-probe` genotype) keeps
+everything from #20–#22 except the exponent: the result is
+`slope / color` again, with the gain still the fixed `$debugGain` = 2.49.
+p3 now has no job. It stays in the signature so Sims' five-argument calls
+parse exactly, and it is not given another role.
+
+Rendered against the references with `rotate-vector` at its shipped 0.2
+scale. Mean saturation is the mean of max − min channel. Region error is
+over a 3×3 grid; RMSE is at a 58×46 downsample:
+
+| | Fig 10 region / RMSE / saturation | Fig 9 region / RMSE / saturation |
+| --- | --- | --- |
+| `÷ color^(1/p3)` (#22) | 0.119 / 0.212 / 0.051 | 0.091 / 0.247 / 0.137 |
+| `÷ color` (this section) | 0.114 / 0.217 / 0.121 | 0.095 / 0.252 / 0.179 |
+| Karl's print | — / — / 0.119 | — / — / 0.202 |
+
+Scores are flat; the difference is hue. Figure 10 gets back gold
+spindles, violet below the horizon on the right and a pink line on the
+horizon there, at Karl's saturation. Figure 9's structure, edges and
+values are unchanged, with slightly bolder yellow and blue fringes and a
+bluer lower spindle. Known cost: a thin cyan line comes back on Figure
+10's upper left at y ≈ 0.15, just above the yellow band. It is lower than
+#22's old y ≈ 0.33 blue line and near where Karl's cream band turns teal,
+but it is a hard line where his colour is a soft band. Andy judged the
+full divide the best of the three columns (current, full divide, Karl),
+so it shipped. With p3 = 1.35 and gain 2.49 = 1.35 × 1.845, Figure 9's
+inner call gives exactly the pre-#22 golden value again.
+
 ## Current state of the code (as of this writing)
 
 > Superseded in part by #20: `color-grad` is now the blurred-slope node of

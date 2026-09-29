@@ -3,15 +3,21 @@
 //   p1: filter radius scale (delta = p1/3.1 * $debugDelta)
 //   p2: light angle in radians, measured from -x (light = (-cos p2, sin p2);
 //       see ColorGradient.md, section 21)
-//   color: divides the result per channel, raised to 1/p3
-//   p3: colour exponent only (result / color^(1/p3)); the slope gain is the
-//       fixed $debugGain (2.49, Figure 9's old p3 * 1.845). See
-//       ColorGradient.md, section 22.
+//   color: divides the result per channel (result / color)
+//   p3: unused. It stays in the signature so Sims' expressions parse
+//       exactly. The slope gain is the fixed $debugGain (2.49, Figure 9's
+//       old p3 * 1.845).
 // Box-blurs source over a 5x5 grid, takes one central difference of the
 // blurred field, averages that difference across the three channels
 // (luminance slope, not per-channel), and returns the raw (unnormalized)
-// directional slope divided by color^(1/p3). See ColorGradient.md,
-// section 20.
+// directional slope divided by color. See ColorGradient.md, section 20.
+//
+// Full divide since the Figure 10 colour probe (ColorGradient.md, section
+// 23). This reverses section 22, where p3 was the colour exponent
+// (result / color^(1/p3)). Dividing by the full colour brings Figure 10's
+// mean saturation to 0.121 (Karl's print: 0.119; the exponent gave 0.051)
+// and leaves Figure 9's structure, edges and values unchanged. Known cost:
+// a thin cyan line on Figure 10's upper left at y ~ 0.15.
 node "color-grad"(source: fn, p1, p2, color, p3) requires(lighting) {
 	param $debugDelta: float = 0.01089 debug slider(0.0, 0.2)
 	param $debugGain: float = 2.49 debug slider(0.0, 20.0)
@@ -25,7 +31,6 @@ node "color-grad"(source: fn, p1, p2, color, p3) requires(lighting) {
 	let p1Val: float = avgLum(p1)
 	let deltaLocal: float = (abs(p1Val) / $debugDivisor) * $debugDelta
 
-	let p3Val: float = avgLum(p3)
 	let gain: float = $debugGain
 
 	let angle: float = avgLum(p2)
@@ -52,5 +57,5 @@ node "color-grad"(source: fn, p1, p2, color, p3) requires(lighting) {
 	let lightDy: float = sin(angle)
 	let lightMap: float = -(avgLum(gx) * lightDx + avgLum(gy) * lightDy) * gain
 
-	return lightMap / pow(max(color, float3(1e-6)), float3(1.0 / max(p3Val, 1e-6)))
+	return lightMap / max(color, float3(1e-6))
 }
