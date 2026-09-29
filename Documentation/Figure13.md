@@ -51,6 +51,9 @@ channel across the width.
 - **`blur` uses sigma = radius pixels** (sigma scale 1, was 0.5) on a 9×9
   grid over ±3σ (was 5×5 over ±2σ). At 0.5 the blur barely showed; 1
   softens the worms toward Sims'; 2 over-softens.
+- **`blur` taps are one CM-2 pixel apart** (21×21 over ±10 pixels), not
+  the 9×9 grid 0.75σ apart that shipped first. That reduces the cross-hatch
+  but doesn't remove it; see "The cross-hatch" below.
 
 ## What we ruled out
 
@@ -73,6 +76,34 @@ channel across the width.
 - **Unnormalised root `sin`**: `sin(πv)` clipped at zero gives real black,
   but it pools on the left (the `+ x` ramp) instead of sitting beside each
   worm.
+
+## The cross-hatch
+
+After the changes above, Figure 13 had a fine cross-hatch over the worms
+that Sims' image lacks. It came from the blur. With no blur,
+`grad-direction` of the `if` layer shows clean contour edges; with the
+9×9 blur, it shows hatching and small blocks, and a 17×17 grid halved the
+hatch spacing, so the spacing followed the tap spacing. The `if` layer is
+a hard-edged mask, so a blur with sparse taps is a stack of shifted copies
+of every edge: a staircase, not a ramp. `grad-direction`'s height factor
+of 200 turns each step into a line, and the square tap grid makes the
+lines cross.
+
+Resolution alone isn't the cause: the 9×9 blur still hatches at 256×256
+with no supersampling. On the CM-2 the source, the blur and the
+differences all sat on one 256×256 pixel grid, so the shifted copies were
+one pixel apart and merged into a ramp. A probe that snapped the taps to
+that grid (point-sampling the `if` layer at CM-2 pixel centres) had no
+hatch at 256×256 and more defined worms, since point-sampling aliases the
+`if` layer's thin stripes into coarser blobs; at our resolutions it is
+blocky. Taps one CM-2 pixel apart without snapping shipped. They reduce
+the hatch a lot but don't remove it: a finer hatch, about one CM-2 pixel
+apart, is still visible at full resolution. Randomly jittered taps removed
+the hatch but left grain.
+
+With an alias-free blur most of the `if` layer's stripes (2–5 CM-2 pixels
+wide, below σ = 3.1) blur away. Sims' worms are about 25 pixels thick, so
+his `if` layer was probably coarser than ours.
 
 ## The 1991 print
 
@@ -101,8 +132,10 @@ matching in node maths. The Figure 10 `log` black point of about 0.17
   light about 0–0.2, not a distinct band. Candidates: a Lambert
   `max(dot, 0)` output, a signed output that the root `sin` then wraps, or
   reading `dirX`/`dirY` (1.46, 5.9) as angles.
-- **Fine hatching inside the tubes**, from leftover fine contours in the
-  `if` layer. It is not from `grad-direction`'s difference step.
+- **A finer cross-hatch remains** at full resolution after the
+  one-pixel blur (see "The cross-hatch"). Untried: snapping to the CM-2
+  grid with interpolation between grid points, or pairing the one-pixel
+  taps with a small jitter.
 - A few small ring nests remain.
 - The noise's permutation table is reshuffled on every launch, so exact
   layouts differ between runs.

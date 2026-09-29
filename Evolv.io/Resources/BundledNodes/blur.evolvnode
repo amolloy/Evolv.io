@@ -8,24 +8,31 @@
 //   3.1 is a sigma of 3.1 CM-2 pixels. (The scale was 0.5 until Figure 13's
 //   probes: at 0.5 the blur barely showed; 1 softens the embossed worms
 //   toward Sims' original; 2 over-softens.)
-// Sampled on a 9x9 grid spanning +/-3 sigma; weights are normalized.
+// Sampled on a 21x21 grid of taps one CM-2 pixel apart (+/-10 pixels, which
+// covers +/-3 sigma up to sigma 3.33); larger sigmas space the taps a whole
+// number of pixels apart to keep +/-3 sigma. Weights are normalized. The
+// taps were a 9x9 grid 0.75 sigma apart until Figure 13's cross-hatch:
+// blurring its hard-edged `if` mask with sparse taps stacks shifted copies
+// of every edge, and grad-direction turns each step into a line. Taps one
+// pixel apart match the CM-2's neighbour sums and reduce the hatch, though a
+// finer one remains at full resolution. See Documentation/Figure13.md.
 node "blur"(source: fn, radius) {
 	param $debugImageWidth: float = 256.0 debug slider(64.0, 1024.0)
 	param $debugSigmaScale: float = 1.0 debug slider(0.0, 2.0)
 	let px: float = 2.0 / $debugImageWidth
-	let sigma: float = abs((radius.x + radius.y + radius.z) / 3.0) * $debugSigmaScale * px
-	let step: float = sigma * 3.0 / 4.0
-	let invTwoSigma2: float = (sigma > 1e-9) ? 1.0 / (2.0 * sigma * sigma) : 0.0
-	let wsum: float = average(j in 0...8) {
-		average(k in 0...8) {
-			let o: float2 = float2(float(k - 4) * step, float(j - 4) * step)
+	let sigmaPx: float = abs((radius.x + radius.y + radius.z) / 3.0) * $debugSigmaScale
+	let stepPx: float = max(ceil(sigmaPx * 3.0 / 10.0), 1.0)
+	let invTwoSigma2: float = (sigmaPx > 1e-6) ? 1.0 / (2.0 * sigmaPx * sigmaPx) : 1e6
+	let wsum: float = average(j in 0...20) {
+		average(k in 0...20) {
+			let o: float2 = float2(float(k - 10), float(j - 10)) * stepPx
 			exp(-dot(o, o) * invTwoSigma2)
 		}
 	}
-	let acc = average(j in 0...8) {
-		average(k in 0...8) {
-			let o: float2 = float2(float(k - 4) * step, float(j - 4) * step)
-			source(coord + o) * exp(-dot(o, o) * invTwoSigma2)
+	let acc = average(j in 0...20) {
+		average(k in 0...20) {
+			let o: float2 = float2(float(k - 10), float(j - 10)) * stepPx
+			source(coord + o * px) * exp(-dot(o, o) * invTwoSigma2)
 		}
 	}
 	return acc / wsum
