@@ -36,4 +36,49 @@ final class GenotypeStore {
 	func genotype(id: String) -> Genotype? {
 		genotypes.first { $0.id == id }
 	}
+
+	struct SaveError: LocalizedError {
+		let errorDescription: String?
+	}
+
+	/// Writes `expression` as a new user genotype called `name` and reloads.
+	/// The file name comes from `name` (lowercased, anything but letters and
+	/// digits turned into dashes), with -2, -3, ... added if that id is
+	/// taken, so saving never overwrites an existing genotype.
+	@discardableResult
+	func saveUserGenotype(name: String, expression: String) throws -> Genotype {
+		guard let directory = GenotypeLibrary.containerGenotypesDirectory else {
+			throw SaveError(errorDescription: "Couldn't find the Genotypes folder.")
+		}
+		let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines).replacingOccurrences(of: "\"", with: "")
+		var slug = trimmedName.lowercased()
+			.map { $0.isLetter || $0.isNumber ? String($0) : "-" }
+			.joined()
+			.split(separator: "-")
+			.joined(separator: "-")
+		if slug.isEmpty { slug = "genotype" }
+
+		let takenIDs = Set(genotypes.map(\.id))
+		var id = slug
+		var suffix = 2
+		while takenIDs.contains(id) || FileManager.default.fileExists(atPath: directory.appendingPathComponent("\(id).\(GenotypeLibrary.fileExtension)").path) {
+			id = "\(slug)-\(suffix)"
+			suffix += 1
+		}
+
+		let fileURL = directory.appendingPathComponent("\(id).\(GenotypeLibrary.fileExtension)")
+		let header = trimmedName.isEmpty ? "" : "---\nname: \"\(trimmedName)\"\n---\n"
+		do {
+			try (header + expression + "\n").write(to: fileURL, atomically: true, encoding: .utf8)
+		} catch {
+			throw SaveError(errorDescription: "Couldn't write \(fileURL.lastPathComponent): \(error.localizedDescription)")
+		}
+
+		reload()
+		guard let saved = genotype(id: id) else {
+			let issue = loadIssues.first { $0.fileURL.lastPathComponent == fileURL.lastPathComponent }
+			throw SaveError(errorDescription: "Wrote \(fileURL.lastPathComponent), but it didn't load: \(issue?.message ?? "unknown problem")")
+		}
+		return saved
+	}
 }

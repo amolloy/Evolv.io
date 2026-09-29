@@ -106,16 +106,21 @@ struct RandomExpressionGeneratorTests {
 		sample().forEach(check)
 	}
 
-	@Test func depthIsCapped() {
+	@Test(arguments: [2, 4])
+	func depthIsCapped(maxDepth: Int) {
 		func depth(_ expression: GeneratedExpression) -> Int {
 			guard case .call(_, let arguments) = expression, !arguments.isEmpty else { return 0 }
 			return 1 + (arguments.map(depth).max() ?? 0)
 		}
-		// maxDepth 2: the root call, plus calls as its arguments whose own
-		// arguments are leaves.
-		let depths = sample().map(depth)
-		#expect(depths.max()! <= 2)
-		#expect(depths.contains(2))
+		var configuration = RandomExpressionGenerator.Configuration()
+		configuration.maxDepth = maxDepth
+		let generator = RandomExpressionGenerator(signatures: bundled.signatures, configuration: configuration)
+		var rng = SeededRandomNumberGenerator(seed: 1)
+		// maxDepth counts levels of calls, the root included; the deepest
+		// calls' arguments are leaves.
+		let depths = (0..<500).map { _ in depth(generator.generate(using: &rng)) }
+		#expect(depths.max()! <= maxDepth)
+		#expect(depths.contains(maxDepth))
 	}
 
 	@Test func variablesAreXAndY() {

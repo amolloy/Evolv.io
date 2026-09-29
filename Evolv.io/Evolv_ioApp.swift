@@ -29,10 +29,13 @@ struct Evolv_ioApp: App {
 
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            RandomGridView()
         }
         .commands {
             CommandGroup(after: .appInfo) {
+#if os(macOS)
+                GenotypeLibraryMenuItem()
+#endif
                 Toggle("Supersampling", isOn: $supersamplingEnabled)
                 Button("Reload Custom Nodes") {
                     NodeRegistry.shared.reload()
@@ -54,5 +57,29 @@ struct Evolv_ioApp: App {
 #endif
             }
         }
+
+        // The genotype library that used to be the main window: bundled
+        // figures and saved genotypes, one at a time.
+#if os(macOS)
+        Window("Genotype Library", id: Self.genotypeLibraryWindowID) {
+            ContentView()
+        }
+#endif
+    }
+
+    static let genotypeLibraryWindowID = "genotype-library"
+}
+
+#if os(macOS)
+/// A menu item needs a View to read `openWindow` from the environment.
+private struct GenotypeLibraryMenuItem: View {
+    @Environment(\.openWindow) private var openWindow
+
+    var body: some View {
+        Button("Genotype Library") {
+            openWindow(id: Evolv_ioApp.genotypeLibraryWindowID)
+        }
+        .keyboardShortcut("l", modifiers: [.command, .shift])
     }
 }
+#endif

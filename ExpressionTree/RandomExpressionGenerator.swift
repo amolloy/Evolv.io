@@ -46,8 +46,10 @@ public struct RandomExpressionGenerator {
 		public var variables: [String] = ["x", "y"]
 		/// How many levels of function calls a tree can have. 2 means the
 		/// root call's arguments can be calls, but theirs are leaves, like
-		/// Sims' Figure 4h `(grad-direction (bw-noise .15 2) .0 .0)`.
-		public var maxDepth: Int = 2
+		/// Sims' Figure 4h `(grad-direction (bw-noise .15 2) .0 .0)`. 2 gave
+		/// first generations too simple to be interesting; Andy found 10
+		/// gave the best ones.
+		public var maxDepth: Int = 10
 		/// Chance an argument is a sub-expression, when depth allows.
 		/// Otherwise it's one of the literal/variable forms its type allows,
 		/// picked uniformly.

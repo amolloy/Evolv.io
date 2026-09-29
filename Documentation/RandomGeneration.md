@@ -150,11 +150,13 @@ randomArgument(type, depth):
 - **Variables are `x` and `y`.** `z` is only for volume textures, so the
   generator takes a list of variables rather than using every 0-arity
   node.
-- **"Simple"** means `maxDepth = 2` (two levels of calls: the root's
-  arguments can be calls, theirs are leaves) and `pExpr = 0.3` by
-  default. That gives trees about the size of Figure 4's examples, like
-  4h's `(grad-direction (bw-noise .15 2) .0 .0)`. The paper gives no
-  numbers, so these are knobs on `RandomExpressionGenerator.Configuration`.
+- **"Simple"** was first read as `maxDepth = 2` (two levels of calls:
+  the root's arguments can be calls, theirs are leaves), about the size
+  of Figure 4's examples. In the app those first generations looked too
+  plain. With a Depth control in the grid window's toolbar, the deepest
+  setting tried (10) gave the best results, so that's the default
+  (2026-09-29). `pExpr = 0.3`. The paper gives no numbers,
+  so these are knobs on `RandomExpressionGenerator.Configuration`.
 - **Constants**: scalar literals uniform in -1 to 1, vector components
   uniform in 0 to 1, rounded to two significant figures to match the
   papers. Sims' larger scalars (10.7, 15.5, -31) most likely came from
