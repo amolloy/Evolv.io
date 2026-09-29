@@ -270,6 +270,33 @@ node "color-grad"(source: fn, p1, p2, color, p3) ...
   two genuinely separate GPU function calls, so don't reach for `:fn`
   unless you actually need more than one sample.
 
+## Preferred argument types (for random generation)
+
+A child param can also name the type the random expression generator
+should prefer for it, and a node can name what it returns:
+
+```
+node "color-grad"(source: fn, p1: scalar, p2: scalar, color: vector, p3: scalar) -> vector requires(lighting) { ... }
+node "bw-noise"(e0: scalar, e1: scalar) -> scalar requires(perlin, octaves) { ... }
+node "x"() -> scalar { ... }
+node "+"(v0, v1) { ... }
+```
+
+- After the colon: at most one role (`fn` or `value`) and at most one
+  type (`scalar` or `vector`), in either order (`source: fn scalar`).
+  No type means either type is fine.
+- `-> scalar` / `-> vector` goes after the param list, before
+  `requires`. With no output type, the generator assumes the node follows
+  its untyped children: vector if any of them is, otherwise scalar. That
+  is right for arithmetic nodes like `+`, `dissolve` and `if`, which need
+  no annotation.
+- These are hints for `RandomExpressionGenerator` only. Codegen ignores
+  them: every child is still a `float3`, and a node gets whatever it's
+  passed, so hand-written genotypes that pass a vector where `scalar` is
+  preferred still work as before. See `RandomGeneration.md` for why the
+  hint exists (Sims' published genotypes almost always pass the preferred
+  type).
+
 ## `requires(...)` and modules
 
 A node's `requires(...)` clause lists module names (or the reserved
@@ -399,6 +426,7 @@ resolved, in this order:
 |---|---|
 | Declare a node taking two children | `node "name"(v0, v1) { ... }` |
 | Declare a leaf (no children) | `node "name"() { ... }` |
+| Prefer a scalar/vector argument, and say what the node returns | `node "name"(a: scalar, b: vector) -> vector { ... }` |
 | Sample a child at an offset coordinate | `node "name"(source: fn) { ... source(coord + float2(dx, dy)) ... }` |
 | Pull in shared helpers | `node "name"(...) requires(lighting) { ... }` |
 | Define shared helpers | `module "name" { func f(v: float3) -> float3 { ... } }` |

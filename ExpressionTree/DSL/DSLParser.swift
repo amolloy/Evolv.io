@@ -19,11 +19,14 @@
 //
 //    file       := nodeDecl | moduleDecl | packageDecl   -- one per file
 //    nodeDecl   := 'node' STRING '(' paramDecl (',' paramDecl)* ')'
+//                  ('->' ('scalar'|'vector'))?   -- output type, for the generator
 //                  ('requires' '(' requirement (',' requirement)* ')')?
 //    requirement := ('::')? (IDENT|STRING)  -- '::' = look only in library
 //                  roots scanned before this file's own (see DSLLibrary.scan)
 //                  '{' (letStmt | paramStmt)* 'return' expr '}'
-//    paramDecl  := IDENT (':' IDENT)?          -- ": fn" marks a sampled child
+//    paramDecl  := IDENT (':' IDENT+)?         -- ": fn" marks a sampled child;
+//                  ": scalar"/": vector" (optionally after "fn") is the
+//                  generator's preferred argument type
 //    paramStmt  := 'param' '$' IDENT ':' IDENT '=' signedNumber debugClause?
 //                  -- a self-contained default for a `$name` reference,
 //                  used when nothing external supplies one
@@ -105,6 +108,17 @@ final class DSLParser {
 		}
 		try expect(.rparen)
 
+		// '->' is .minus then .gt, as in parseFuncDecl.
+		var outputType: NodeValueType? = nil
+		if match(.minus) {
+			try expect(.gt)
+			let typeName = try expectAnyIdentifier()
+			guard let type = NodeValueType(rawValue: typeName) else {
+				throw DSLParseError(message: "Unknown output type '\(typeName)' for node '\(name)' -- expected 'scalar' or 'vector'")
+			}
+			outputType = type
+		}
+
 		var requires: [String] = []
 		if checkIdentifier("requires") {
 			pos += 1
@@ -135,7 +149,7 @@ final class DSLParser {
 		try expect(.rbrace)
 		try expect(.eof)
 
-		return DSLTemplate(name: name, params: params, requires: requires, paramDefaults: paramDefaults, debugControls: debugControls, body: body, returnExpr: returnExpr)
+		return DSLTemplate(name: name, params: params, outputType: outputType, requires: requires, paramDefaults: paramDefaults, debugControls: debugControls, body: body, returnExpr: returnExpr)
 	}
 
 	private func parseModule() throws -> DSLModule {
@@ -243,14 +257,30 @@ final class DSLParser {
 	private func parseParamDecl() throws -> DSLParam {
 		let name = try expectAnyIdentifier()
 		var isFunction = false
+		var preferredType: NodeValueType? = nil
 		if match(.colon) {
-			let role = try expectAnyIdentifier()
-			guard role == "fn" || role == "value" else {
-				throw DSLParseError(message: "Unknown param role '\(role)' for '\(name)' -- expected 'fn' or 'value'")
-			}
-			isFunction = role == "fn"
+			// One or more words up to the next ',' or ')': at most one role
+			// (fn/value) and at most one type (scalar/vector), e.g. `fn scalar`.
+			var sawRole = false
+			repeat {
+				let word = try expectAnyIdentifier()
+				if word == "fn" || word == "value" {
+					guard !sawRole else {
+						throw DSLParseError(message: "Param '\(name)' has more than one role")
+					}
+					sawRole = true
+					isFunction = word == "fn"
+				} else if let type = NodeValueType(rawValue: word) {
+					guard preferredType == nil else {
+						throw DSLParseError(message: "Param '\(name)' has more than one type")
+					}
+					preferredType = type
+				} else {
+					throw DSLParseError(message: "Unknown param role or type '\(word)' for '\(name)' -- expected 'fn', 'value', 'scalar' or 'vector'")
+				}
+			} while !check(.comma) && !check(.rparen)
 		}
-		return DSLParam(name: name, isFunction: isFunction)
+		return DSLParam(name: name, isFunction: isFunction, preferredType: preferredType)
 	}
 
 	private func parseLetStmt() throws -> DSLLetStmt {

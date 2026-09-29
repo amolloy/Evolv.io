@@ -10,7 +10,7 @@
 // baked-in constants -- see git history); now hardcoded literals
 // (0.01/20.0/0.0/4) directly below. To tune, edit the literals and use
 // "Reload Custom Nodes".
-node "color-grad-curvature"(source: fn, p1, p2, color, p3) requires(lighting) {
+node "color-grad-curvature"(source: fn, p1: scalar, p2: scalar, color: vector, p3: scalar) -> vector requires(lighting) {
 	let p1Val: float = avgLum(p1)
 	let deltaLocal: float = (abs(p1Val) / 3.1) * 0.01
 

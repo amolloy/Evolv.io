@@ -46,6 +46,11 @@ struct DSLParam {
 	/// MSLCodegenContext.emitFunction (e.g. ColorGradient's `source`) rather
 	/// than emitted once against the ambient coordinate.
 	let isFunction: Bool
+	/// `name: scalar` / `name: vector` -- the argument type the random
+	/// expression generator prefers for this child (see
+	/// `RandomExpressionGenerator`). nil means either. Only a hint:
+	/// codegen still treats every child as a float3.
+	var preferredType: NodeValueType? = nil
 }
 
 // Public because DSLCodegenNode's initializer (called from outside this
@@ -56,6 +61,10 @@ struct DSLParam {
 public struct DSLTemplate {
 	let name: String
 	let params: [DSLParam]
+	/// `-> scalar` / `-> vector` after the param list -- what this node
+	/// returns, for the random expression generator. nil means it follows
+	/// its untyped children (vector if any of them is).
+	var outputType: NodeValueType? = nil
 	/// Names a node's body wants resolved -- either the reserved "perlin"
 	/// intrinsic (its table is live-shuffled Swift data, never a text file)
 	/// or a module name resolved by whoever constructs the DSLCodegenNode

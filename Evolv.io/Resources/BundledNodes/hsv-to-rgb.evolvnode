@@ -3,7 +3,7 @@
 // teal, which gives salmon/teal where Sims has brown/blue; as sextants it is
 // orange (R > G > B), which gives the brown/blue family. Figure 10 is almost
 // unchanged.
-node "hsv-to-rgb"(hsv) {
+node "hsv-to-rgb"(hsv: vector) -> vector {
 	let h: float = fmod(hsv.x, 6.0)
 	let s: float = hsv.y
 	let v: float = hsv.z

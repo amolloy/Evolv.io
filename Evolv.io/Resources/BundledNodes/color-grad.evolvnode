@@ -20,7 +20,7 @@
 //
 // p3 is the gain again since section 24, replacing the fixed 2.49. With
 // the factor at 1.0, Figure 9's gain is 1.35 and Figure 10's is 3.03.
-node "color-grad"(source: fn, p1, p2, color, p3) requires(lighting) {
+node "color-grad"(source: fn, p1: scalar, p2: scalar, color: vector, p3: scalar) -> vector requires(lighting) {
 	param $debugDelta: float = 0.01089 debug slider(0.0, 0.2)
 	param $debugGainFactor: float = 1.0 debug slider(-10.0, 10.0)
 	param $debugBlur: float = 1.0 debug toggle

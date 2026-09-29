@@ -1,6 +1,6 @@
 // bw-noise: the last argument is the octave count (see octaves.evolvnode);
 // the permutation offset is fixed at 0 for every channel.
-node "bw-noise"(e0, e1) requires(perlin, octaves) {
+node "bw-noise"(e0: scalar, e1: scalar) -> scalar requires(perlin, octaves) {
 	let v0 = e0 * 50.0
 	return float3(
 		octaveNoise(coord * v0.x, 0, e1.x),

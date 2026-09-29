@@ -53,7 +53,16 @@ public enum DSLLibrary {
 	/// container Documents folder itself, so this is testable against a
 	/// fixture directory -- see `productionRoots` for the real roots.
 	public static func scan(roots: [URL], reservedNames: Set<String>) -> (constructors: [String: NodeRegistry.NodeConstructor], issues: [DSLLoadIssue]) {
+		let result = scanWithSignatures(roots: roots, reservedNames: reservedNames)
+		return (result.constructors, result.issues)
+	}
+
+	/// `scan`, plus a `NodeSignature` for every registered node (same keys
+	/// as `constructors`) -- what `NodeRegistry` hands the random
+	/// expression generator.
+	public static func scanWithSignatures(roots: [URL], reservedNames: Set<String>) -> (constructors: [String: NodeRegistry.NodeConstructor], signatures: [String: NodeSignature], issues: [DSLLoadIssue]) {
 		var constructors: [String: NodeRegistry.NodeConstructor] = [:]
+		var signatures: [String: NodeSignature] = [:]
 		var claimedBy: [String: URL] = [:]
 		var claimed = reservedNames
 		var issues: [DSLLoadIssue] = []
@@ -156,8 +165,16 @@ public enum DSLLibrary {
 				constructors[name] = { children in
 					try DSLCodegenNode(template: template, modules: resolvedModules, children: children)
 				}
+				signatures[name] = NodeSignature(
+					name: name,
+					argumentTypes: template.params.map(\.preferredType),
+					outputType: template.outputType
+				)
 
-				let argList = template.params.map { $0.isFunction ? "\($0.name):fn" : $0.name }.joined(separator: ", ")
+				let argList = template.params.map { param in
+					let words = [param.isFunction ? "fn" : nil, param.preferredType?.rawValue].compactMap { $0 }
+					return words.isEmpty ? param.name : "\(param.name):\(words.joined(separator: " "))"
+				}.joined(separator: ", ")
 				let requiresSuffix = template.requires.isEmpty ? "" : " requires(\(template.requires.joined(separator: ", ")))"
 				print("DSL node loaded: '\(name)' (\(template.params.count) args: \(argList))\(requiresSuffix) from \(fileURL.lastPathComponent)")
 			}
@@ -166,7 +183,7 @@ public enum DSLLibrary {
 		}
 
 		print("DSL scan complete: \(constructors.count) node(s) registered, \(issues.count) issue(s)")
-		return (constructors, issues)
+		return (constructors, signatures, issues)
 	}
 
 	/// One `requires()` entry -> the module it names, or nil. `qualified`

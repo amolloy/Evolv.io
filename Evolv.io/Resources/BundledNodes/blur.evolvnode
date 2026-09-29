@@ -19,7 +19,7 @@
 // step into a line. Taps one pixel apart without the grid reduced it; the
 // grid removes it. The result depends on $debugImageWidth, since the source
 // is sampled only at CM-2 pixel centres. See Documentation/Figure13.md.
-node "blur"(source: fn, radius) {
+node "blur"(source: fn, radius: scalar) {
 	param $debugImageWidth: float = 256.0 debug slider(64.0, 1024.0)
 	param $debugSigmaScale: float = 1.0 debug slider(0.0, 2.0)
 	let px: float = 2.0 / $debugImageWidth

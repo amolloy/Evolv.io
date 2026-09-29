@@ -27,6 +27,10 @@ public final class NodeRegistry {
 	]
 
 	public private(set) var registry: [String: NodeConstructor]
+	/// Arity and preferred argument/output types for every DSL-defined node
+	/// (same keys as `registry`, minus the literal-syntax built-ins), for
+	/// `RandomExpressionGenerator`.
+	public private(set) var signatures: [String: NodeSignature]
 	/// Whatever went wrong on the most recent load/reload -- a bad or
 	/// colliding `.evolvnode` file is logged here (and to the console, see
 	/// `reload()`) rather than crashing the app; see `DSLLibrary.scan`.
@@ -35,6 +39,7 @@ public final class NodeRegistry {
 	public init() {
 		let result = Self.buildRegistry()
 		registry = result.registry
+		signatures = result.signatures
 		loadIssues = result.issues
 		Self.logIssues(loadIssues)
 	}
@@ -48,12 +53,13 @@ public final class NodeRegistry {
 	public func reload() {
 		let result = Self.buildRegistry()
 		registry = result.registry
+		signatures = result.signatures
 		loadIssues = result.issues
 		Self.logIssues(loadIssues)
 		MetalRenderContext.shared.clearPipelineCache()
 	}
 
-	private static func buildRegistry() -> (registry: [String: NodeConstructor], issues: [DSLLoadIssue]) {
+	private static func buildRegistry() -> (registry: [String: NodeConstructor], signatures: [String: NodeSignature], issues: [DSLLoadIssue]) {
 		// Programmatically build the registry from the list of types.
 		// No giant switch statement needed!
 		var builtRegistry: [String: NodeConstructor] = [:]
@@ -66,13 +72,13 @@ public final class NodeRegistry {
 		// folder. A `.evolvnode` file claiming a name already used by a
 		// built-in above is a load issue, not a silent override -- see
 		// DSLLibrary.scan's `reservedNames`.
-		let (dslConstructors, issues) = DSLLibrary.scan(
+		let (dslConstructors, signatures, issues) = DSLLibrary.scanWithSignatures(
 			roots: DSLLibrary.productionRoots,
 			reservedNames: Set(builtinNodeTypes.map { $0.name })
 		)
 		builtRegistry.merge(dslConstructors) { existing, _ in existing }
 
-		return (builtRegistry, issues)
+		return (builtRegistry, signatures, issues)
 	}
 
 	private static func logIssues(_ issues: [DSLLoadIssue]) {

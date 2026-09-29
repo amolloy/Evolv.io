@@ -6,7 +6,7 @@
 // scale was 0.5 until the Figure 10 colour probes, which settled on 0.2;
 // the slider now runs -pi...pi so the rotation direction can be flipped.
 // See ColorGradient.md, section 20.
-node "rotate-vector"(v, angle, axis) requires(lighting) {
+node "rotate-vector"(v: vector, angle: scalar, axis: vector) -> vector requires(lighting) {
 	param $debugScale: float = 0.2 debug slider(-3.1416, 3.1416)
 	let th: float = avgLum(angle) * $debugScale
 	let axisLen: float = length(axis)

@@ -1,4 +1,4 @@
-node "z"() {
+node "z"() -> scalar {
 	param $z: float = 0.0 debug slider(-1.0, 1.0)
 	return float3($z)
 }

@@ -1,6 +1,6 @@
 // color-noise: the last argument is the octave count (see octaves.evolvnode);
 // the channels use fixed permutation offsets 0, 1 and 2.
-node "color-noise"(e0, e1) requires(perlin, octaves) {
+node "color-noise"(e0: scalar, e1: scalar) -> vector requires(perlin, octaves) {
 	let v0 = e0 * 50.0
 	return float3(
 		octaveNoise(coord * v0.x, 0, e1.x),
