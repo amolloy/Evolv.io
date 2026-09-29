@@ -51,9 +51,10 @@ channel across the width.
 - **`blur` uses sigma = radius pixels** (sigma scale 1, was 0.5) on a 9×9
   grid over ±3σ (was 5×5 over ±2σ). At 0.5 the blur barely showed; 1
   softens the worms toward Sims'; 2 over-softens.
-- **`blur` taps are one CM-2 pixel apart** (21×21 over ±10 pixels), not
-  the 9×9 grid 0.75σ apart that shipped first. That reduces the cross-hatch
-  but doesn't remove it; see "The cross-hatch" below.
+- **`blur` emulates the CM-2 pixel grid**: it blurs at the four CM-2 pixel
+  centres around each point (21×21 taps one pixel apart, source sampled at
+  pixel centres) and interpolates between them. The 9×9 grid 0.75σ apart
+  that shipped first caused a cross-hatch; see "The cross-hatch" below.
 
 ## What we ruled out
 
@@ -96,10 +97,17 @@ one pixel apart and merged into a ramp. A probe that snapped the taps to
 that grid (point-sampling the `if` layer at CM-2 pixel centres) had no
 hatch at 256×256 and more defined worms, since point-sampling aliases the
 `if` layer's thin stripes into coarser blobs; at our resolutions it is
-blocky. Taps one CM-2 pixel apart without snapping shipped. They reduce
-the hatch a lot but don't remove it: a finer hatch, about one CM-2 pixel
-apart, is still visible at full resolution. Randomly jittered taps removed
-the hatch but left grain.
+blocky. Taps one CM-2 pixel apart without snapping (commit b591404)
+reduced the hatch a lot but left a finer one, about one CM-2 pixel apart,
+visible at full resolution. Randomly jittered taps removed the hatch but
+left grain.
+
+What shipped next computes the snapped blur at the four CM-2 pixel centres
+around each point and interpolates bilinearly between them, like upscaling
+the CM-2's image. That removes the hatch entirely, even zoomed in, and the
+worms are bolder and crisper, closer to Sims'. It costs four blurs per
+sample, and the worm shapes depend on the grid (`$debugImageWidth`), since
+the `if` layer is sampled only at CM-2 pixel centres.
 
 With an alias-free blur most of the `if` layer's stripes (2–5 CM-2 pixels
 wide, below σ = 3.1) blur away. Sims' worms are about 25 pixels thick, so
@@ -132,10 +140,6 @@ matching in node maths. The Figure 10 `log` black point of about 0.17
   light about 0–0.2, not a distinct band. Candidates: a Lambert
   `max(dot, 0)` output, a signed output that the root `sin` then wraps, or
   reading `dirX`/`dirY` (1.46, 5.9) as angles.
-- **A finer cross-hatch remains** at full resolution after the
-  one-pixel blur (see "The cross-hatch"). Untried: snapping to the CM-2
-  grid with interpolation between grid points, or pairing the one-pixel
-  taps with a small jitter.
 - A few small ring nests remain.
 - The noise's permutation table is reshuffled on every launch, so exact
   layouts differ between runs.
