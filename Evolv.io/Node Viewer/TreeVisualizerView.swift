@@ -102,10 +102,12 @@ private struct NodeTileView: View {
 			.frame(width: TreeLayout.tileSize.width, height: TreeLayout.tileSize.width)
 			.clipShape(RoundedRectangle(cornerRadius: 6))
 
-			Text(node.displayName)
-				.font(.caption.bold())
+			Text(label)
+				.font(.caption.bold().monospacedDigit())
 				.lineLimit(1)
-				.padding(.horizontal, 8)
+				.minimumScaleFactor(0.6)
+				// Tighter for triplets, whose three values need the room.
+				.padding(.horizontal, node is ConstantTriplet ? 4 : 8)
 				.padding(.vertical, 3)
 				.background {
 					// Two opaque layers, not one translucent one: `.background`
@@ -118,5 +120,22 @@ private struct NodeTileView: View {
 				}
 		}
 		.frame(width: TreeLayout.tileSize.width, height: TreeLayout.tileSize.height)
+	}
+
+	/// Constants show their value instead of their node name; the thumbnail
+	/// above already shows the value as a swatch.
+	private var label: String {
+		switch node {
+		case let constant as Constant:
+			return Self.format(constant.value)
+		case let triplet as ConstantTriplet:
+			return [triplet.value.x, triplet.value.y, triplet.value.z].map(Self.format).joined(separator: " ")
+		default:
+			return node.displayName
+		}
+	}
+
+	private static func format(_ value: ComponentType) -> String {
+		value.formatted(.number.precision(.fractionLength(0...2)))
 	}
 }
