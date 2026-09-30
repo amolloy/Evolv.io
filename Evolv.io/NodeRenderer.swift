@@ -37,6 +37,9 @@ class NodeRenderer: ObservableObject {
 	/// none. Built once and reused for every subsequent render, so moving a
 	/// slider never recompiles anything -- see `LiveDebugValues`.
 	@Published private(set) var liveDebugValues: LiveDebugValues?
+	/// Why the last render failed (e.g. the GPU stopped partway through), or
+	/// nil if it succeeded. The image is black when this is set.
+	@Published private(set) var renderError: String?
 
 	init(node: any Node,
 		 evaluator: Evaluator,
@@ -69,6 +72,7 @@ class NodeRenderer: ObservableObject {
 		data = rendered.data
 		maxValue = rendered.maxValue
 		minValue = rendered.minValue
+		renderError = rendered.error
 
 		if liveDebugValues == nil,
 		   let controls = try? evaluator.debugControls(for: node),
@@ -86,12 +90,14 @@ class NodeRenderer: ObservableObject {
 									  width: Int,
 									  height: Int,
 									  supersample: Int,
-									  liveDebugValues: MTLBuffer?) -> (data: [Value], maxValue: Value, minValue: Value) {
+									  liveDebugValues: MTLBuffer?) -> (data: [Value], maxValue: Value, minValue: Value, error: String?) {
 		let data: [Value]
+		var renderError: String? = nil
 		do {
 			data = try evaluator.render(node: node, scale: scale, supersample: supersample, liveDebugValues: liveDebugValues)
 		} catch {
-			print("Metal render failed: \(error)")
+			print("Metal render failed: \(error.localizedDescription)")
+			renderError = error.localizedDescription
 			data = Array(repeating: Value.zero, count: width * height)
 		}
 
@@ -102,7 +108,7 @@ class NodeRenderer: ObservableObject {
 			minValue = min(minValue, pixel)
 		}
 
-		return (data, maxValue, minValue)
+		return (data, maxValue, minValue, renderError)
 	}
 
 	func cgImage() -> CGImage? {
