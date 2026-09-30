@@ -19,7 +19,11 @@
 // step into a line. Taps one pixel apart without the grid reduced it; the
 // grid removes it. The result depends on $debugImageWidth, since the source
 // is sampled only at CM-2 pixel centres. See Documentation/Figure13.md.
-node "blur"(source: fn, radius: scalar) {
+// source is only sampled at CM-2 pixel centres, so it is marked
+// grid(2.0 / $debugImageWidth): the renderer evaluates it once per CM-2
+// pixel into a texture and the taps read that, instead of evaluating
+// source's whole subtree 1764 times per call.
+node "blur"(source: fn grid(2.0 / $debugImageWidth), radius: scalar) {
 	param $debugImageWidth: float = 256.0 debug slider(64.0, 1024.0)
 	param $debugSigmaScale: float = 1.0 debug slider(0.0, 2.0)
 	let px: float = 2.0 / $debugImageWidth

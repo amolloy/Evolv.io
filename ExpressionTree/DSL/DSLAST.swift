@@ -81,6 +81,13 @@ struct DSLParam {
 	/// `RandomExpressionGenerator`). nil means either. Only a hint:
 	/// codegen still treats every child as a float3.
 	var preferredType: NodeValueType? = nil
+	/// `name: fn grid(<spacing>)` -- a promise that the body only ever calls
+	/// this child at `(float2(i, j) + 0.5) * spacing` for integers i, j, so
+	/// the renderer may evaluate it once per grid cell into a texture and
+	/// answer the calls from there (see `MSLCodegenContext.registerGridCache`).
+	/// `spacing` may only use numbers, `$param`s and arithmetic: it is
+	/// evaluated once per render, not per pixel. nil for every other param.
+	var grid: DSLExpr? = nil
 }
 
 // Public because DSLCodegenNode's initializer (called from outside this

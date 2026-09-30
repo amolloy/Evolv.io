@@ -126,14 +126,31 @@ public final class MSLCodegenContext {
 	}
 	private let debugControlRegistry: DebugControlRegistry
 
-	public init() {
+	// Grid caches registered in this codegen pass (see `registerGridCache`),
+	// shared with every sub-context for the same reason as the two
+	// registries above: a cache's index is baked into the emitted text.
+	private final class SampleCacheRegistry {
+		let enabled: Bool
+		var caches: [SampleCache] = []
+		init(enabled: Bool) { self.enabled = enabled }
+	}
+	private let sampleCacheRegistry: SampleCacheRegistry
+
+	/// `sampleCaching` lets `grid`-annotated children be answered from a
+	/// texture the renderer fills first (see `registerGridCache`). Only
+	/// `MetalRenderContext` turns it on; anything that runs the generated
+	/// code without filling textures (`MSLTreeEvaluator`) leaves it off, and
+	/// those children are called directly like any other.
+	public init(sampleCaching: Bool = false) {
 		functionNameCounter = FunctionNameCounter()
 		debugControlRegistry = DebugControlRegistry()
+		sampleCacheRegistry = SampleCacheRegistry(enabled: sampleCaching)
 	}
 
 	private init(sharingCodegenPassStateWith parent: MSLCodegenContext) {
 		functionNameCounter = parent.functionNameCounter
 		debugControlRegistry = parent.debugControlRegistry
+		sampleCacheRegistry = parent.sampleCacheRegistry
 	}
 
 	/// Returns the memoized value for `node` if it's already been emitted;
@@ -258,9 +275,49 @@ public final class MSLCodegenContext {
 		// noise took 40-60 s to compile. As real calls, each subtree is
 		// compiled once.
 		extraFunctions.append("""
-		__attribute__((noinline)) float3 \(name)(float2 coord, constant float* debugValues) {
+		__attribute__((noinline)) float3 \(name)(float2 coord, constant float* debugValues EVOLV_CACHE_PARAMS) {
 			\(subContext.body())
 			return \(result.variableName);
+		}
+		""")
+		return name
+	}
+
+	/// Every grid cache registered in this codegen pass, in fill order: a
+	/// cache's function only ever reads caches registered before it.
+	public var sampleCaches: [SampleCache] { sampleCacheRegistry.caches }
+
+	/// For a child emitted by `emitFunction` as `functionName` and only ever
+	/// sampled at grid-cell centres `(float2(i, j) + 0.5) * spacing` (a
+	/// `fn grid(spacing)` param), returns the name of a function to call in
+	/// its place. With caching on, `MetalRenderContext` renders the child
+	/// once per cell into a texture before the main pass, and this function
+	/// reads the cell; a call off the grid or outside the texture falls back
+	/// to `functionName`, so the result never depends on the texture's
+	/// extent. With caching off it's just `functionName`.
+	/// `spacingExpression` is MSL text that may use `debugValues` but not
+	/// `coord`: it is also evaluated once per render to size the texture.
+	public func registerGridCache(functionName: String, spacingExpression: String) -> String {
+		guard sampleCacheRegistry.enabled else { return functionName }
+		let index = sampleCacheRegistry.caches.count
+		sampleCacheRegistry.caches.append(SampleCache(index: index, functionName: functionName, spacingExpression: spacingExpression))
+		let name = "\(functionName)_cached"
+		// A texel holds the value at its cell centre, so a call is on the
+		// grid when coord / spacing is half-way between two integers. The
+		// tolerance only has to absorb float error in the caller's
+		// coordinate arithmetic. noinline for the same reason as
+		// `emitFunction`'s: blur calls this 1764 times, and inlined copies
+		// made Figure 13 four times slower than no cache at all.
+		extraFunctions.append("""
+		__attribute__((noinline)) float3 \(name)(float2 coord, constant float* debugValues EVOLV_CACHE_PARAMS) {
+			float spacing = \(spacingExpression);
+			float2 g = coord / spacing;
+			float2 cell = floor(g);
+			int2 texel = int2(cell) - cacheInfo[\(index)].origin;
+			if (all(abs(g - cell - 0.5) < 0.01) && all(texel >= 0) && all(texel < cacheInfo[\(index)].size)) {
+				return sampleCache\(index).read(uint2(texel)).xyz;
+			}
+			return \(functionName)(coord, debugValues EVOLV_CACHE_ARGS);
 		}
 		""")
 		return name
@@ -276,6 +333,44 @@ public final class MSLCodegenContext {
 	public func allFunctions() -> String {
 		extraFunctions.joined(separator: "\n\n")
 	}
+}
+
+/// One `fn grid(...)` child rendered into a texture before the main pass --
+/// see `MSLCodegenContext.registerGridCache`.
+public struct SampleCache: Sendable {
+	public let index: Int
+	/// The `emitFunction` function that computes a cell's value.
+	public let functionName: String
+	/// MSL for the grid spacing, in terms of `debugValues` only.
+	public let spacingExpression: String
+}
+
+/// Every generated function takes the grid-cache textures (and where each
+/// one sits on its grid) after `debugValues`, through these macros, so a
+/// cache can be read from however deeply nested a function it's called in.
+/// `EVOLV_CACHE_KERNEL_PARAMS` is the same list with kernel binding
+/// indices: `cacheInfo` in buffer 3, cache i in texture i. Empty when a
+/// tree has no caches.
+func mslSampleCacheMacros(_ caches: [SampleCache]) -> String {
+	guard !caches.isEmpty else {
+		return """
+		#define EVOLV_CACHE_PARAMS
+		#define EVOLV_CACHE_ARGS
+		#define EVOLV_CACHE_KERNEL_PARAMS
+		"""
+	}
+	let params = caches.map { ", texture2d<float, access::read> sampleCache\($0.index)" }.joined()
+	let args = caches.map { ", sampleCache\($0.index)" }.joined()
+	let kernelParams = caches.map { ", texture2d<float, access::read> sampleCache\($0.index) [[texture(\($0.index))]]" }.joined()
+	return """
+	struct SampleCacheInfo {
+		int2 origin; // grid cell of texel (0, 0)
+		int2 size;
+	};
+	#define EVOLV_CACHE_PARAMS , constant SampleCacheInfo* cacheInfo\(params)
+	#define EVOLV_CACHE_ARGS , cacheInfo\(args)
+	#define EVOLV_CACHE_KERNEL_PARAMS , constant SampleCacheInfo* cacheInfo [[buffer(3)]]\(kernelParams)
+	"""
 }
 
 /// The Perlin noise helper functions and permutation-table declaration,
@@ -335,8 +430,8 @@ func mslPerlinPreamble() -> String {
 /// before a generated kernel's own per-tree function body -- shared by
 /// `MSLTreeEvaluator` (parity testing) and `MetalRenderContext` (production
 /// rendering) so the two don't drift.
-func mslSharedPreamble(functions: String, resourceRequirements: MSLResourceRequirements, customModules: String = "") -> String {
-	var preamble = ""
+func mslSharedPreamble(functions: String, resourceRequirements: MSLResourceRequirements, customModules: String = "", sampleCaches: [SampleCache] = []) -> String {
+	var preamble = mslSampleCacheMacros(sampleCaches) + "\n\n"
 	if resourceRequirements.contains(.perlinTable) {
 		preamble += mslPerlinPreamble() + "\n\n"
 	}

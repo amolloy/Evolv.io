@@ -265,11 +265,34 @@ node "color-grad"(source: fn, p1, p2, color, p3) ...
   gradients and multi-tap filters work — `color-grad`/`bump`/
   `grad-direction`/`color-grad-curvature` all sample their `source` child
   at several nearby offsets and combine the results. Under the hood this
-  compiles the child subtree into its own standalone MSL function once;
-  calling it twice at two different coordinates does not evaluate the
-  child's tree twice from scratch in some naive sense, but it does mean
-  two genuinely separate GPU function calls, so don't reach for `:fn`
-  unless you actually need more than one sample.
+  compiles the child subtree into its own standalone MSL function once,
+  but every call evaluates that whole subtree again at the new
+  coordinate, so a node with many taps over a deep child is expensive —
+  don't reach for `:fn` unless you actually need more than one sample.
+
+### Grid-sampled children (`fn grid(spacing)`)
+
+```
+node "blur"(source: fn grid(2.0 / $debugImageWidth), radius: scalar) { ... }
+```
+
+`grid(spacing)` promises that the body only ever calls the child at grid
+cell centres, `(float2(i, j) + 0.5) * spacing` for integers `i`, `j`. The
+renderer then evaluates the child once per cell into a texture before the
+main pass, and each call reads its cell instead of evaluating the child's
+subtree. Blur takes 1764 taps per call, so this is what makes it
+affordable.
+
+- A call that isn't on the grid (off a cell centre by more than 1% of a
+  cell), or lands outside the texture, evaluates the child directly, so
+  a wrong or partial promise costs speed, never correctness. The texture
+  covers the image bounds plus a quarter of their size on each side,
+  plus 24 cells.
+- `spacing` may only use numbers, `$param`s (debug ones included),
+  operators and builtin calls: it's evaluated once per render to size
+  the texture, where there is no `coord` and no child value.
+- Only valid on a `fn` param. `MSLTreeEvaluator` (the parity-test
+  evaluator) ignores it and always calls the child directly.
 
 ## Preferred argument types (for random generation)
 
@@ -283,8 +306,9 @@ node "x"() -> scalar { ... }
 node "+"(v0, v1) { ... }
 ```
 
-- After the colon: at most one role (`fn` or `value`) and at most one
-  type (`scalar` or `vector`), in either order (`source: fn scalar`).
+- After the colon: at most one role (`fn` or `value`), at most one
+  type (`scalar` or `vector`) and, on a `fn` param, at most one
+  `grid(...)`, in any order (`source: fn scalar`).
   No type means either type is fine.
 - `-> scalar` / `-> vector` goes after the param list, before
   `requires`. With no output type, the generator assumes the node follows

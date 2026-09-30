@@ -129,7 +129,7 @@ public final class MSLTreeEvaluator {
 		#include <metal_stdlib>
 		using namespace metal;
 
-		\(preamble)inline float3 evalTree(float2 coord, constant float* debugValues) {
+		\(preamble)inline float3 evalTree(float2 coord, constant float* debugValues EVOLV_CACHE_PARAMS) {
 			\(body)
 			return \(resultVariable);
 		}
@@ -138,7 +138,7 @@ public final class MSLTreeEvaluator {
 									  device float4* results [[buffer(1)]],
 									  constant float* debugValues [[buffer(2)]],
 									  uint gid [[thread_position_in_grid]]) {
-			results[gid] = float4(evalTree(coords[gid], debugValues), 1.0);
+			results[gid] = float4(evalTree(coords[gid], debugValues EVOLV_CACHE_ARGS), 1.0);
 		}
 		"""
 	}

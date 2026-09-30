@@ -129,6 +129,14 @@ public final class DSLCodegenNode: Node {
 				templateName: template.name, paramName: control.paramName, kind: control.kind, defaultValue: defaultValue)
 		}
 
+		// A `fn grid(spacing)` child is called through its grid cache. Done
+		// after the debug controls above, since the spacing may read one.
+		for decl in template.params {
+			guard let grid = decl.grid, case .sampledFunction(let fnName) = env[decl.name] else { continue }
+			let spacing = DSLInterpreter(context: context, params: effectiveParams, env: [:], liveParamText: liveParamText).evaluate(grid)
+			env[decl.name] = .sampledFunction(context.registerGridCache(functionName: fnName, spacingExpression: spacing))
+		}
+
 		let interpreter = DSLInterpreter(context: context, params: effectiveParams, env: env, liveParamText: liveParamText)
 		for stmt in template.body {
 			interpreter.execute(stmt)
@@ -353,9 +361,10 @@ final class DSLInterpreter {
 				if case .identifier(let name) = callee {
 					if case .sampledFunction(let fnName) = env[name] {
 						// The emitted function also takes `debugValues` (it
-						// may itself contain debug-annotated params) -- see
+						// may itself contain debug-annotated params) and the
+						// grid-cache textures -- see
 						// `MSLCodegenContext.emitFunction`.
-						return "\(fnName)(\(argsText), debugValues)"
+						return "\(fnName)(\(argsText), debugValues EVOLV_CACHE_ARGS)"
 					}
 					if let binding = env[name] {
 						return "\(binding.text)(\(argsText))"

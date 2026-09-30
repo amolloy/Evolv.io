@@ -24,9 +24,12 @@
 //    requirement := ('::')? (IDENT|STRING)  -- '::' = look only in library
 //                  roots scanned before this file's own (see DSLLibrary.scan)
 //                  '{' (stmt | paramStmt)* 'return' expr '}'
-//    paramDecl  := IDENT (':' IDENT+)?         -- ": fn" marks a sampled child;
+//    paramDecl  := IDENT (':' (IDENT | 'grid' '(' expr ')')+)?
+//                  -- ": fn" marks a sampled child;
 //                  ": scalar"/": vector" (optionally after "fn") is the
-//                  generator's preferred argument type
+//                  generator's preferred argument type; "grid(spacing)"
+//                  (fn only) says the child is only sampled at grid-cell
+//                  centres, so it can be rendered into a texture once
 //    paramStmt  := 'param' '$' IDENT ':' IDENT '=' signedNumber debugClause?
 //                  -- a self-contained default for a `$name` reference,
 //                  used when nothing external supplies one
@@ -278,13 +281,24 @@ final class DSLParser {
 		let name = try expectAnyIdentifier()
 		var isFunction = false
 		var preferredType: NodeValueType? = nil
+		var grid: DSLExpr? = nil
 		if match(.colon) {
 			// One or more words up to the next ',' or ')': at most one role
-			// (fn/value) and at most one type (scalar/vector), e.g. `fn scalar`.
+			// (fn/value), at most one type (scalar/vector) and at most one
+			// grid(...), e.g. `fn scalar` or `fn grid(2.0 / $width)`.
 			var sawRole = false
 			repeat {
 				let word = try expectAnyIdentifier()
-				if word == "fn" || word == "value" {
+				if word == "grid" {
+					guard grid == nil else {
+						throw DSLParseError(message: "Param '\(name)' has more than one grid")
+					}
+					try expect(.lparen)
+					let spacing = try parseExpr()
+					try expect(.rparen)
+					try validateGridSpacing(spacing, param: name)
+					grid = spacing
+				} else if word == "fn" || word == "value" {
 					guard !sawRole else {
 						throw DSLParseError(message: "Param '\(name)' has more than one role")
 					}
@@ -300,7 +314,31 @@ final class DSLParser {
 				}
 			} while !check(.comma) && !check(.rparen)
 		}
-		return DSLParam(name: name, isFunction: isFunction, preferredType: preferredType)
+		if grid != nil && !isFunction {
+			throw DSLParseError(message: "Param '\(name)' has a grid but isn't 'fn' -- only a sampled child can have one")
+		}
+		return DSLParam(name: name, isFunction: isFunction, preferredType: preferredType, grid: grid)
+	}
+
+	/// A grid spacing is evaluated once per render (to size the texture),
+	/// where there is no coordinate and no child value -- so it may only
+	/// use numbers, `$param`s, operators and calls to MSL builtins.
+	private func validateGridSpacing(_ expr: DSLExpr, param: String) throws {
+		switch expr {
+			case .number, .param:
+				return
+			case .unary(_, let operand):
+				try validateGridSpacing(operand, param: param)
+			case .binary(_, let lhs, let rhs):
+				try validateGridSpacing(lhs, param: param)
+				try validateGridSpacing(rhs, param: param)
+			case .ternary(let cond, let then, let else_):
+				for e in [cond, then, else_] { try validateGridSpacing(e, param: param) }
+			case .call(.identifier, let args):
+				for e in args { try validateGridSpacing(e, param: param) }
+			default:
+				throw DSLParseError(message: "The grid spacing for '\(param)' may only use numbers, $params, operators and builtin calls")
+		}
 	}
 
 	/// One statement, or nil (consuming nothing) if the next token doesn't
