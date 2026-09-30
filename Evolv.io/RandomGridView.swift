@@ -5,23 +5,26 @@
 //  The main window: a 3x3 grid of random genotypes from
 //  RandomExpressionGenerator (see Documentation/RandomGeneration.md). Each
 //  image's context menu shows it full size, in the Debug View or the
-//  expression tree viewer, or saves it as a user genotype. The genotype
-//  library (ContentView) is in its own window, from the app menu.
+//  expression tree viewer, or saves it as a genotype file. File > Open
+//  Genotype shows a saved genotype file full size. The genotype library
+//  (ContentView) is in its own window, from the app menu.
 //
 
 import SwiftUI
 import ExpressionTree
 #if os(macOS)
 import AppKit
+import UniformTypeIdentifiers
 #endif
 
-/// One generated genotype and the node tree parsed from it.
+/// One genotype's expression and the node tree parsed from it: generated
+/// for the grid, or opened from a file.
 struct RandomGenotype: Identifiable {
 	let id = UUID()
-	let expression: GeneratedExpression
+	let text: String
 	let node: any Node
-
-	var text: String { expression.description }
+	/// The genotype file's name, for one opened from a file.
+	var name: String?
 }
 
 struct RandomGridView: View {
@@ -70,15 +73,16 @@ struct RandomGridView: View {
 			if genotypes.isEmpty { generate() }
 		}
 		.onChange(of: maxDepth) { generate() }
+#if os(macOS)
+		.focusedSceneValue(\.openGenotype, openWithPanel)
+#endif
 		.sheet(item: $fullSizeGenotype) { genotype in
-			sheet(title: "Full Size", dismiss: { fullSizeGenotype = nil }) {
+			sheet(title: genotype.name ?? "Full Size", dismiss: { fullSizeGenotype = nil }) {
 				VStack(alignment: .leading) {
 					RenderedImageView(nodeRenderer: NodeRenderer(node: genotype.node,
 																 evaluator: Evaluator(size: CGSize(width: 800, height: 800))))
-					Text(genotype.text)
-						.font(.system(.body, design: .monospaced))
-						.textSelection(.enabled)
-						.frame(maxWidth: 800, alignment: .leading)
+					ExpressionTextView(text: genotype.text)
+						.frame(width: 800, height: 120)
 				}
 				.padding()
 			}
@@ -121,12 +125,14 @@ struct RandomGridView: View {
 				Button("Show Debug View") { debugGenotype = genotype }
 				Button("Show Expression Tree") { treeGenotype = genotype }
 				Divider()
-				Button("Save as Genotype…") { savingGenotype = genotype }
 #if os(macOS)
+				Button("Save as Genotype…") { saveWithPanel(genotype) }
 				Button("Copy Expression") {
 					NSPasteboard.general.clearContents()
 					NSPasteboard.general.setString(genotype.text, forType: .string)
 				}
+#else
+				Button("Save as Genotype…") { savingGenotype = genotype }
 #endif
 			}
 	}
@@ -142,6 +148,70 @@ struct RandomGridView: View {
 				}
 		}
 	}
+
+#if os(macOS)
+	/// The type macOS gives `.evolvgenotype` files. The app doesn't declare
+	/// one, so this has to be the plain extension-based type: asking for one
+	/// that conforms to plain text makes a different type, and the open
+	/// panel greys out the files.
+	private static let genotypeContentType = UTType(filenameExtension: GenotypeLibrary.fileExtension) ?? .data
+
+	/// Asks where to save the expression as an `.evolvgenotype` file, starting
+	/// in the user Genotypes folder so it shows up in the genotype library,
+	/// but it can go anywhere. The file name becomes the genotype's name.
+	private func saveWithPanel(_ genotype: RandomGenotype) {
+		let panel = NSSavePanel()
+		panel.title = "Save as Genotype"
+		panel.nameFieldStringValue = "Untitled"
+		panel.allowedContentTypes = [Self.genotypeContentType]
+		panel.canCreateDirectories = true
+		panel.directoryURL = GenotypeLibrary.containerGenotypesDirectory
+		let expression = genotype.text
+		let completion: (NSApplication.ModalResponse) -> Void = { response in
+			guard response == .OK, let url = panel.url else { return }
+			do {
+				try GenotypeStore.shared.writeGenotype(expression: expression, to: url)
+			} catch {
+				NSAlert(error: error).runModal()
+			}
+		}
+		if let window = NSApp.keyWindow {
+			panel.beginSheetModal(for: window, completionHandler: completion)
+		} else {
+			panel.begin(completionHandler: completion)
+		}
+	}
+
+	/// Asks for an `.evolvgenotype` file, from anywhere, and shows it full
+	/// size. It isn't added to the genotype library.
+	private func openWithPanel() {
+		let panel = NSOpenPanel()
+		panel.title = "Open Genotype"
+		panel.allowedContentTypes = [Self.genotypeContentType]
+		panel.allowsMultipleSelection = false
+		panel.canChooseDirectories = false
+		panel.directoryURL = GenotypeLibrary.containerGenotypesDirectory
+		let completion: (NSApplication.ModalResponse) -> Void = { response in
+			guard response == .OK, let url = panel.url else { return }
+			do {
+				let text = try String(contentsOf: url, encoding: .utf8)
+				let genotype = try GenotypeLibrary.parse(text, fileURL: url, source: .user).genotype
+				let node = try ContentView.parser.parse(genotype.expression)
+				fullSizeGenotype = RandomGenotype(text: genotype.expression, node: node, name: genotype.name ?? genotype.id)
+			} catch {
+				let alert = NSAlert()
+				alert.messageText = "Couldn't open \(url.lastPathComponent)"
+				alert.informativeText = (error as? GenotypeParseError)?.message ?? error.localizedDescription
+				alert.runModal()
+			}
+		}
+		if let window = NSApp.keyWindow {
+			panel.beginSheetModal(for: window, completionHandler: completion)
+		} else {
+			panel.begin(completionHandler: completion)
+		}
+	}
+#endif
 
 	/// Nine new genotypes from a fresh seed. The seed is shown in the window
 	/// subtitle, so a grid can be regenerated from it later.
@@ -162,14 +232,72 @@ struct RandomGridView: View {
 				print("Generated expression doesn't parse: \(expression) -- \(error.localizedDescription)")
 				node = Constant(0)
 			}
-			return RandomGenotype(expression: expression, node: node)
+			return RandomGenotype(text: expression.description, node: node)
 		}
 	}
 }
 
+/// The full size view's expression: read-only, but selectable and
+/// copyable, and scrolls when it's long.
+private struct ExpressionTextView: View {
+	let text: String
+
+	var body: some View {
+#if os(macOS)
+		SelectableTextView(text: text)
+			.overlay(RoundedRectangle(cornerRadius: 4).stroke(.separator))
+#else
+		ScrollView {
+			Text(text)
+				.font(.system(.body, design: .monospaced))
+				.textSelection(.enabled)
+				.frame(maxWidth: .infinity, alignment: .leading)
+		}
+#endif
+	}
+}
+
+#if os(macOS)
+/// File > Open Genotype, published by the focused RandomGridView.
+struct OpenGenotypeKey: FocusedValueKey {
+	typealias Value = () -> Void
+}
+
+extension FocusedValues {
+	var openGenotype: OpenGenotypeKey.Value? {
+		get { self[OpenGenotypeKey.self] }
+		set { self[OpenGenotypeKey.self] = newValue }
+	}
+}
+
+/// A non-editable NSTextView: any part of the expression can be selected and
+/// copied, with the usual Copy and Select All menu items.
+private struct SelectableTextView: NSViewRepresentable {
+	let text: String
+
+	func makeNSView(context: Context) -> NSScrollView {
+		let scrollView = NSTextView.scrollableTextView()
+		let textView = scrollView.documentView as! NSTextView
+		textView.isEditable = false
+		textView.isSelectable = true
+		textView.font = .monospacedSystemFont(ofSize: NSFont.systemFontSize, weight: .regular)
+		textView.textContainerInset = NSSize(width: 4, height: 4)
+		return scrollView
+	}
+
+	func updateNSView(_ scrollView: NSScrollView, context: Context) {
+		let textView = scrollView.documentView as! NSTextView
+		if textView.string != text {
+			textView.string = text
+		}
+	}
+}
+#endif
+
 /// Asks for a name and saves the expression as a user genotype (see
 /// GenotypeStore.saveUserGenotype). It then shows up in the genotype
 /// library window.
+/// Used where there's no save panel; on macOS, see saveWithPanel.
 private struct SaveGenotypeSheet: View {
 	let expression: String
 

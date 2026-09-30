@@ -81,4 +81,19 @@ final class GenotypeStore {
 		}
 		return saved
 	}
+
+	/// Writes `expression` to `fileURL` (anywhere, e.g. from a save panel),
+	/// replacing what's there, with the file name as the genotype's name.
+	/// Reloads afterwards, so a file saved into the user Genotypes folder
+	/// shows up in the library.
+	func writeGenotype(expression: String, to fileURL: URL) throws {
+		let name = fileURL.deletingPathExtension().lastPathComponent.replacingOccurrences(of: "\"", with: "")
+		let header = name.isEmpty ? "" : "---\nname: \"\(name)\"\n---\n"
+		do {
+			try (header + expression + "\n").write(to: fileURL, atomically: true, encoding: .utf8)
+		} catch {
+			throw SaveError(errorDescription: "Couldn't write \(fileURL.lastPathComponent): \(error.localizedDescription)")
+		}
+		reload()
+	}
 }

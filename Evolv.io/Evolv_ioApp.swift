@@ -32,6 +32,11 @@ struct Evolv_ioApp: App {
             RandomGridView()
         }
         .commands {
+#if os(macOS)
+            CommandGroup(after: .newItem) {
+                OpenGenotypeMenuItem()
+            }
+#endif
             CommandGroup(after: .appInfo) {
 #if os(macOS)
                 GenotypeLibraryMenuItem()
@@ -80,6 +85,19 @@ private struct GenotypeLibraryMenuItem: View {
             openWindow(id: Evolv_ioApp.genotypeLibraryWindowID)
         }
         .keyboardShortcut("l", modifiers: [.command, .shift])
+    }
+}
+
+/// Opens a genotype file in the focused grid window's full size view.
+private struct OpenGenotypeMenuItem: View {
+    @FocusedValue(\.openGenotype) private var openGenotype
+
+    var body: some View {
+        Button("Open Genotype…") {
+            openGenotype?()
+        }
+        .keyboardShortcut("o")
+        .disabled(openGenotype == nil)
     }
 }
 #endif
