@@ -116,6 +116,7 @@ actor EvolvMCPServer {
                 ),
                 MCPRenderTool.tool,
                 MCPDebugValuesTool.tool,
+                MCPGenerateTool.tool,
             ] + MCPGenotypeTools.tools)
         }
 
@@ -136,6 +137,8 @@ actor EvolvMCPServer {
                 return await MCPRenderTool.call(arguments: params.arguments)
             case "debug_values":
                 return await MCPDebugValuesTool.call()
+            case "generate_genotypes":
+                return await MCPGenerateTool.call(arguments: params.arguments)
             default:
                 if let result = await MCPGenotypeTools.call(name: params.name, arguments: params.arguments) {
                     return result

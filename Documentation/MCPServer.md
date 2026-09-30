@@ -208,6 +208,24 @@ Deletes a user `.evolvgenotype` file and reloads the list. Same `name`
 rules; `isError: true` if there's no such user file. Bundled genotypes can't
 be deleted this way.
 
+### `generate_genotypes(seed, count, max_depth, exclude)`
+
+Random genotypes from `RandomExpressionGenerator`, built exactly the way the
+main window's grid builds them (`RandomGridView.generate()`), returned as
+pretty JSON: `seed` (as a string), `max_depth` and `expressions`, in order.
+It only generates; render the expressions with `render`. Source:
+`Evolv.io/MCP/MCPGenerateTool.swift`.
+
+- `seed` (optional): a UInt64, as an integer or a decimal string. Seeds
+  above 2^53 lose precision as JSON numbers, so pass those as strings.
+  Default: random. The same seed and settings always give the same
+  expressions, so a seed from the grid's window subtitle with `count` 9 and
+  the grid's depth reproduces that grid.
+- `count` (optional, 1-100, default 9): how many genotypes to draw from the
+  one seeded generator.
+- `max_depth` (optional, default 10): the grid's Depth stepper.
+- `exclude` (optional): node names never picked as functions.
+
 ## What's *not* exposed yet
 
 A `list_nodes`/`get_node` read-back tool for the user Nodes folder.
