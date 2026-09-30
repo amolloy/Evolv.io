@@ -250,9 +250,53 @@ final class DSLInterpreter {
 		self.liveParamText = liveParamText
 	}
 
-	func execute(_ stmt: DSLLetStmt) {
-		let text = evaluate(stmt.value)
-		env[stmt.name] = .value(context.declare(text, type: stmt.type ?? "float3"))
+	func execute(_ stmt: DSLStmt) {
+		switch stmt {
+			case .constant(let decl), .variable(let decl):
+				let text = evaluate(decl.value)
+				env[decl.name] = .value(context.declare(text, type: decl.type ?? "float3"))
+
+			case .assign(let name, let value):
+				// The parser only lets a `var` in scope be assigned, so the
+				// binding is always a declared local.
+				guard let binding = env[name] else {
+					preconditionFailure("DSL: assignment to unbound '\(name)'")
+				}
+				context.emitStatement("\(binding.text) = \(evaluate(value));")
+
+			case .loop(let loop):
+				executeLoop(loop)
+
+			case .breakIf(let cond):
+				context.emitStatement("if (\(evaluate(cond))) break;")
+		}
+	}
+
+	/// Emits `loop(i in lo..<hi, max: n) { body }` as a real MSL `for` loop.
+	/// The hard bound `lo + n` is a literal in the loop condition, so the
+	/// GPU never runs more than n iterations whatever `hi` evaluates to
+	/// (huge, negative, NaN); `hi` itself is evaluated once, before the
+	/// loop, and ends it early. Body statements are interpreted in a child
+	/// interpreter so their `let`s stay scoped to the loop body, the same
+	/// way MSL scopes them; `var`s declared outside keep their binding, so
+	/// assignments to them carry from one iteration to the next.
+	private func executeLoop(_ loop: DSLLoop) {
+		let loValue = resolveInt(loop.lo)
+		let maxValue = resolveInt(loop.max)
+		precondition(maxValue >= 0, "DSL: loop max must not be negative, got \(maxValue)")
+
+		let end = context.declare("float(\(evaluate(loop.hi)))", type: "float")
+		let counter = context.freshVariableName()
+		context.emitStatement("for (int \(counter) = \(loValue); \(counter) < \(loValue + maxValue); \(counter)++) {")
+		context.emitStatement("if (!(float(\(counter)) < \(end.variableName))) break;")
+
+		var bodyEnv = env
+		bodyEnv[loop.variable] = .literal(counter)
+		let body = DSLInterpreter(context: context, params: params, env: bodyEnv, liveParamText: liveParamText)
+		for stmt in loop.body {
+			body.execute(stmt)
+		}
+		context.emitStatement("}")
 	}
 
 	func evaluate(_ expr: DSLExpr) -> String {
@@ -329,7 +373,7 @@ final class DSLInterpreter {
 	/// time (not as a runtime MSL loop) into `lo...hi` independently-scoped
 	/// copies of `body`/`result`, then averages their results -- the DSL
 	/// equivalent of ColorGradient's Swift-side per-tap loop.
-	private func evaluateReduce(variable: String, lo: DSLExpr, hi: DSLExpr, body: [DSLLetStmt], result: DSLExpr) -> String {
+	private func evaluateReduce(variable: String, lo: DSLExpr, hi: DSLExpr, body: [DSLStmt], result: DSLExpr) -> String {
 		let loValue = resolveInt(lo)
 		let hiValue = resolveInt(hi)
 		precondition(loValue <= hiValue, "DSL: empty reduce range \(loValue)...\(hiValue)")
@@ -352,16 +396,16 @@ final class DSLInterpreter {
 		switch expr {
 			case .number(let text):
 				guard let i = Int(text) else {
-					preconditionFailure("DSL: expected an integer literal in a reduce range, got '\(text)'")
+					preconditionFailure("DSL: expected an integer literal in an average/loop bound, got '\(text)'")
 				}
 				return i
 			case .param(let name):
 				guard case .int(let i)? = params[name] else {
-					preconditionFailure("DSL: expected an int param '$\(name)' in a reduce range")
+					preconditionFailure("DSL: expected an int param '$\(name)' in an average/loop bound")
 				}
 				return i
 			default:
-				preconditionFailure("DSL: reduce range bounds must be integer literals or int params")
+				preconditionFailure("DSL: average bounds and loop lo/max must be integer literals or int params")
 		}
 	}
 }

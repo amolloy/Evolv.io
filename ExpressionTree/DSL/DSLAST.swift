@@ -29,7 +29,37 @@ indirect enum DSLExpr {
 	/// to concrete integers at codegen time (an int literal or an int
 	/// `$param`), since this unrolls `body` once per iteration rather than
 	/// emitting a runtime MSL loop.
-	case reduce(variable: String, lo: DSLExpr, hi: DSLExpr, body: [DSLLetStmt], result: DSLExpr)
+	case reduce(variable: String, lo: DSLExpr, hi: DSLExpr, body: [DSLStmt], result: DSLExpr)
+}
+
+/// One statement in a node, module `func`, `average` or `loop` body.
+indirect enum DSLStmt {
+	/// `let name[: type] = expr` -- an immutable local.
+	case constant(DSLLetStmt)
+	/// `var name[: type] = expr` -- a local that later `name = expr`
+	/// statements (typically inside a `loop`) may reassign.
+	case variable(DSLLetStmt)
+	/// `name = expr`, where `name` is a `var` in scope (the parser checks).
+	case assign(name: String, value: DSLExpr)
+	/// `loop(i in lo..<hi, max: n) { ... }` -- a real MSL `for` loop, unlike
+	/// `average`, which unrolls. See DSLLoop.
+	case loop(DSLLoop)
+	/// `break if cond` -- leaves the innermost enclosing `loop`. The parser
+	/// rejects it outside a loop.
+	case breakIf(DSLExpr)
+}
+
+/// `loop(variable in lo..<hi, max: max) { body }`. `lo` and `max` must be
+/// integers at codegen time (an int literal or an int `$param`); `hi` may be
+/// any runtime scalar expression. The loop runs for `variable` in
+/// `lo..<hi`, but never more than `max` times, so a mutated argument of
+/// 1e6 (or NaN) can't hang the GPU.
+struct DSLLoop {
+	let variable: String
+	let lo: DSLExpr
+	let hi: DSLExpr
+	let max: DSLExpr
+	let body: [DSLStmt]
 }
 
 struct DSLLetStmt {
@@ -82,7 +112,7 @@ public struct DSLTemplate {
 	/// initial/reset value and by anything rendering this tree without a
 	/// live-values buffer of its own).
 	let debugControls: [DSLDebugControl]
-	let body: [DSLLetStmt]
+	let body: [DSLStmt]
 	let returnExpr: DSLExpr
 }
 
@@ -103,13 +133,13 @@ struct DSLDebugControl {
 	let kind: DebugControlKind
 }
 
-/// A `func name(p0: type, ...) -> type { <let>* return expr }` declaration,
+/// A `func name(p0: type, ...) -> type { <stmt>* return expr }` declaration,
 /// only valid inside a `module` block -- see DSLModule.
 struct DSLFuncDecl {
 	let name: String
 	let params: [(name: String, type: String)]
 	let returnType: String
-	let body: [DSLLetStmt]
+	let body: [DSLStmt]
 	let returnExpr: DSLExpr
 }
 

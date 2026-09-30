@@ -24,7 +24,7 @@ enum DSLToken: Equatable {
 	case number(String)
 	case string(String)
 	case lparen, rparen, lbrace, rbrace
-	case comma, colon, dot, ellipsis, question
+	case comma, colon, dot, ellipsis, halfOpenRange, question
 	case plus, minus, star, slash
 	case assign, eq, neq, lt, lte, gt, gte
 	case and, or, not
@@ -152,6 +152,10 @@ final class DSLLexer {
 				if peek() == ".", peek(1) == "." {
 					pos += 2
 					return .ellipsis
+				}
+				if peek() == ".", peek(1) == "<" {
+					pos += 2
+					return .halfOpenRange
 				}
 				return .dot
 			case "=":

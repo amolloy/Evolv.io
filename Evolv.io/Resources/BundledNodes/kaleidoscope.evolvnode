@@ -1,0 +1,50 @@
+// kaleidoscope: source seen through three mirrors forming an equilateral
+// triangle, so the plane tiles with reflected copies of one triangular
+// piece of it. The 1993 paper says only that "a kaleidoscope function
+// generates triangular patterns"; its Figure 6 calls it twice, as
+// (kaleidoscope 2.1 6.9 Y (vector 0.96 0.42 0.51)) and
+// (kaleidoscope 1.6 6.9 Y (vector 0.30 0.45 -0.14)). The argument meanings
+// below are our interpretation, not Sims'.
+//   size:   triangle side = 1 / (0.25 + min(|size|, 16)); Figure 6's 2.1
+//           gives about 0.43, so roughly five triangles across the image
+//   twist:  rotates the mirrors about the origin, in radians
+//   source: sampled once, at the folded coordinate
+//   offset: x and y move the triangle's window over source; z rotates
+//           source inside it, in radians (like turning the object
+//           chamber of a real kaleidoscope)
+// The coordinate is first moved into the triangle's lattice cell by the
+// translations the mirrors generate (reflecting twice across parallel
+// mirror lines is a translation), then folded across whichever mirror it
+// is outside of until it is inside all three. After the lattice step at
+// most a few folds are needed; the loop allows 16.
+node "kaleidoscope"(size: scalar, twist: scalar, source: fn, offset: vector) {
+	let side: float = 1.0 / (0.25 + min(abs((size.x + size.y + size.z) / 3.0), 16.0))
+	// Inradius: each mirror line is h from the triangle's centre.
+	let h: float = side / (2.0 * sqrt(3.0))
+	let tw: float = clamp((twist.x + twist.y + twist.z) / 3.0, -1e4, 1e4)
+	let ct: float = cos(tw)
+	let st: float = sin(tw)
+	let p0: float2 = float2(ct * coord.x + st * coord.y, -st * coord.x + ct * coord.y)
+	// Mirror normals, pointing out of the triangle.
+	let n1: float2 = float2(0.0, 1.0)
+	let n2: float2 = float2(-0.8660254, -0.5)
+	let n3: float2 = float2(0.8660254, -0.5)
+	// Lattice translations 6h * n1 and 6h * n2; p0 = u * T1 + v * T2.
+	let v: float = -p0.x / (3.0 * sqrt(3.0) * h)
+	let u: float = (p0.y + 3.0 * h * v) / (6.0 * h)
+	var p: float2 = p0 - (round(u) * n1 + round(v) * n2) * (6.0 * h)
+	loop(i in 0..<16, max: 16) {
+		let d1: float = dot(p, n1) - h
+		p = (d1 > 0.0) ? p - 2.0 * d1 * n1 : p
+		let d2: float = dot(p, n2) - h
+		p = (d2 > 0.0) ? p - 2.0 * d2 * n2 : p
+		let d3: float = dot(p, n3) - h
+		p = (d3 > 0.0) ? p - 2.0 * d3 * n3 : p
+		break if d1 <= 0.0 && d2 <= 0.0 && d3 <= 0.0
+	}
+	let spin: float = clamp(offset.z, -1e4, 1e4)
+	let co: float = cos(spin)
+	let so: float = sin(spin)
+	let q: float2 = float2(co * p.x - so * p.y, so * p.x + co * p.y)
+	return source(q + offset.xy)
+}

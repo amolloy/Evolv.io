@@ -81,8 +81,9 @@ node "+"(v0, v1) {
   colors/values as RGB triplets, and a "scalar" is just a triplet with all
   three channels equal (a broadcast). There's no dedicated scalar type for
   children.
-- The body is a sequence of `let`/`param` statements followed by exactly one
-  `return <expr>`.
+- The body is a sequence of statements (`let`, `param`, and the `var`/
+  `loop` statements described under [`loop`](#loop-a-real-runtime-loop))
+  followed by exactly one `return <expr>`.
 - Inside the body, `coord` is always available — the ambient pixel
   position (`float2`) being evaluated. Most nodes never need it directly
   (they just combine their children), but anything that samples at an
@@ -120,8 +121,8 @@ Two families of "type" show up, and they mean different things:
   the generated MSL, so anything MSL itself accepts here is fair game.
 - **`param` types**, restricted to exactly `float` or `int` — see `$param`
   below. `int` exists only for things that must be known at *codegen* time
-  (an `average(...)` loop's bounds); `float` is everything else, including
-  every `debug`-annotated value.
+  (an `average(...)`'s bounds, a `loop`'s lower bound and `max`); `float`
+  is everything else, including every `debug`-annotated value.
 
 ## Expressions
 
@@ -188,8 +189,8 @@ param $delta: float = 0.02
   otherwise free-form — same top-level list as `let`, just filtered out of
   the emitted statement sequence.
 - Only `float` and `int` are valid param types. `int` params exist
-  specifically for `average(...)`'s loop bounds (see below) — anything
-  else should be `float`.
+  specifically for `average(...)`'s bounds and a `loop`'s lower bound and
+  `max` (see below) — anything else should be `float`.
 
 ## Debug hooks: live-tunable sliders and toggles
 
@@ -336,7 +337,10 @@ module "lighting" {
 
 Module `func`s have their own small grammar: typed params (`name: type`,
 plain MSL types, no `fn` role, no `$param` support at all), a typed return,
-and a body of `let`s + `return`. They can call each other by plain name.
+and a body of statements (`let`, `var`, `loop`) + `return`. They can call
+each other by plain name. A module is the place for a loop two nodes share:
+`ifs-core.evolvnode` holds the escape-time loop both `ifs` and
+`warped-ifs` call.
 
 Two things make this safe to mix-and-match arbitrarily:
 
@@ -375,6 +379,58 @@ let gx = average(i in 1...4) {
   opposed to a fixed handful of hardcoded offsets) should be written —
   it's the DSL's replacement for what used to be a hand-unrolled Swift
   loop with a `debugTapCount` static.
+
+## `loop`: a real runtime loop
+
+`average` unrolls at compile time and has no state from one iteration to
+the next. For iteration where each step depends on the last (escape-time
+fractals, repeated folding, anything that should stop early), use `var`,
+assignment, `loop` and `break if`:
+
+```
+node "julia"(n: scalar, cx: scalar, cy: scalar) -> scalar {
+	let c: float2 = float2(cx.x, cy.x)
+	var z: float2 = coord * 2.0
+	var steps: float = 0.0
+	loop(i in 0..<n.x, max: 32) {
+		z = float2(z.x * z.x - z.y * z.y, 2.0 * z.x * z.y) + c
+		steps = steps + 1.0
+		break if dot(z, z) > 4.0
+	}
+	return float3(steps / 32.0)
+}
+```
+
+- **`var name[: type] = expr`** declares a local that can be reassigned
+  (`let` locals can't). Type defaults to `float3`, as for `let`.
+- **`name = expr`** reassigns a `var`. Assigning to a `let`, a child
+  param, or a name that isn't a `var` in scope is a parse error (so a load
+  issue, not a render failure). A `let` with the same name inside a block
+  shadows the `var` for the rest of that block.
+- **`loop(i in lo..<hi, max: n) { statements }`** emits a real MSL `for`
+  loop. `i` is an `int` inside the body (`float(i)` to use it in
+  arithmetic). `lo` and `max` must be integer literals or `int` `$param`s;
+  `hi` can be any scalar expression, including a runtime value from a
+  child (`n.x`) or a module function parameter. It is evaluated once,
+  before the loop.
+- **`max` is a hard cap.** The loop runs `i = lo, lo+1, ...` while
+  `i < hi`, but never more than `max` times, whatever `hi` turns out to
+  be. A mutated argument of 1e6 (or a NaN) can't hang the GPU; a
+  negative `hi` runs no iterations.
+- **`break if cond`** leaves the innermost loop when `cond` is true. `cond`
+  must be a scalar `bool` (compare `.x`, or a `float`, not a `float3`). It
+  is only allowed directly in a loop body, not outside a loop or inside an
+  `average` block (those are unrolled inline).
+- Statements in a loop body (`let`, `var`, assignments, nested `loop`s)
+  are scoped to that body: a `let` is a fresh local every iteration, and
+  nothing declared inside is visible after the loop. `var`s declared
+  before the loop keep their value from one iteration to the next and
+  after it ends.
+- Loops work in node bodies, module `func`s and `average` blocks.
+
+`kaleidoscope.evolvnode` (fold a point into a triangle until it's inside
+all three mirrors) and `ifs-core.evolvnode` (iterate inverse maps until
+the point escapes) are the bundled examples.
 
 ## Loading and namespacing
 
@@ -434,4 +490,6 @@ resolved, in this order:
 | Make it a live slider | `param $k: float = 0.5 debug slider(0.0, 1.0)` |
 | Make it a live toggle | `param $k: float = 1.0 debug toggle` |
 | Multi-tap average, compile-time unrolled | `average(i in 1...4) { ... }` |
+| A local you can reassign | `var z: float2 = coord` then `z = z * 2.0` |
+| Iterate at runtime, with state and an early exit | `loop(i in 0..<n.x, max: 32) { ...; break if cond }` |
 | Namespace a folder of custom nodes | drop a `package "name"` file named `Package.evolvnode` at its root |

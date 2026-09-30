@@ -1,0 +1,6 @@
+// ifs: an escape-time iterated function system over the pixel coordinates.
+// The 16 arguments define two affine maps, the line choosing between their
+// inverses, the iteration count and a zoom -- see ifs-core.evolvnode.
+node "ifs"(a0: scalar, a1: scalar, a2: scalar, a3: scalar, a4: scalar, a5: scalar, a6: scalar, a7: scalar, a8: scalar, a9: scalar, a10: scalar, a11: scalar, a12: scalar, a13: scalar, a14: scalar, a15: scalar) -> scalar requires("ifs-core") {
+	return float3(ifsEscape(coord, a0, a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13, a14, a15))
+}

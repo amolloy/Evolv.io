@@ -23,7 +23,7 @@
 //                  ('requires' '(' requirement (',' requirement)* ')')?
 //    requirement := ('::')? (IDENT|STRING)  -- '::' = look only in library
 //                  roots scanned before this file's own (see DSLLibrary.scan)
-//                  '{' (letStmt | paramStmt)* 'return' expr '}'
+//                  '{' (stmt | paramStmt)* 'return' expr '}'
 //    paramDecl  := IDENT (':' IDENT+)?         -- ": fn" marks a sampled child;
 //                  ": scalar"/": vector" (optionally after "fn") is the
 //                  generator's preferred argument type
@@ -39,9 +39,17 @@
 //                  as a Toggle/Slider (see MSLCodegenContext.registerDebugControl)
 //    moduleDecl := 'module' STRING '{' funcDecl* '}'
 //    funcDecl   := 'func' IDENT '(' (IDENT ':' IDENT (',' IDENT ':' IDENT)*)? ')'
-//                  '->' IDENT '{' letStmt* 'return' expr '}'
+//                  '->' IDENT '{' stmt* 'return' expr '}'
 //    packageDecl := 'package' STRING          -- a whole file's content
+//    stmt       := letStmt | varStmt | assignStmt | loopStmt | breakStmt
 //    letStmt    := 'let' IDENT (':' IDENT)? '=' expr
+//    varStmt    := 'var' IDENT (':' IDENT)? '=' expr
+//    assignStmt := IDENT '=' expr             -- IDENT must be a `var` in scope
+//    loopStmt   := 'loop' '(' IDENT 'in' additive '..<' additive ','
+//                  'max' ':' additive ')' '{' stmt* '}'
+//                  -- a real runtime `for` loop; lo and max must be int
+//                  literals or int `$param`s, hi can be any runtime scalar
+//    breakStmt  := 'break' 'if' expr          -- only inside a loopStmt
 //    expr       := ternary
 //    ternary    := or ('?' expr ':' expr)?
 //    or         := and ('||' and)*
@@ -59,7 +67,7 @@
 //                  passthrough MSL builtin (see DSLInterpreter's unbound-call
 //                  handling) without the grammar needing real generics
 //    reduceExpr := 'average' '(' IDENT 'in' expr '...' expr ')'
-//                  '{' letStmt* expr '}'
+//                  '{' stmt* expr '}'     -- no breakStmt, even inside a loop
 //
 //  Bare (non-call) identifiers that aren't bound to a child/let/param are
 //  passed through as literal text too (not just in call position) -- see
@@ -75,6 +83,14 @@ struct DSLParseError: Error, CustomStringConvertible {
 final class DSLParser {
 	private let tokens: [DSLToken]
 	private var pos = 0
+	/// Names declared in each enclosing block, innermost last, mapped to
+	/// whether they're a `var` -- so `x = ...` can be rejected unless `x`
+	/// is a `var` in scope (a `let` or a child param of the same name
+	/// shadows it).
+	private var scopes: [[String: Bool]] = []
+	/// How many `loop`s enclose the current statement; `break if` needs at
+	/// least one. Reset to 0 inside an `average` block (see parseReduce).
+	private var loopDepth = 0
 
 	init(_ source: String) throws {
 		tokens = try DSLLexer(source).tokenize()
@@ -132,16 +148,19 @@ final class DSLParser {
 		}
 
 		try expect(.lbrace)
-		var body: [DSLLetStmt] = []
+		scopes = [Dictionary(params.map { ($0.name, false) }, uniquingKeysWith: { a, _ in a })]
+		var body: [DSLStmt] = []
 		var paramDefaults: [String: DSLParamValue] = [:]
 		var debugControls: [DSLDebugControl] = []
-		while checkIdentifier("let") || checkIdentifier("param") {
+		while true {
 			if checkIdentifier("param") {
 				let (paramName, value, debugControl) = try parseParamDefaultStmt()
 				paramDefaults[paramName] = value
 				if let debugControl { debugControls.append(debugControl) }
+			} else if let stmt = try parseStmt() {
+				body.append(stmt)
 			} else {
-				body.append(try parseLetStmt())
+				break
 			}
 		}
 		try expectIdentifier("return")
@@ -187,9 +206,10 @@ final class DSLParser {
 		let returnType = try expectAnyIdentifier()
 
 		try expect(.lbrace)
-		var body: [DSLLetStmt] = []
-		while checkIdentifier("let") {
-			body.append(try parseLetStmt())
+		scopes = [Dictionary(params.map { ($0.name, false) }, uniquingKeysWith: { a, _ in a })]
+		var body: [DSLStmt] = []
+		while let stmt = try parseStmt() {
+			body.append(stmt)
 		}
 		try expectIdentifier("return")
 		let returnExpr = try parseExpr()
@@ -283,8 +303,39 @@ final class DSLParser {
 		return DSLParam(name: name, isFunction: isFunction, preferredType: preferredType)
 	}
 
-	private func parseLetStmt() throws -> DSLLetStmt {
-		try expectIdentifier("let")
+	/// One statement, or nil (consuming nothing) if the next token doesn't
+	/// start one -- the caller then expects `return` or a trailing
+	/// expression.
+	private func parseStmt() throws -> DSLStmt? {
+		if checkIdentifier("let") {
+			return .constant(try parseLetStmt(keyword: "let"))
+		}
+		if checkIdentifier("var") {
+			return .variable(try parseLetStmt(keyword: "var"))
+		}
+		if checkIdentifier("loop") {
+			return .loop(try parseLoop())
+		}
+		if checkIdentifier("break") {
+			pos += 1
+			guard loopDepth > 0 else {
+				throw DSLParseError(message: "'break if' is only valid inside a 'loop' (and not inside an 'average' block)")
+			}
+			try expectIdentifier("if")
+			return .breakIf(try parseExpr())
+		}
+		if case .identifier(let name) = peek(), pos + 1 < tokens.count, tokens[pos + 1] == .assign {
+			guard lookupIsMutable(name) == true else {
+				throw DSLParseError(message: "Can't assign to '\(name)': only a 'var' can be reassigned")
+			}
+			pos += 2
+			return .assign(name: name, value: try parseExpr())
+		}
+		return nil
+	}
+
+	private func parseLetStmt(keyword: String) throws -> DSLLetStmt {
+		try expectIdentifier(keyword)
 		let name = try expectAnyIdentifier()
 		var type: String? = nil
 		if match(.colon) {
@@ -292,7 +343,54 @@ final class DSLParser {
 		}
 		try expect(.assign)
 		let value = try parseExpr()
+		declare(name, mutable: keyword == "var")
 		return DSLLetStmt(name: name, type: type, value: value)
+	}
+
+	private func parseLoop() throws -> DSLLoop {
+		try expectIdentifier("loop")
+		try expect(.lparen)
+		let variable = try expectAnyIdentifier()
+		try expectIdentifier("in")
+		let lo = try parseAdditive()
+		try expect(.halfOpenRange)
+		let hi = try parseAdditive()
+		try expect(.comma)
+		try expectIdentifier("max")
+		try expect(.colon)
+		let max = try parseAdditive()
+		try expect(.rparen)
+		for (label, bound) in [("lower bound", lo), ("max", max)] {
+			switch bound {
+				case .number(let text) where Int(text) != nil: continue
+				case .param: continue
+				default: throw DSLParseError(message: "loop \(label) must be an integer literal or an int $param")
+			}
+		}
+		try expect(.lbrace)
+		scopes.append([variable: false])
+		loopDepth += 1
+		var body: [DSLStmt] = []
+		while let stmt = try parseStmt() {
+			body.append(stmt)
+		}
+		loopDepth -= 1
+		scopes.removeLast()
+		try expect(.rbrace)
+		return DSLLoop(variable: variable, lo: lo, hi: hi, max: max, body: body)
+	}
+
+	private func declare(_ name: String, mutable: Bool) {
+		if scopes.isEmpty { scopes.append([:]) }
+		scopes[scopes.count - 1][name] = mutable
+	}
+
+	/// nil if `name` isn't declared in any enclosing block.
+	private func lookupIsMutable(_ name: String) -> Bool? {
+		for scope in scopes.reversed() {
+			if let mutable = scope[name] { return mutable }
+		}
+		return nil
 	}
 
 	// MARK: - Expressions
@@ -464,11 +562,18 @@ final class DSLParser {
 		let hi = try parseAdditive()
 		try expect(.rparen)
 		try expect(.lbrace)
-		var body: [DSLLetStmt] = []
-		while checkIdentifier("let") {
-			body.append(try parseLetStmt())
+		// Each `average` iteration is unrolled inline, so a `break` in here
+		// would leave an enclosing loop halfway through an expression.
+		let savedLoopDepth = loopDepth
+		loopDepth = 0
+		scopes.append([variable: false])
+		var body: [DSLStmt] = []
+		while let stmt = try parseStmt() {
+			body.append(stmt)
 		}
 		let result = try parseExpr()
+		scopes.removeLast()
+		loopDepth = savedLoopDepth
 		try expect(.rbrace)
 		return .reduce(variable: variable, lo: lo, hi: hi, body: body, result: result)
 	}

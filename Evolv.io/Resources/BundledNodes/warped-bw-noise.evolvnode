@@ -3,10 +3,5 @@
 // u and v replace the pixel coordinates (1991 paper, section 4.1, and
 // Figure 4i's stretched bands for (warped-color-noise (* X .2) Y .1 2)).
 node "warped-bw-noise"(u, v, e2: scalar, e3: scalar) -> scalar requires(perlin, octaves) {
-	let v0 = e2 * 50.0
-	return float3(
-		octaveNoise(float2(u.x, v.x) * v0.x, 0, e3.x),
-		octaveNoise(float2(u.y, v.y) * v0.y, 0, e3.y),
-		octaveNoise(float2(u.z, v.z) * v0.z, 0, e3.z)
-	)
+	return noiseChannels(float2(u.x, v.x), float2(u.y, v.y), float2(u.z, v.z), e2, e3, 0)
 }

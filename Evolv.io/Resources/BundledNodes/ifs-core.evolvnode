@@ -1,0 +1,85 @@
+// Shared core of the ifs and warped-ifs nodes. Neither Sims paper says how
+// his ifs worked beyond "iterated function systems can generate fractal
+// patterns and shapes"; every published genotype passes it exactly 16
+// constants (1991 Figures 7 and 12, 1993 Figure 6). This is a plausible
+// interpretation, not a reconstruction: an escape-time image of a two-map
+// IFS, after Barnsley (Fractals Everywhere, 1988, chapter 7).
+//
+// The 16 arguments (each reduced to a scalar by averaging its channels,
+// then clamped to -1e4...1e4):
+//   0-5   map 1: rotation (radians), x scale, y scale, shear, x shift, y shift
+//   6-11  map 2: the same
+//   12    bias between the maps: map 1's inverse is preferred by a factor
+//         exp(0.5 * sin(a12)), 0.61...1.65
+//   13    bands: the output is 0.5 - 0.5 * cos(escape steps * |a13|), so
+//         larger values give more contour rings (at most 16 rad per step);
+//         |a13| < 0.01 returns the plain escape fraction instead
+//   14    iteration count: 6 + floor(|a14|), at most 32
+//   15    zoom: the pixel coordinate is scaled by 2 * 2^a15 (a15 clamped
+//         to -3...3), so larger values show more of the plane
+//
+// Every argument value gives a finite, non-degenerate map. Rotations are
+// angles, so any value works. Scales, shears and shifts go through sin, so
+// small values pass through almost unchanged and mutated ones like -31 or
+// 20.7 wrap instead of blowing up: scales land in 0.2...0.7, shears in
+// -0.2...0.2, shifts in -1...1. Each forward map therefore contracts
+// (largest stretch at most 0.9) and is never singular (determinant at
+// least 0.04), so its inverse always exists.
+//
+// For each point z (the zoomed coordinate), each loop step applies both
+// inverse maps and keeps whichever result is nearer the midpoint of the
+// two shifts (weighted by the bias), until z is more than 16 from that
+// midpoint. Every attractor these maps can make lies within 15.6 of it, and
+// points on the attractor never leave; points off it are pushed out, the
+// farther away the sooner. The escape step, smoothed by how far past 16
+// the point landed, divided by the iteration count, is the escape
+// fraction in 0...1 (1 = never escaped). The fractal structure shows up as
+// spiral and island contours around the attractor.
+module "ifs-core" {
+	func ifsLum(v: float3) -> float {
+		return clamp((v.x + v.y + v.z) / 3.0, -1e4, 1e4)
+	}
+
+	// Inverse of the linear part R(th) * [[sx, k], [0, sy]], row-major.
+	func ifsInverse(th: float, sxArg: float, syArg: float, shearArg: float) -> float4 {
+		let sx: float = 0.45 + 0.25 * sin(sxArg)
+		let sy: float = 0.45 + 0.25 * sin(syArg)
+		let k: float = 0.2 * sin(shearArg)
+		let c: float = cos(th)
+		let s: float = sin(th)
+		let i00: float = 1.0 / sx
+		let i01: float = -k / (sx * sy)
+		let i11: float = 1.0 / sy
+		return float4(i00 * c - i01 * s, i00 * s + i01 * c, -i11 * s, i11 * c)
+	}
+
+	func ifsEscape(p: float2, a0: float3, a1: float3, a2: float3, a3: float3, a4: float3, a5: float3, a6: float3, a7: float3, a8: float3, a9: float3, a10: float3, a11: float3, a12: float3, a13: float3, a14: float3, a15: float3) -> float {
+		let inv1: float4 = ifsInverse(ifsLum(a0), ifsLum(a1), ifsLum(a2), ifsLum(a3))
+		let t1: float2 = sin(float2(ifsLum(a4), ifsLum(a5)))
+		let inv2: float4 = ifsInverse(ifsLum(a6), ifsLum(a7), ifsLum(a8), ifsLum(a9))
+		let t2: float2 = sin(float2(ifsLum(a10), ifsLum(a11)))
+		let mid: float2 = (t1 + t2) * 0.5
+		let bias: float = exp(0.5 * sin(ifsLum(a12)))
+		let bands: float = min(abs(ifsLum(a13)), 16.0)
+		let count: float = min(6.0 + floor(abs(ifsLum(a14))), 32.0)
+		let zoom: float = 2.0 * exp2(clamp(ifsLum(a15), -3.0, 3.0))
+		var z: float2 = clamp(p, float2(-1e4), float2(1e4)) * zoom
+		var result: float = 1.0
+		loop(i in 0..<count, max: 32) {
+			let q1: float2 = z - t1
+			let q2: float2 = z - t2
+			let z1: float2 = float2(inv1.x * q1.x + inv1.y * q1.y, inv1.z * q1.x + inv1.w * q1.y)
+			let z2: float2 = float2(inv2.x * q2.x + inv2.y * q2.y, inv2.z * q2.x + inv2.w * q2.y)
+			let zNext: float2 = (length(z1 - mid) < length(z2 - mid) * bias) ? z1 : z2
+			let r0: float = max(length(z - mid), 1e-6)
+			let r1: float = length(zNext - mid)
+			let escaped: bool = r1 > 16.0
+			let past: float = clamp(log(r1 / 16.0) / log(max(r1 / r0, 1.0001)), 0.0, 1.0)
+			result = escaped ? (float(i) + 1.0 - past) / count : result
+			z = zNext
+			break if escaped
+		}
+		let banded: float = 0.5 - 0.5 * cos(result * count * bands)
+		return (bands < 0.01) ? result : banded
+	}
+}

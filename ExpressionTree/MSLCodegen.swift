@@ -164,6 +164,21 @@ public final class MSLCodegenContext {
 		return MSLValue(variableName: name)
 	}
 
+	/// A fresh local name from the same `tN` sequence `declare` uses, for
+	/// a local `declare` can't emit itself (a DSL `loop`'s counter).
+	public func freshVariableName() -> String {
+		let name = "t\(nextVariableIndex)"
+		nextVariableIndex += 1
+		return name
+	}
+
+	/// Appends one raw MSL statement or block delimiter (`for (...) {`,
+	/// `}`, `tN = ...;`) -- used by a DSL `loop`, whose body statements
+	/// land between the two braces.
+	public func emitStatement(_ text: String) {
+		statements.append(text)
+	}
+
 	public func require(_ requirement: MSLResourceRequirements) {
 		resourceRequirements.insert(requirement)
 	}

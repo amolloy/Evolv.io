@@ -1,4 +1,5 @@
-// Fractal (octave) sum of perlinNoise, shared by the four noise nodes.
+// Fractal (octave) sum of perlinNoise, and the body the four noise nodes
+// share (noiseChannels, at the end).
 // Their last argument is an octave count, not a random seed: every noise
 // sample in Sims' 1991 Figure 4 (4f bw-noise, 4g color-noise, 4i
 // warped-color-noise) passes 2 there, which reads as a held-fixed setting.
@@ -31,5 +32,19 @@ module "octaves" {
 		let s: float = t0.x + t1.x + t2.x + t3.x + t4.x + t5.x + t6.x + t7.x
 		let w2: float = t0.y + t1.y + t2.y + t3.y + t4.y + t5.y + t6.y + t7.y
 		return (s / sqrt(w2) + 1.0) * 0.5
+	}
+
+	// Channel c samples point pc at frequency freq.c * 50, with octave count
+	// octaves.c and permutation offset c * seedStep: 0 for bw-noise and
+	// warped-bw-noise (one pattern in every channel), 1 for color-noise and
+	// warped-color-noise (offsets 0, 1 and 2). The plain nodes pass coord
+	// for all three points; the warped ones pass each channel's (u, v).
+	func noiseChannels(px: float2, py: float2, pz: float2, freq: float3, octaves: float3, seedStep: int) -> float3 {
+		let v0 = freq * 50.0
+		return float3(
+			octaveNoise(px * v0.x, 0, octaves.x),
+			octaveNoise(py * v0.y, seedStep, octaves.y),
+			octaveNoise(pz * v0.z, seedStep * 2, octaves.z)
+		)
 	}
 }
