@@ -51,6 +51,9 @@ struct Evolv_ioApp: App {
             CommandGroup(after: .newItem) {
                 OpenGenotypeMenuItem()
             }
+            CommandGroup(replacing: .saveItem) {
+                SaveGenotypeMenuItem()
+            }
 #endif
             CommandGroup(after: .appInfo) {
 #if os(macOS)
@@ -106,6 +109,20 @@ private struct OpenGenotypeMenuItem: View {
         }
         .keyboardShortcut("o")
         .disabled(openGenotype == nil)
+    }
+}
+
+/// Saves the genotype in the key full size view. Disabled when no full
+/// size view is key.
+private struct SaveGenotypeMenuItem: View {
+    @FocusedValue(\.saveGenotype) private var saveGenotype
+
+    var body: some View {
+        Button("Save Genotype…") {
+            saveGenotype?()
+        }
+        .keyboardShortcut("s")
+        .disabled(saveGenotype == nil)
     }
 }
 #endif

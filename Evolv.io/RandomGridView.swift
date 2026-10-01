@@ -7,7 +7,8 @@
 //  image's context menu shows it full size, in the Debug View or the
 //  expression tree viewer, shows or copies its expression, or saves it as a
 //  genotype file. The menu works while the image is still rendering. File > Open
-//  Genotype shows a saved genotype file full size. The genotype library
+//  Genotype shows a saved genotype file full size, and File > Save Genotype
+//  saves the one in the key full size view. The genotype library
 //  (ContentView) is the window that opens at launch.
 //
 
@@ -88,6 +89,11 @@ struct RandomGridView: View {
 				}
 				.padding()
 			}
+#if os(macOS)
+			// Set inside the sheet so File > Save Genotype follows whichever
+			// full size view is key, when several grid windows have one open.
+			.focusedSceneValue(\.saveGenotype, { saveWithPanel(genotype) })
+#endif
 		}
 		.sheet(item: $debugGenotype) { genotype in
 			sheet(title: "Debug View", dismiss: { debugGenotype = nil }) {
@@ -175,7 +181,7 @@ struct RandomGridView: View {
 	private func saveWithPanel(_ genotype: RandomGenotype) {
 		let panel = NSSavePanel()
 		panel.title = "Save as Genotype"
-		panel.nameFieldStringValue = "Untitled"
+		panel.nameFieldStringValue = genotype.name ?? "Untitled"
 		panel.allowedContentTypes = [Self.genotypeContentType]
 		panel.canCreateDirectories = true
 		panel.directoryURL = GenotypeLibrary.containerGenotypesDirectory
@@ -278,10 +284,20 @@ struct OpenGenotypeKey: FocusedValueKey {
 	typealias Value = () -> Void
 }
 
+/// File > Save Genotype, published by the key full size view.
+struct SaveGenotypeKey: FocusedValueKey {
+	typealias Value = () -> Void
+}
+
 extension FocusedValues {
 	var openGenotype: OpenGenotypeKey.Value? {
 		get { self[OpenGenotypeKey.self] }
 		set { self[OpenGenotypeKey.self] = newValue }
+	}
+
+	var saveGenotype: SaveGenotypeKey.Value? {
+		get { self[SaveGenotypeKey.self] }
+		set { self[SaveGenotypeKey.self] = newValue }
 	}
 }
 
