@@ -5,7 +5,8 @@
 //  The random grid window (File > New Window): a 3x3 grid of random genotypes from
 //  RandomExpressionGenerator (see Documentation/RandomGeneration.md). Each
 //  image's context menu shows it full size, in the Debug View or the
-//  expression tree viewer, or saves it as a genotype file. File > Open
+//  expression tree viewer, shows or copies its expression, or saves it as a
+//  genotype file. The menu works while the image is still rendering. File > Open
 //  Genotype shows a saved genotype file full size. The genotype library
 //  (ContentView) is the window that opens at launch.
 //
@@ -38,6 +39,7 @@ struct RandomGridView: View {
 	@State private var fullSizeGenotype: RandomGenotype?
 	@State private var debugGenotype: RandomGenotype?
 	@State private var treeGenotype: RandomGenotype?
+	@State private var expressionGenotype: RandomGenotype?
 	@State private var savingGenotype: RandomGenotype?
 
 	var body: some View {
@@ -107,6 +109,13 @@ struct RandomGridView: View {
 #endif
 			.presentationSizing(.page)
 		}
+		.sheet(item: $expressionGenotype) { genotype in
+			sheet(title: "Expression", dismiss: { expressionGenotype = nil }) {
+				ExpressionTextView(text: genotype.text)
+					.frame(minWidth: 400, idealWidth: 600, minHeight: 120, idealHeight: 240)
+					.padding()
+			}
+		}
 		.sheet(item: $savingGenotype) { genotype in
 			SaveGenotypeSheet(expression: genotype.text)
 		}
@@ -117,6 +126,9 @@ struct RandomGridView: View {
 													 evaluator: Evaluator(size: Self.thumbnailSize)))
 			.frame(width: Self.thumbnailSize.width, height: Self.thumbnailSize.height)
 			.clipShape(RoundedRectangle(cornerRadius: 8))
+			// The whole cell, not just the spinner, takes clicks while it's
+			// still rendering.
+			.contentShape(RoundedRectangle(cornerRadius: 8))
 			.id(genotype.id)
 			.help(genotype.text)
 			.onTapGesture(count: 2) { fullSizeGenotype = genotype }
@@ -124,6 +136,7 @@ struct RandomGridView: View {
 				Button("Show Full Size") { fullSizeGenotype = genotype }
 				Button("Show Debug View") { debugGenotype = genotype }
 				Button("Show Expression Tree") { treeGenotype = genotype }
+				Button("Show Expression…") { expressionGenotype = genotype }
 				Divider()
 #if os(macOS)
 				Button("Save as Genotype…") { saveWithPanel(genotype) }
@@ -239,7 +252,7 @@ struct RandomGridView: View {
 	}
 }
 
-/// The full size view's expression: read-only, but selectable and
+/// The expression in the full size and Show Expression sheets: read-only, but selectable and
 /// copyable, and scrolls when it's long.
 private struct ExpressionTextView: View {
 	let text: String
