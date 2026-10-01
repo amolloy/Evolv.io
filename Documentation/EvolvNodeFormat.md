@@ -48,7 +48,7 @@ after "Reload Custom Nodes".
 Each file is exactly one of:
 
 ```
-node "name"(params...) [requires(...)] { body }
+node "name"(params...) [-> type] [nonconst] [requires(...)] { body }
 module "name" { func declarations }
 package "name"
 ```
@@ -359,6 +359,28 @@ node "+"(v0, v1) { ... }
   hint exists (Sims' published genotypes almost always pass the preferred
   type).
 
+### Terminals and `nonconst`
+
+A node with no params is a terminal, so the generator uses it the way
+Sims uses `x` and `y`: as a leaf, in the "variable" form, never as a
+function and never as the root. That happens automatically for any
+no-param node, including your own (`randomExcludedVariables` in user
+defaults leaves some out; it defaults to `z`).
+
+If you write a no-param node that shouldn't be treated that way, add
+`nonconst` after the output type:
+
+```
+node "rng"() -> scalar nonconst requires(perlin) { ... }
+```
+
+The generator then picks it like any other function: as the root, or as
+a sub-expression at the chance for its depth, never in the "variable"
+form. It changes nothing else: parsing, codegen and rendering are the
+same. `nonconst` on a node with params is a parse error, since only a
+no-param node could be a terminal. Don't give a node an unused param to
+get this; use `nonconst`.
+
 ## `requires(...)` and modules
 
 A node's `requires(...)` clause lists module names (or the reserved
@@ -544,6 +566,7 @@ resolved, in this order:
 | Declare a node taking two children | `node "name"(v0, v1) { ... }` |
 | Declare a leaf (no children) | `node "name"() { ... }` |
 | Prefer a scalar/vector argument, and say what the node returns | `node "name"(a: scalar, b: vector) -> vector { ... }` |
+| Keep a no-param node out of the generator's terminals | `node "name"() -> scalar nonconst { ... }` |
 | Sample a child at an offset coordinate | `node "name"(source: fn) { ... source(coord + float2(dx, dy)) ... }` |
 | Pull in shared helpers | `node "name"(...) requires(lighting) { ... }` |
 | Define shared helpers | `module "name" { func f(v: float3) -> float3 { ... } }` |

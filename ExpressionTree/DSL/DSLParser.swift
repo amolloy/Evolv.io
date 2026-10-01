@@ -20,6 +20,8 @@
 //    file       := nodeDecl | moduleDecl | packageDecl   -- one per file
 //    nodeDecl   := 'node' STRING '(' paramDecl (',' paramDecl)* ')'
 //                  ('->' ('scalar'|'vector'))?   -- output type, for the generator
+//                  'nonconst'?   -- a no-param node the generator treats
+//                                      as a function, not a variable
 //                  ('requires' '(' requirement (',' requirement)* ')')?
 //    requirement := ('::')? (IDENT|STRING)  -- '::' = look only in library
 //                  roots scanned before this file's own (see DSLLibrary.scan)
@@ -145,6 +147,14 @@ final class DSLParser {
 			outputType = type
 		}
 
+		let isNonconst = checkIdentifier("nonconst")
+		if isNonconst {
+			guard params.isEmpty else {
+				throw DSLParseError(message: "'nonconst' on node '\(name)', which has params -- only a node with no params can be a terminal, so only it needs 'nonconst'")
+			}
+			pos += 1
+		}
+
 		var requires: [String] = []
 		if checkIdentifier("requires") {
 			pos += 1
@@ -178,7 +188,7 @@ final class DSLParser {
 		try expect(.rbrace)
 		try expect(.eof)
 
-		return DSLTemplate(name: name, params: params, outputType: outputType, requires: requires, paramDefaults: paramDefaults, debugControls: debugControls, body: body, returnExpr: returnExpr)
+		return DSLTemplate(name: name, params: params, outputType: outputType, isNonconst: isNonconst, requires: requires, paramDefaults: paramDefaults, debugControls: debugControls, body: body, returnExpr: returnExpr)
 	}
 
 	private func parseModule() throws -> DSLModule {

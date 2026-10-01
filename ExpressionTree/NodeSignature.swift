@@ -26,12 +26,21 @@ public struct NodeSignature: Sendable {
 	/// nil means the node follows its untyped children: vector if any of
 	/// them is, otherwise scalar.
 	public let outputType: NodeValueType?
+	/// From `nonconst` in the `.evolvnode` file: a no-argument node that
+	/// asked not to be treated as a terminal.
+	public let isNonconst: Bool
 
-	public init(name: String, argumentTypes: [NodeValueType?], outputType: NodeValueType?) {
+	public init(name: String, argumentTypes: [NodeValueType?], outputType: NodeValueType?, isNonconst: Bool = false) {
 		self.name = name
 		self.argumentTypes = argumentTypes
 		self.outputType = outputType
+		self.isNonconst = isNonconst
 	}
 
 	public var arity: Int { argumentTypes.count }
+
+	/// A node with no arguments is a terminal -- the generator's "variable"
+	/// form -- unless it's marked `nonconst`, in which case it's
+	/// picked like any other function.
+	public var isTerminal: Bool { arity == 0 && !isNonconst }
 }

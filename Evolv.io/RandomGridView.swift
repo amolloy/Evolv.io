@@ -220,6 +220,8 @@ struct RandomGridView: View {
 		var rng = SeededRandomNumberGenerator(seed: seed)
 		var configuration = RandomExpressionGenerator.Configuration()
 		configuration.maxDepth = maxDepth
+		configuration.excludedRootFunctions = UserDefaults.standard.randomExcludedRootNodes
+		configuration.excludedVariables = UserDefaults.standard.randomExcludedVariables
 		let generator = RandomExpressionGenerator(signatures: NodeRegistry.shared.signatures, configuration: configuration)
 		genotypes = (0..<(Self.gridSize * Self.gridSize)).map { _ in
 			let expression = generator.generate(using: &rng)

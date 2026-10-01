@@ -42,7 +42,7 @@ enum MCPGenerateTool {
                 "exclude": .object([
                     "type": .string("array"),
                     "items": .object(["type": .string("string")]),
-                    "description": .string("Node names never picked as functions. Default none."),
+                    "description": .string("Node names never picked, as functions or variables. Default none."),
                 ]),
             ]),
         ])
@@ -88,6 +88,8 @@ enum MCPGenerateTool {
         }
 
         var configuration = RandomExpressionGenerator.Configuration()
+        configuration.excludedRootFunctions = UserDefaults.standard.randomExcludedRootNodes
+        configuration.excludedVariables = UserDefaults.standard.randomExcludedVariables
         if let maxDepth = try integer(args["max_depth"], "max_depth") {
             guard maxDepth >= 1 else { throw Failure(message: "max_depth must be at least 1.") }
             configuration.maxDepth = maxDepth

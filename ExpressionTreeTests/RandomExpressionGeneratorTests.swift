@@ -43,6 +43,16 @@ struct NodeTypeAnnotationTests {
 		#expect(throws: DSLParseError.self) { try DSLParser(#"node "t"(a: fn value) { return a }"#).parseTemplate() }
 	}
 
+	@Test func parsesNonconst() throws {
+		let template = try DSLParser(#"node "rng"() -> scalar nonconst requires(perlin) { return float3(0.5) }"#).parseTemplate()
+		#expect(template.isNonconst)
+		#expect(template.outputType == .scalar)
+		#expect(template.requires == ["perlin"])
+		#expect(try DSLParser(#"node "x"() -> scalar { return float3(0.5) }"#).parseTemplate().isNonconst == false)
+		// Only a node with no params could be a terminal in the first place.
+		#expect(throws: DSLParseError.self) { try DSLParser(#"node "t"(a) nonconst { return a }"#).parseTemplate() }
+	}
+
 	@Test func bundledSignatures() throws {
 		#expect(bundled.issues.isEmpty)
 		let colorGrad = try #require(bundled.signatures["color-grad"])
@@ -79,6 +89,29 @@ struct RandomExpressionGeneratorTests {
 		}
 	}
 
+	@Test func excludedRootNodesOnlyMissTheRoot() {
+		var configuration = RandomExpressionGenerator.Configuration()
+		configuration.excludedRootFunctions = ["vector", "+"]
+		let generator = RandomExpressionGenerator(signatures: bundled.signatures, configuration: configuration)
+		var rng = SeededRandomNumberGenerator(seed: 1)
+		var belowRoot: Set<String> = []
+		func collect(_ expression: GeneratedExpression) {
+			guard case .call(let name, let arguments) = expression else { return }
+			belowRoot.insert(name)
+			arguments.forEach(collect)
+		}
+		for _ in 0..<500 {
+			guard case .call(let root, let arguments) = generator.generate(using: &rng) else { continue }
+			#expect(!configuration.excludedRootFunctions.contains(root), "excluded node at the root: \(root)")
+			arguments.forEach(collect)
+		}
+		#expect(belowRoot.isSuperset(of: ["vector", "+"]))
+	}
+
+	@Test func defaultExcludedRootNodes() {
+		#expect(RandomExpressionGenerator.Configuration().excludedRootFunctions == ["constant", "triplet-constant", "vector"])
+	}
+
 	@Test func argumentsFollowPreferredTypes() {
 		func check(_ expression: GeneratedExpression) {
 			guard case .call(let name, let arguments) = expression, !arguments.isEmpty else { return }
@@ -90,13 +123,10 @@ struct RandomExpressionGeneratorTests {
 						Issue.record("vector literal in a scalar slot of \(name): \(expression)")
 					case (.scalar, .vector):
 						Issue.record("scalar literal in a vector slot of \(name): \(expression)")
-					case (.call(let inner, let innerArguments), .some(let type)):
+					case (.call(let inner, _), .some(let type)):
+						// Functions and variables both fit by output type.
 						let output = bundled.signatures[inner]!.outputType
-						if innerArguments.isEmpty {
-							#expect(type == .scalar, "variable in a vector slot of \(name): \(expression)")
-						} else {
-							#expect(output == nil || output == type, "\(inner) in a \(type) slot of \(name): \(expression)")
-						}
+						#expect(output == nil || output == type, "\(inner) in a \(type) slot of \(name): \(expression)")
 					default:
 						break
 				}
@@ -134,6 +164,28 @@ struct RandomExpressionGeneratorTests {
 		#expect(variables == ["x", "y"])
 	}
 
+	@Test func everyNoArgumentNodeIsAVariable() {
+		var signatures = bundled.signatures
+		signatures["r"] = NodeSignature(name: "r", argumentTypes: [], outputType: .scalar)
+		signatures["sky"] = NodeSignature(name: "sky", argumentTypes: [], outputType: .vector)
+		let generator = RandomExpressionGenerator(signatures: signatures)
+		var rng = SeededRandomNumberGenerator(seed: 1)
+		var variables: Set<String> = []
+		func collect(_ expression: GeneratedExpression) {
+			guard case .call(let name, let arguments) = expression else { return }
+			if arguments.isEmpty { variables.insert(name) }
+			arguments.forEach(collect)
+		}
+		for _ in 0..<500 {
+			let expression = generator.generate(using: &rng)
+			guard case .call(let root, _) = expression else { continue }
+			#expect(!["r", "sky"].contains(root), "a variable at the root: \(root)")
+			collect(expression)
+		}
+		// `z` is excluded by default; user nodes are picked up automatically.
+		#expect(variables == ["x", "y", "r", "sky"])
+	}
+
 	@Test func everyExpressionBuildsANodeTree() throws {
 		func build(_ expression: GeneratedExpression) throws -> any Node {
 			switch expression {
@@ -145,6 +197,55 @@ struct RandomExpressionGeneratorTests {
 		for expression in sample() {
 			_ = try build(expression)
 		}
+	}
+
+	@Test func expressionProbabilityFallsWithDepth() {
+		var configuration = RandomExpressionGenerator.Configuration()
+		configuration.expressionProbability = 0.8
+		configuration.expressionProbabilityDecay = 0.5
+		let generator = RandomExpressionGenerator(signatures: bundled.signatures, configuration: configuration)
+		#expect(generator.expressionProbability(atDepth: 1) == 0.8)
+		#expect(generator.expressionProbability(atDepth: 2) == 0.4)
+		#expect(generator.expressionProbability(atDepth: 3) == 0.2)
+	}
+
+	@Test func nonconstNodesAreFunctions() {
+		var signatures = bundled.signatures
+		signatures["rng"] = NodeSignature(name: "rng", argumentTypes: [], outputType: .scalar, isNonconst: true)
+		var configuration = RandomExpressionGenerator.Configuration()
+		// Every argument is a terminal, so a function only shows up at the root.
+		configuration.expressionProbability = 0
+		let generator = RandomExpressionGenerator(signatures: signatures, configuration: configuration)
+		var rng = SeededRandomNumberGenerator(seed: 1)
+		var roots: Set<String> = []
+		for _ in 0..<2000 {
+			guard case .call(let root, let arguments) = generator.generate(using: &rng) else { continue }
+			roots.insert(root)
+			for case .call(let name, _) in arguments {
+				#expect(name != "rng", "nonconst node used as a variable")
+			}
+		}
+		#expect(roots.contains("rng"))
+		#expect(roots.isDisjoint(with: ["x", "y"]))
+	}
+
+	@Test func terminalWeightsPickTheTerminal() {
+		var configuration = RandomExpressionGenerator.Configuration()
+		configuration.terminalWeights = .init(scalar: 0, vector: 0, variable: 1)
+		let generator = RandomExpressionGenerator(signatures: bundled.signatures, configuration: configuration)
+		var rng = SeededRandomNumberGenerator(seed: 1)
+		// With constants weighted to zero, only vector slots get literals.
+		func check(_ expression: GeneratedExpression) {
+			guard case .call(let name, let arguments) = expression, !arguments.isEmpty else { return }
+			for (argument, type) in zip(arguments, bundled.signatures[name]!.argumentTypes) {
+				switch argument {
+					case .scalar: Issue.record("scalar literal in \(name): \(expression)")
+					case .vector: #expect(type == .vector, "vector literal in a non-vector slot of \(name)")
+					case .call: check(argument)
+				}
+			}
+		}
+		for _ in 0..<500 { check(generator.generate(using: &rng)) }
 	}
 
 	@Test func descriptionIsGenotypeText() {

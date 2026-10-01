@@ -115,6 +115,10 @@ public struct DSLTemplate {
 	/// returns, for the random expression generator. nil means it follows
 	/// its untyped children (vector if any of them is).
 	var outputType: NodeValueType? = nil
+	/// `nonconst` after the output type: a node with no params that the
+	/// random expression generator should still treat as a function rather
+	/// than a variable. See `NodeSignature.isTerminal`.
+	var isNonconst: Bool = false
 	/// Names a node's body wants resolved -- either the reserved "perlin"
 	/// intrinsic (its table is live-shuffled Swift data, never a text file)
 	/// or a module name resolved by whoever constructs the DSLCodegenNode

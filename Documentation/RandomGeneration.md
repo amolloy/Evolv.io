@@ -137,26 +137,76 @@ randomExpression(depth):
 randomArgument(type, depth):
     forms = allowed forms for type:
         scalar -> scalar literal, variable, expression
-        vector -> vector literal, expression
+        vector -> vector literal, vector variable, expression
         any    -> scalar literal, vector literal, variable, expression
     if depth >= maxDepth: drop "expression"
-    form = uniform pick from forms, with "expression" at pExpr
+    form = "expression" at pExpr(depth), otherwise a weighted pick from
+           the other forms (terminalWeights)
     expression -> randomExpression(depth), with f limited to nodes whose
                   output fits the type (-> scalar, -> vector or untyped)
 ```
 
 - **The root is always a function**, since Sims says to start by picking
   a function. That rules out a bare `x` or `.4` as a whole genotype.
-- **Variables are `x` and `y`.** `z` is only for volume textures, so the
-  generator takes a list of variables rather than using every 0-arity
-  node.
+- **Some nodes are never the root.** `excludedRootFunctions` lists
+  node names the root call can't be, though they can appear anywhere
+  below it. The app reads it from the `randomExcludedRootNodes` user
+  default (an array of node names, no UI; set it with `defaults write`),
+  defaulting to `constant`, `triplet-constant` and `vector`
+  (2026-10-01). A whole genotype that's a flat value or a `vector` of
+  three sub-expressions isn't interesting. The two literals can't be a
+  root anyway, since the root is always a call; they're listed so the
+  setting says what's meant.
+- **Every node with no arguments is a variable.** Taking no arguments
+  makes a node a terminal by definition, so the generator treats every
+  such node as the "variable" form, including user-written ones, and
+  never as a function (2026-10-01). A variable fits a slot by its output
+  type, like a function: `x` and `y` are `-> scalar`, so they never land
+  in a vector slot, but a user's `-> vector` no-argument node can.
+  `excludedVariables` (the `randomExcludedVariables` user default, no
+  UI) leaves some out, defaulting to `z`, which is only for volume
+  textures. A node author who wants a no-argument node picked like a
+  function instead (a plain random-number node, say) writes
+  `nonconst` after its output type; see EvolvNodeFormat.md.
 - **"Simple"** was first read as `maxDepth = 2` (two levels of calls:
   the root's arguments can be calls, theirs are leaves), about the size
   of Figure 4's examples. In the app those first generations looked too
   plain. With a Depth control in the grid window's toolbar, the deepest
   setting tried (10) gave the best results, so that's the default
-  (2026-09-29). `pExpr = 0.3`. The paper gives no numbers,
-  so these are knobs on `RandomExpressionGenerator.Configuration`.
+  (2026-09-29). The paper gives no numbers, so these are knobs on
+  `RandomExpressionGenerator.Configuration`.
+- **`pExpr` falls with depth.** It started as a flat 0.3, which gave a
+  lot of solid-colour genotypes: in 5,000 of them, 23% had no `x` or `y`
+  anywhere, and the median tree had 6 nodes while the biggest had 1,370.
+  Now it's 0.9 for the root's arguments and halves at each level below
+  (`expressionProbability`, `expressionProbabilityDecay`), so trees are
+  bushy near the top and end in literals and variables (2026-10-01).
+  Same 5,000 seeds:
+
+  | pExpr, decay | No `x`/`y` | Median nodes | 99th percentile | Max |
+  |---|---|---|---|---|
+  | 0.3, 1 (old) | 23% | 6 | 546 | 1,370 |
+  | 0.5, 0.7 | 17% | 11 | 215 | 500 |
+  | 0.8, 0.5 | 10% | 19 | 268 | 486 |
+  | 0.9, 0.5 | 7% | 25 | 334 | 560 |
+  | 1.0, 0.4 | 6% | 22 | 290 | 432 |
+- **Terminals are picked in a second step, favouring variables.** Once
+  an argument isn't a sub-expression, `randomTerminal` picks a scalar
+  literal, vector literal or variable among those the slot's type
+  allows, by `terminalWeights` (scalar 1, vector 1, variable 3). Before,
+  the pick was uniform, so 60% of terminals were constants. A vector
+  slot gets a vector literal, or a variable whose output is a vector.
+  With pExpr 0.9 halving, over
+  5,000 genotypes (2026-10-01):
+
+  | Variable weight | No `x`/`y` | Terminals that are variables |
+  |---|---|---|
+  | 1 (uniform) | 7.7% | 40% |
+  | 2 | 4.1% | 56% |
+  | **3** | **2.7%** | **65%** |
+  | 5 | 1.8% | 74% |
+
+  Tree sizes barely change with the weight.
 - **Constants**: scalar literals uniform in -1 to 1, vector components
   uniform in 0 to 1, rounded to two significant figures to match the
   papers. Sims' larger scalars (10.7, 15.5, -31) most likely came from

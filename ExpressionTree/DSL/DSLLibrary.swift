@@ -168,7 +168,8 @@ public enum DSLLibrary {
 				signatures[name] = NodeSignature(
 					name: name,
 					argumentTypes: template.params.map(\.preferredType),
-					outputType: template.outputType
+					outputType: template.outputType,
+					isNonconst: template.isNonconst
 				)
 
 				let argList = template.params.map { param in
