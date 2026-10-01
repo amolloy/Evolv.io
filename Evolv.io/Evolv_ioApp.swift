@@ -28,9 +28,24 @@ struct Evolv_ioApp: App {
     }
 
     var body: some Scene {
-        WindowGroup {
+        // The genotype library opens at launch and renders nothing until a
+        // genotype is selected.
+#if os(macOS)
+        Window("Genotype Library", id: Self.genotypeLibraryWindowID) {
+            ContentView()
+        }
+        .defaultLaunchBehavior(.presented)
+#endif
+
+        // The 3x3 random grid, from File > New Window. It renders as soon as
+        // it opens, so it's kept from opening (or being restored) at launch.
+        WindowGroup("Random Grid", id: Self.randomGridWindowID) {
             RandomGridView()
         }
+#if os(macOS)
+        .defaultLaunchBehavior(.suppressed)
+        .restorationBehavior(.disabled)
+#endif
         .commands {
 #if os(macOS)
             CommandGroup(after: .newItem) {
@@ -62,17 +77,10 @@ struct Evolv_ioApp: App {
 #endif
             }
         }
-
-        // The genotype library that used to be the main window: bundled
-        // figures and saved genotypes, one at a time.
-#if os(macOS)
-        Window("Genotype Library", id: Self.genotypeLibraryWindowID) {
-            ContentView()
-        }
-#endif
     }
 
     static let genotypeLibraryWindowID = "genotype-library"
+    static let randomGridWindowID = "random-grid"
 }
 
 #if os(macOS)

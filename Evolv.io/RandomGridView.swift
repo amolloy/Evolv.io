@@ -2,12 +2,12 @@
 //  RandomGridView.swift
 //  Evolv.io
 //
-//  The main window: a 3x3 grid of random genotypes from
+//  The random grid window (File > New Window): a 3x3 grid of random genotypes from
 //  RandomExpressionGenerator (see Documentation/RandomGeneration.md). Each
 //  image's context menu shows it full size, in the Debug View or the
 //  expression tree viewer, or saves it as a genotype file. File > Open
 //  Genotype shows a saved genotype file full size. The genotype library
-//  (ContentView) is in its own window, from the app menu.
+//  (ContentView) is the window that opens at launch.
 //
 
 import SwiftUI
