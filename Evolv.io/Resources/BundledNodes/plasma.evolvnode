@@ -1,0 +1,15 @@
+// plasma: Fractint's plasma cloud, computed per pixel (see
+// plasma-core.evolvnode). Each argument is reduced to a scalar by
+// averaging its channels.
+//   grain: how rough the cloud is, like Fractint's graininess. Each edge
+//          midpoint moves by up to grain / 2 times the edge's length
+//          (|grain| clamped to 16). 0 gives a smooth blend of the top
+//          cell's random corners; Fractint's default of 2 is grainy.
+//   seed:  picks the pattern. Any change gives an unrelated cloud.
+// The result starts from corners in 0...1 and is not clamped, so a large
+// grain reaches outside 0...1.
+node "plasma"(grain: scalar, seed: scalar) -> scalar requires("plasma-core") {
+	let g: float = min(abs((grain.x + grain.y + grain.z) / 3.0), 16.0)
+	let s: float = clamp((seed.x + seed.y + seed.z) / 3.0, -1e4, 1e4)
+	return float3(plasmaValue(coord, g, s))
+}

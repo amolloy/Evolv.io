@@ -1,0 +1,68 @@
+// Shared core of the plasma node: Fractint's plasma (midpoint displacement)
+// evaluated one pixel at a time, with no stored grid.
+//
+// Fractint's plasma.c starts with random values at the four screen corners
+// and subdivides recursively. Each edge midpoint gets the average of the
+// edge's two ends plus a random displacement proportional to the edge's
+// length; the cell centre gets the average of the four edge midpoints with
+// no displacement of its own. Every edge midpoint depends only on the two
+// ends of that edge, so a pixel only needs the cell it is in at each level:
+// start from the top cell's four corners, compute that cell's four edge
+// midpoints and centre, step into whichever quadrant holds the pixel, and
+// repeat. Neighbouring cells share edges, so they compute the same midpoint
+// values and the result is continuous, exactly as in Fractint.
+//
+// Fractint draws its random numbers in recursion order; here each vertex's
+// displacement is a hash of its position on a 4096 x 4096 lattice per top
+// cell and of the seed, so any pixel can compute any vertex on its own.
+// Top cells are 2 x 2 in coordinate units (the default view's whole
+// image is one), and the plane outside that view is tiled with more of
+// them, their corners hashed the same way, so the pattern continues.
+// Twelve levels reach cells of 1/2048 units, finer than a pixel at the
+// usual sizes; within the last cell the four corners are blended
+// bilinearly.
+module "plasma-core" {
+	// Dave Hoskins' hash13 ("Hash without Sine"), 0...1.
+	func plasmaHash(v: float2, seed: float) -> float {
+		var p: float3 = fract(float3(v.x, v.y, seed) * 0.1031)
+		p = p + dot(p, p.zyx + 31.32)
+		return fract((p.x + p.y) * p.z)
+	}
+
+	func plasmaValue(c: float2, grain: float, seed: float) -> float {
+		let q: float2 = clamp(c, float2(-1e4), float2(1e4)) * 0.5 + 0.5
+		let cell: float2 = floor(q)
+		var f: float2 = q - cell
+		var origin: float2 = cell * 4096.0
+		var size: float = 4096.0
+		var c00: float = plasmaHash(origin, seed)
+		var c10: float = plasmaHash(origin + float2(size, 0.0), seed)
+		var c01: float = plasmaHash(origin + float2(0.0, size), seed)
+		var c11: float = plasmaHash(origin + float2(size, size), seed)
+		loop(i in 0..<12, max: 12) {
+			let half: float = size * 0.5
+			// Displacement in -0.5...0.5 times grain times the edge length,
+			// with the top cell's edge counted as 1.
+			let amp: float = grain * size / 4096.0
+			let bottom: float = (c00 + c10) * 0.5 + amp * (plasmaHash(origin + float2(half, 0.0), seed) - 0.5)
+			let top: float = (c01 + c11) * 0.5 + amp * (plasmaHash(origin + float2(half, size), seed) - 0.5)
+			let left: float = (c00 + c01) * 0.5 + amp * (plasmaHash(origin + float2(0.0, half), seed) - 0.5)
+			let right: float = (c10 + c11) * 0.5 + amp * (plasmaHash(origin + float2(size, half), seed) - 0.5)
+			let centre: float = (bottom + top + left + right) * 0.25
+			let hx: bool = f.x >= 0.5
+			let hy: bool = f.y >= 0.5
+			let n00: float = hx ? (hy ? centre : bottom) : (hy ? left : c00)
+			let n10: float = hx ? (hy ? right : c10) : (hy ? centre : bottom)
+			let n01: float = hx ? (hy ? top : centre) : (hy ? c01 : left)
+			let n11: float = hx ? (hy ? c11 : right) : (hy ? top : centre)
+			c00 = n00
+			c10 = n10
+			c01 = n01
+			c11 = n11
+			origin = origin + float2(hx ? half : 0.0, hy ? half : 0.0)
+			f = f * 2.0 - float2(hx ? 1.0 : 0.0, hy ? 1.0 : 0.0)
+			size = half
+		}
+		return mix(mix(c00, c10, f.x), mix(c01, c11, f.x), f.y)
+	}
+}
