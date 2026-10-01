@@ -1,0 +1,7 @@
+// Builds a vector from three scalars, one per channel, like a #(r g b)
+// triplet whose components can be expressions. Figure 12 calls it as
+// (vector y 0.09 (cos (round y y))). A vector passed in is reduced to
+// the mean of its channels, as avgLum does.
+node "vector"(r: scalar, g: scalar, b: scalar) -> vector {
+	return float3((r.x + r.y + r.z) / 3.0, (g.x + g.y + g.z) / 3.0, (b.x + b.y + b.z) / 3.0)
+}

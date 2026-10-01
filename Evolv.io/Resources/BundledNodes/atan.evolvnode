@@ -1,0 +1,9 @@
+// Three arguments, as both published calls use it: Figure 7
+// (atan 2.25 (dissolve 0.1 0.11 time) 0.15) and Figure 12
+// (atan (log ...) #(0.17 0.08 0.75) 0.37). The first two are Common
+// Lisp's (atan y x). Neither paper says what the third does; it is a
+// scalar constant in both calls, so it is taken as a scale on the
+// result. The result is left in radians, -pi...pi before scaling.
+node "atan"(y, x, scale: scalar) {
+	return atan2(y, x) * scale
+}
