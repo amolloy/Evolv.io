@@ -21,6 +21,10 @@ public final class Evaluator {
 		self.context = EvaluationContext(size: size)
     }
 
+	/// Opt-in tap caching for every render through an `Evaluator` -- see
+	/// `TapCacheSettings`. nil (the default) renders exactly.
+	nonisolated(unsafe) public static var tapCache: TapCacheSettings? = nil
+
 	/// Renders `node` over this evaluator's full `size`, via the shared
 	/// Metal pipeline cache (`MetalRenderContext`) -- this is what
 	/// `NodeRenderer` calls to produce its pixel data. `liveDebugValues`
@@ -32,7 +36,8 @@ public final class Evaluator {
 											  height: Int(context.size.height),
 											  scale: scale,
 											  supersample: supersample,
-											  liveDebugValues: liveDebugValues)
+											  liveDebugValues: liveDebugValues,
+											  tapCache: Self.tapCache)
 	}
 
 	/// Like `render(node:scale:...)`, but over an arbitrary coordinate
@@ -44,7 +49,8 @@ public final class Evaluator {
 											  height: Int(context.size.height),
 											  bounds: bounds,
 											  supersample: supersample,
-											  liveDebugValues: liveDebugValues)
+											  liveDebugValues: liveDebugValues,
+											  tapCache: Self.tapCache)
 	}
 
 	/// The `MTLDevice` behind the shared render pipeline -- exposed so app-

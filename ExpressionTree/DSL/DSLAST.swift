@@ -88,6 +88,12 @@ struct DSLParam {
 	/// `spacing` may only use numbers, `$param`s and arithmetic: it is
 	/// evaluated once per render, not per pixel. nil for every other param.
 	var grid: DSLExpr? = nil
+	/// `name: fn taps(<maxOffset>)` -- a promise that the body only calls
+	/// this child within `maxOffset` of `coord`, so with tap caching on the
+	/// renderer may answer the calls by interpolating a texture (see
+	/// `MSLCodegenContext.registerTapCache`). Same rules as `grid`'s
+	/// spacing; a call further out still works, just without the cache.
+	var taps: DSLExpr? = nil
 }
 
 // Public because DSLCodegenNode's initializer (called from outside this

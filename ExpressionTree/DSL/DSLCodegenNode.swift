@@ -102,9 +102,17 @@ public final class DSLCodegenNode: Node {
 			}
 		}
 
+		// A `fn taps(...)` child is emitted inside a tap scope, so any tap
+		// cache inside it knows these taps reach it (see `registerTapCache`).
+		var tapScopes: [String: Int] = [:]
 		for (decl, child) in zip(template.params, children) {
 			if decl.isFunction {
+				let tapScope = decl.taps != nil ? context.beginTapScope() : nil
 				env[decl.name] = .sampledFunction(context.emitFunction(for: child))
+				if let tapScope {
+					context.endTapScope()
+					tapScopes[decl.name] = tapScope
+				}
 			} else {
 				env[decl.name] = .value(child.codegenMSL(into: context))
 			}
@@ -135,6 +143,13 @@ public final class DSLCodegenNode: Node {
 			guard let grid = decl.grid, case .sampledFunction(let fnName) = env[decl.name] else { continue }
 			let spacing = DSLInterpreter(context: context, params: effectiveParams, env: [:], liveParamText: liveParamText).evaluate(grid)
 			env[decl.name] = .sampledFunction(context.registerGridCache(functionName: fnName, spacingExpression: spacing))
+		}
+		// Likewise a `fn taps(maxOffset)` child through its tap cache, when
+		// tap caching is on.
+		for decl in template.params {
+			guard let taps = decl.taps, let tapScope = tapScopes[decl.name], case .sampledFunction(let fnName) = env[decl.name] else { continue }
+			let maxOffset = DSLInterpreter(context: context, params: effectiveParams, env: [:], liveParamText: liveParamText).evaluate(taps)
+			env[decl.name] = .sampledFunction(context.registerTapCache(functionName: fnName, maxOffsetExpression: maxOffset, scope: tapScope))
 		}
 
 		let interpreter = DSLInterpreter(context: context, params: effectiveParams, env: env, liveParamText: liveParamText)

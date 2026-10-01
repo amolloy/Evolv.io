@@ -131,8 +131,15 @@ public final class MSLCodegenContext {
 	// registries above: a cache's index is baked into the emitted text.
 	private final class SampleCacheRegistry {
 		let enabled: Bool
+		let tapsEnabled: Bool
 		var caches: [SampleCache] = []
-		init(enabled: Bool) { self.enabled = enabled }
+		/// `beginTapScope`'s open scopes, innermost last.
+		var openTapScopes: [Int] = []
+		var nextTapScope = 0
+		init(enabled: Bool, tapsEnabled: Bool) {
+			self.enabled = enabled
+			self.tapsEnabled = tapsEnabled
+		}
 	}
 	private let sampleCacheRegistry: SampleCacheRegistry
 
@@ -141,10 +148,13 @@ public final class MSLCodegenContext {
 	/// `MetalRenderContext` turns it on; anything that runs the generated
 	/// code without filling textures (`MSLTreeEvaluator`) leaves it off, and
 	/// those children are called directly like any other.
-	public init(sampleCaching: Bool = false) {
+	/// `tapCaching` (needs `sampleCaching`) does the same for `taps`-annotated
+	/// children -- see `registerTapCache`. Off by default: unlike a grid
+	/// cache it changes the image.
+	public init(sampleCaching: Bool = false, tapCaching: Bool = false) {
 		functionNameCounter = FunctionNameCounter()
 		debugControlRegistry = DebugControlRegistry()
-		sampleCacheRegistry = SampleCacheRegistry(enabled: sampleCaching)
+		sampleCacheRegistry = SampleCacheRegistry(enabled: sampleCaching, tapsEnabled: sampleCaching && tapCaching)
 	}
 
 	private init(sharingCodegenPassStateWith parent: MSLCodegenContext) {
@@ -300,7 +310,7 @@ public final class MSLCodegenContext {
 	public func registerGridCache(functionName: String, spacingExpression: String) -> String {
 		guard sampleCacheRegistry.enabled else { return functionName }
 		let index = sampleCacheRegistry.caches.count
-		sampleCacheRegistry.caches.append(SampleCache(index: index, functionName: functionName, spacingExpression: spacingExpression))
+		sampleCacheRegistry.caches.append(SampleCache(index: index, functionName: functionName, kind: .grid, measureExpression: spacingExpression))
 		let name = "\(functionName)_cached"
 		// A texel holds the value at its cell centre, so a call is on the
 		// grid when coord / spacing is half-way between two integers. The
@@ -323,6 +333,63 @@ public final class MSLCodegenContext {
 		return name
 	}
 
+	/// Opens a scope around emitting a `fn taps(...)` child (see
+	/// `registerTapCache`), so tap caches registered inside it know which
+	/// cache's taps reach them; returns nil when tap caching is off. Every
+	/// non-nil scope must be closed with `endTapScope`.
+	public func beginTapScope() -> Int? {
+		guard sampleCacheRegistry.tapsEnabled else { return nil }
+		let scope = sampleCacheRegistry.nextTapScope
+		sampleCacheRegistry.nextTapScope += 1
+		sampleCacheRegistry.openTapScopes.append(scope)
+		return scope
+	}
+
+	public func endTapScope() {
+		sampleCacheRegistry.openTapScopes.removeLast()
+	}
+
+	/// For a child emitted by `emitFunction` as `functionName` inside tap
+	/// scope `scope` and sampled at arbitrary points no more than
+	/// `maxOffsetExpression` from the point the node is asked for (a
+	/// `fn taps(maxOffset)` param), returns the name of a function to call
+	/// in its place: it interpolates bilinearly between the four nearest
+	/// texels of a texture `MetalRenderContext` fills first, at a
+	/// resolution a multiple of the output's, covering the image plus the
+	/// largest offset of this cache and of every tap cache whose taps reach
+	/// it. Unlike a grid cache this changes the image (the child is
+	/// replaced by its interpolation), so it's opt-in. A call that needs a
+	/// texel outside the texture evaluates the child directly.
+	/// `maxOffsetExpression` follows `registerGridCache`'s rules for its
+	/// spacing; it only affects how far the texture reaches.
+	public func registerTapCache(functionName: String, maxOffsetExpression: String, scope: Int) -> String {
+		let index = sampleCacheRegistry.caches.count
+		sampleCacheRegistry.caches.append(SampleCache(index: index, functionName: functionName,
+													  kind: .taps(scope: scope, enclosingScope: sampleCacheRegistry.openTapScopes.last),
+													  measureExpression: maxOffsetExpression))
+		let name = "\(functionName)_taps"
+		// Interpolated by hand: the sampler's bilinear filter weights have
+		// only 8 fractional bits, far too coarse for the finite
+		// differences the callers take. noinline as in `registerGridCache`.
+		extraFunctions.append("""
+		__attribute__((noinline)) float3 \(name)(float2 coord, constant float* debugValues EVOLV_CACHE_PARAMS) {
+			float2 g = (coord - cacheInfo[\(index)].texelOrigin) / cacheInfo[\(index)].texelSpacing - 0.5;
+			if (all(g >= 0.0) && all(g < float2(cacheInfo[\(index)].size - 1))) {
+				float2 cell = floor(g);
+				float2 f = g - cell;
+				uint2 t = uint2(cell);
+				float3 a = sampleCache\(index).read(t).xyz;
+				float3 b = sampleCache\(index).read(t + uint2(1, 0)).xyz;
+				float3 c = sampleCache\(index).read(t + uint2(0, 1)).xyz;
+				float3 d = sampleCache\(index).read(t + uint2(1, 1)).xyz;
+				return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
+			}
+			return \(functionName)(coord, debugValues EVOLV_CACHE_ARGS);
+		}
+		""")
+		return name
+	}
+
 	/// All emitted statements so far, joined for splicing into a function body.
 	public func body() -> String {
 		statements.joined(separator: "\n\t")
@@ -335,14 +402,27 @@ public final class MSLCodegenContext {
 	}
 }
 
-/// One `fn grid(...)` child rendered into a texture before the main pass --
-/// see `MSLCodegenContext.registerGridCache`.
+/// One `fn grid(...)` or `fn taps(...)` child rendered into a texture before
+/// the main pass -- see `MSLCodegenContext.registerGridCache` and
+/// `registerTapCache`.
 public struct SampleCache: Sendable {
+	public enum Kind: Sendable {
+		/// One texel per grid cell, read only at cell centres.
+		case grid
+		/// Interpolated texels a multiple of the output's resolution.
+		/// `scope` is the tap scope around this node's own taps child;
+		/// `enclosingScope` the innermost one this cache was registered in,
+		/// i.e. the tap cache whose taps reach this one, if any.
+		case taps(scope: Int, enclosingScope: Int?)
+	}
+
 	public let index: Int
-	/// The `emitFunction` function that computes a cell's value.
+	/// The `emitFunction` function that computes a texel's value.
 	public let functionName: String
-	/// MSL for the grid spacing, in terms of `debugValues` only.
-	public let spacingExpression: String
+	public let kind: Kind
+	/// MSL in terms of `debugValues` only: the grid spacing for `.grid`, the
+	/// largest tap offset for `.taps`.
+	public let measureExpression: String
 }
 
 /// Every generated function takes the grid-cache textures (and where each
@@ -364,8 +444,10 @@ func mslSampleCacheMacros(_ caches: [SampleCache]) -> String {
 	let kernelParams = caches.map { ", texture2d<float, access::read> sampleCache\($0.index) [[texture(\($0.index))]]" }.joined()
 	return """
 	struct SampleCacheInfo {
-		int2 origin; // grid cell of texel (0, 0)
+		int2 origin; // grid cell of texel (0, 0), for a grid cache
 		int2 size;
+		float2 texelOrigin; // corner of texel (0, 0), for a tap cache
+		float2 texelSpacing;
 	};
 	#define EVOLV_CACHE_PARAMS , constant SampleCacheInfo* cacheInfo\(params)
 	#define EVOLV_CACHE_ARGS , cacheInfo\(args)

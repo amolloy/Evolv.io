@@ -36,6 +36,30 @@ public enum MetalRenderError: Error, LocalizedError {
 	}
 }
 
+/// Opt-in tap caching: every `fn taps(...)` child (color-grad's, bump's and
+/// grad-direction's `source`) is rendered into a texture before the main
+/// pass and its taps interpolate that texture instead of evaluating the
+/// child -- see `MSLCodegenContext.registerTapCache`. Faster, but not exact.
+public struct TapCacheSettings: Sendable, Equatable {
+	/// Texels per output pixel along each axis.
+	public var resolution: Double
+
+	public init(resolution: Double = 2) {
+		self.resolution = resolution
+	}
+}
+
+/// Where a filled cache's texture sits (the kernels' `SampleCacheInfo`).
+private struct SampleCacheInfo {
+	/// Grid cell of texel (0, 0), for a grid cache.
+	var origin: SIMD2<Int32> = .zero
+	/// Texels across and down; zero for a cache that isn't filled.
+	var size: SIMD2<Int32> = .zero
+	/// Corner of texel (0, 0) and texel size, for a tap cache.
+	var texelOrigin: SIMD2<Float> = .zero
+	var texelSpacing: SIMD2<Float> = SIMD2(1, 1)
+}
+
 private struct RenderParams {
 	var width: UInt32
 	var height: UInt32
@@ -115,9 +139,10 @@ final class MetalRenderContext {
 	/// left that could make an identical `toString()` compile to different
 	/// MSL.
 	/// `sampleCaching: false` (tests only) calls every `fn grid(...)` child
-	/// directly instead of through a texture, and is cached separately.
-	private func compiled(for node: any Node, sampleCaching: Bool = true) throws -> CompiledTree {
-		let key = (sampleCaching ? "" : "nocache:") + node.toString()
+	/// directly instead of through a texture, and is cached separately;
+	/// `tapCaching: true` reads `fn taps(...)` children through theirs.
+	private func compiled(for node: any Node, sampleCaching: Bool = true, tapCaching: Bool = false) throws -> CompiledTree {
+		let key = (sampleCaching ? "" : "nocache:") + (sampleCaching && tapCaching ? "taps:" : "") + node.toString()
 
 		lock.lock()
 		if let cached = pipelineCache[key] {
@@ -126,7 +151,7 @@ final class MetalRenderContext {
 		}
 		lock.unlock()
 
-		let context = MSLCodegenContext(sampleCaching: sampleCaching)
+		let context = MSLCodegenContext(sampleCaching: sampleCaching, tapCaching: tapCaching)
 		let result = node.codegenMSL(into: context)
 		let caches = context.sampleCaches
 		let source = Self.kernelSource(body: context.body(), resultVariable: result.variableName, functions: context.allFunctions(), resourceRequirements: context.resourceRequirements, customModules: context.customModulesMSL(), sampleCaches: caches)
@@ -169,10 +194,11 @@ final class MetalRenderContext {
 	/// default instead, so a tree with debug controls still renders
 	/// correctly wherever nobody's watching sliders (the main canvas,
 	/// thumbnails, etc).
-	func render(node: any Node, width: Int, height: Int, scale: ComponentType, supersample: Int, liveDebugValues: MTLBuffer? = nil) throws -> [Value] {
+	func render(node: any Node, width: Int, height: Int, scale: ComponentType, supersample: Int, liveDebugValues: MTLBuffer? = nil,
+				tapCache: TapCacheSettings? = nil) throws -> [Value] {
 		try render(node: node, width: width, height: height,
 				   bounds: CGRect(x: -scale, y: -scale, width: 2 * scale, height: 2 * scale),
-				   supersample: supersample, liveDebugValues: liveDebugValues)
+				   supersample: supersample, liveDebugValues: liveDebugValues, tapCache: tapCache)
 	}
 
 	/// Same as `render(node:width:height:scale:...)`, but over an arbitrary
@@ -201,9 +227,12 @@ final class MetalRenderContext {
 	/// A tree with `fn grid(...)` children (blur's source) first renders each
 	/// of them into a texture covering the image -- see `fillSampleCaches`.
 	/// `sampleCaching: false` (tests only) skips that and calls them directly.
+	/// With `tapCache` set, `fn taps(...)` children are rendered into
+	/// textures too -- see `TapCacheSettings`.
 	func render(node: any Node, width: Int, height: Int, bounds: CGRect, supersample: Int, liveDebugValues: MTLBuffer? = nil,
-				fixedBandRows: Int? = nil, fixedSamplesPerPass: Int? = nil, sampleCaching: Bool = true) throws -> [Value] {
-		let compiledTree = try compiled(for: node, sampleCaching: sampleCaching)
+				fixedBandRows: Int? = nil, fixedSamplesPerPass: Int? = nil, sampleCaching: Bool = true,
+				tapCache: TapCacheSettings? = nil) throws -> [Value] {
+		let compiledTree = try compiled(for: node, sampleCaching: sampleCaching, tapCaching: tapCache != nil)
 		let pipeline = compiledTree.pipeline
 		let pixelCount = width * height
 
@@ -217,7 +246,7 @@ final class MetalRenderContext {
 			throw MetalRenderError.bufferAllocationFailed
 		}
 
-		let caches = try fillSampleCaches(compiledTree, bounds: bounds, debugValues: debugValuesBuffer)
+		let caches = try fillSampleCaches(compiledTree, bounds: bounds, width: width, height: height, tapCache: tapCache, debugValues: debugValuesBuffer)
 
 		let tgWidth = pipeline.threadExecutionWidth
 		let tgHeight = max(1, pipeline.maxTotalThreadsPerThreadgroup / tgWidth)
@@ -324,12 +353,19 @@ final class MetalRenderContext {
 	/// than `maxSampleCacheSize` cells across isn't filled at all and every
 	/// call goes direct. Caches fill in order, each in row bands sized like
 	/// `render`'s passes, since a cache may read the ones before it.
-	private func fillSampleCaches(_ compiledTree: CompiledTree, bounds: CGRect, debugValues: MTLBuffer) throws -> FilledSampleCaches? {
+	///
+	/// A tap cache (`fn taps(...)`, only with `tapCache` set) has
+	/// `tapCache.resolution` texels per output pixel and covers the image
+	/// bounds plus its largest tap offset, plus that of every tap cache
+	/// whose taps reach it (an inner color-grad is sampled up to the outer
+	/// one's offset beyond the image), plus two texels. One that would need
+	/// more than `maxTapCacheSize` texels across isn't filled.
+	private func fillSampleCaches(_ compiledTree: CompiledTree, bounds: CGRect, width: Int, height: Int, tapCache: TapCacheSettings?, debugValues: MTLBuffer) throws -> FilledSampleCaches? {
 		let caches = compiledTree.sampleCaches
 		guard !caches.isEmpty, let measurePipeline = compiledTree.measurePipeline else { return nil }
 
-		// The spacings can depend on live debug values, so the GPU computes
-		// them from the same expressions the kernels use.
+		// The spacings and tap offsets can depend on live debug values, so
+		// the GPU computes them from the same expressions the kernels use.
 		guard let spacingsBuffer = device.makeBuffer(length: caches.count * MemoryLayout<Float>.stride, options: .storageModeShared) else {
 			throw MetalRenderError.bufferAllocationFailed
 		}
@@ -341,6 +377,22 @@ final class MetalRenderContext {
 		}
 		let spacings = spacingsBuffer.contents().bindMemory(to: Float.self, capacity: caches.count)
 
+		// A tap cache's margin: its own largest offset plus its enclosing
+		// tap caches'.
+		var cacheOwningTapScope: [Int: Int] = [:]
+		for cache in caches {
+			if case .taps(let scope, _) = cache.kind { cacheOwningTapScope[scope] = cache.index }
+		}
+		func tapMargin(_ cache: SampleCache) -> Double {
+			var margin = 0.0
+			var current: SampleCache? = cache
+			while let c = current, case .taps(_, let enclosingScope) = c.kind {
+				margin += Swift.abs(Double(spacings[c.index]))
+				current = enclosingScope.flatMap { cacheOwningTapScope[$0] }.map { caches[$0] }
+			}
+			return margin
+		}
+
 		let placeholderDescriptor = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: .rgba32Float, width: 1, height: 1, mipmapped: false)
 		placeholderDescriptor.usage = [.shaderRead]
 		guard let placeholder = device.makeTexture(descriptor: placeholderDescriptor) else {
@@ -348,12 +400,20 @@ final class MetalRenderContext {
 		}
 
 		var textures: [MTLTexture] = []
-		var info: [SIMD4<Int32>] = []
+		var info: [SampleCacheInfo] = []
 		for cache in caches {
-			guard let region = Self.sampleCacheRegion(spacing: Double(spacings[cache.index]), bounds: bounds) else {
+			let region: SampleCacheInfo?
+			switch cache.kind {
+				case .grid:
+					region = Self.sampleCacheRegion(spacing: Double(spacings[cache.index]), bounds: bounds)
+						.map { SampleCacheInfo(origin: $0.origin, size: $0.size) }
+				case .taps:
+					region = tapCache.flatMap { Self.tapCacheRegion(margin: tapMargin(cache), bounds: bounds, width: width, height: height, resolution: $0.resolution) }
+			}
+			guard let region else {
 				// A zero size makes every call go direct.
 				textures.append(placeholder)
-				info.append(.zero)
+				info.append(SampleCacheInfo())
 				continue
 			}
 			let descriptor = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: .rgba32Float, width: Int(region.size.x), height: Int(region.size.y), mipmapped: false)
@@ -363,9 +423,9 @@ final class MetalRenderContext {
 				throw MetalRenderError.bufferAllocationFailed
 			}
 			textures.append(texture)
-			info.append(SIMD4(region.origin.x, region.origin.y, region.size.x, region.size.y))
+			info.append(region)
 		}
-		guard let infoBuffer = device.makeBuffer(bytes: info, length: info.count * MemoryLayout<SIMD4<Int32>>.stride, options: .storageModeShared) else {
+		guard let infoBuffer = device.makeBuffer(bytes: info, length: info.count * MemoryLayout<SampleCacheInfo>.stride, options: .storageModeShared) else {
 			throw MetalRenderError.bufferAllocationFailed
 		}
 		let filled = FilledSampleCaches(textures: textures, info: infoBuffer, placeholder: placeholder)
@@ -417,6 +477,32 @@ final class MetalRenderContext {
 		guard let x = axis(Double(bounds.minX), Double(bounds.maxX)), let y = axis(Double(bounds.minY), Double(bounds.maxY)) else { return nil }
 		return (SIMD2(x.first, y.first), SIMD2(x.count, y.count))
 	}
+
+	/// Where a tap cache with `resolution` texels per output pixel goes for
+	/// a `width`x`height` image over `bounds` whose taps reach `margin`
+	/// beyond it, or nil if the texture would be too big.
+	private static func tapCacheRegion(margin: Double, bounds: CGRect, width: Int, height: Int, resolution: Double) -> SampleCacheInfo? {
+		guard margin.isFinite, resolution.isFinite, resolution > 0 else { return nil }
+		func axis(_ lo: Double, _ hi: Double, _ pixels: Int) -> (origin: Double, spacing: Double, count: Int32)? {
+			let spacing = (hi - lo) / (Double(pixels) * resolution)
+			// Two texels past the margin, so a tap right at it still has
+			// both of its bilinear neighbours.
+			let pad = margin + 2 * spacing
+			let count = ((hi - lo + 2 * pad) / spacing).rounded(.up)
+			guard spacing.isFinite, spacing > 0, count.isFinite, count <= Double(maxTapCacheSize) else { return nil }
+			return (lo - pad, spacing, Int32(count))
+		}
+		guard let x = axis(Double(bounds.minX), Double(bounds.maxX), width),
+			  let y = axis(Double(bounds.minY), Double(bounds.maxY), height) else { return nil }
+		return SampleCacheInfo(size: SIMD2(x.count, y.count),
+							   texelOrigin: SIMD2(Float(x.origin), Float(y.origin)),
+							   texelSpacing: SIMD2(Float(x.spacing), Float(y.spacing)))
+	}
+
+	/// The most texels a tap cache may have along either axis (8192 x 8192
+	/// float4 texels is 1 GB). 4 texels per pixel of a 2048-pixel image
+	/// is past it, and that cache goes direct.
+	private static let maxTapCacheSize = 8192
 
 	/// Cells beyond the padded image bounds a grid cache still covers.
 	private static let sampleCacheMarginCells = 24
@@ -524,15 +610,26 @@ final class MetalRenderContext {
 		"""
 	}
 
-	/// `measureSampleCaches` writes every cache's grid spacing into buffer 0;
-	/// `fillSampleCache<i>` evaluates cache i's function at the centre of
-	/// every cell of its texture (bound at texture index `caches.count`),
-	/// for the band of rows starting at the row in buffer 4.
+	/// `measureSampleCaches` writes every cache's grid spacing (or largest
+	/// tap offset) into buffer 0; `fillSampleCache<i>` evaluates cache i's
+	/// function at the centre of every texel of its texture (bound at
+	/// texture index `caches.count`), for the band of rows starting at the
+	/// row in buffer 4.
 	private static func sampleCacheKernels(_ caches: [SampleCache]) -> String {
 		guard !caches.isEmpty else { return "" }
-		let spacings = caches.map { "spacings[\($0.index)] = \($0.spacingExpression);" }.joined(separator: "\n\t")
+		let spacings = caches.map { "spacings[\($0.index)] = \($0.measureExpression);" }.joined(separator: "\n\t")
 		let fills = caches.map { cache in
-			"""
+			let coord: String
+			switch cache.kind {
+				case .grid:
+					coord = """
+					float spacing = \(cache.measureExpression);
+						float2 coord = (float2(int2(gid) + cacheInfo[\(cache.index)].origin) + 0.5) * spacing;
+					"""
+				case .taps:
+					coord = "float2 coord = cacheInfo[\(cache.index)].texelOrigin + (float2(gid) + 0.5) * cacheInfo[\(cache.index)].texelSpacing;"
+			}
+			return """
 			kernel void fillSampleCache\(cache.index)(texture2d<float, access::write> target [[texture(\(caches.count))]],
 											constant uint& rowOffset [[buffer(4)]],
 											constant float* debugValues [[buffer(2)]]
@@ -540,8 +637,7 @@ final class MetalRenderContext {
 											uint2 bandGid [[thread_position_in_grid]]) {
 				uint2 gid = uint2(bandGid.x, bandGid.y + rowOffset);
 				if (gid.x >= target.get_width() || gid.y >= target.get_height()) return;
-				float spacing = \(cache.spacingExpression);
-				float2 coord = (float2(int2(gid) + cacheInfo[\(cache.index)].origin) + 0.5) * spacing;
+				\(coord)
 				target.write(float4(\(cache.functionName)(coord, debugValues EVOLV_CACHE_ARGS), 0.0), gid);
 			}
 			"""

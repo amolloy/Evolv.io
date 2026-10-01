@@ -24,12 +24,15 @@
 //    requirement := ('::')? (IDENT|STRING)  -- '::' = look only in library
 //                  roots scanned before this file's own (see DSLLibrary.scan)
 //                  '{' (stmt | paramStmt)* 'return' expr '}'
-//    paramDecl  := IDENT (':' (IDENT | 'grid' '(' expr ')')+)?
+//    paramDecl  := IDENT (':' (IDENT | ('grid' | 'taps') '(' expr ')')+)?
 //                  -- ": fn" marks a sampled child;
 //                  ": scalar"/": vector" (optionally after "fn") is the
 //                  generator's preferred argument type; "grid(spacing)"
 //                  (fn only) says the child is only sampled at grid-cell
-//                  centres, so it can be rendered into a texture once
+//                  centres, so it can be rendered into a texture once;
+//                  "taps(maxOffset)" (fn only) says it's only sampled
+//                  within maxOffset of coord, so with tap caching on it
+//                  can be interpolated from a texture
 //    paramStmt  := 'param' '$' IDENT ':' IDENT '=' signedNumber debugClause?
 //                  -- a self-contained default for a `$name` reference,
 //                  used when nothing external supplies one
@@ -282,6 +285,7 @@ final class DSLParser {
 		var isFunction = false
 		var preferredType: NodeValueType? = nil
 		var grid: DSLExpr? = nil
+		var taps: DSLExpr? = nil
 		if match(.colon) {
 			// One or more words up to the next ',' or ')': at most one role
 			// (fn/value), at most one type (scalar/vector) and at most one
@@ -298,6 +302,15 @@ final class DSLParser {
 					try expect(.rparen)
 					try validateGridSpacing(spacing, param: name)
 					grid = spacing
+				} else if word == "taps" {
+					guard taps == nil else {
+						throw DSLParseError(message: "Param '\(name)' has more than one taps")
+					}
+					try expect(.lparen)
+					let maxOffset = try parseExpr()
+					try expect(.rparen)
+					try validateGridSpacing(maxOffset, param: name)
+					taps = maxOffset
 				} else if word == "fn" || word == "value" {
 					guard !sawRole else {
 						throw DSLParseError(message: "Param '\(name)' has more than one role")
@@ -317,7 +330,13 @@ final class DSLParser {
 		if grid != nil && !isFunction {
 			throw DSLParseError(message: "Param '\(name)' has a grid but isn't 'fn' -- only a sampled child can have one")
 		}
-		return DSLParam(name: name, isFunction: isFunction, preferredType: preferredType, grid: grid)
+		if taps != nil && !isFunction {
+			throw DSLParseError(message: "Param '\(name)' has taps but isn't 'fn' -- only a sampled child can have them")
+		}
+		if grid != nil && taps != nil {
+			throw DSLParseError(message: "Param '\(name)' has both a grid and taps")
+		}
+		return DSLParam(name: name, isFunction: isFunction, preferredType: preferredType, grid: grid, taps: taps)
 	}
 
 	/// A grid spacing is evaluated once per render (to size the texture),

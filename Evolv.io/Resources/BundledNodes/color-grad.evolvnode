@@ -22,7 +22,13 @@
 //
 // p3 is the gain again since section 24, replacing the fixed 2.49. With
 // the factor at 1.0, Figure 9's gain is 1.35 and Figure 10's is 3.03.
-node "color-grad"(source: fn, p1: scalar, p2: scalar, color: vector, p3: scalar) -> vector requires(lighting, "color-grad-core") {
+//
+// source's taps reach (diff + blur half-width) along an axis, i.e.
+// delta * ($debugDiffDistance + $debugBlurWidth); taps(...) assumes
+// |p1| <= 2 * $debugDivisor (it's 3.1 in Figures 9 and 10). With tap
+// caching on, taps further out than that near the image edge skip the
+// cache, which only costs speed.
+node "color-grad"(source: fn taps(2.0 * $debugDelta * (abs($debugDiffDistance) + abs($debugBlurWidth))), p1: scalar, p2: scalar, color: vector, p3: scalar) -> vector requires(lighting, "color-grad-core") {
 	param $debugDelta: float = 0.01089 debug slider(0.0, 0.2)
 	param $debugGainFactor: float = 1.0 debug slider(-10.0, 10.0)
 	param $debugBlur: float = 1.0 debug toggle

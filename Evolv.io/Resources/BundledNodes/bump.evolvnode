@@ -6,7 +6,7 @@
 // the change in Bump.md #7 is only the maths: reading source as a normal
 // turned Figure 10's (if x 10.7 y) into a lower-left-quadrant switch and a
 // black bar along y = 0.
-node "bump"(source: fn, multiplier, strength: scalar, color1: vector, color2: vector, dirX: scalar, dirY: scalar, lightHeight: scalar) -> vector requires(lighting) {
+node "bump"(source: fn taps(abs($debugDelta)), multiplier, strength: scalar, color1: vector, color2: vector, dirX: scalar, dirY: scalar, lightHeight: scalar) -> vector requires(lighting) {
 	param $debugDelta: float = 0.01 debug slider(0.0, 0.2)
 	let strengthVal: float = avgLum(strength)
 	let d: float = $debugDelta
