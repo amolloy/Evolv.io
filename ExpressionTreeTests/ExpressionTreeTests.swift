@@ -248,19 +248,16 @@ struct MetalRenderRegressionTests {
         try assertFiniteAndInNoiseRange(DSLTestNodes.gradientDirection(DSLTestNodes.bwNoise(Constant(0.15), Constant(2)), Constant(0.0), Constant(0.0)))
     }
 
-    /// `source = x²` has constant curvature (2·r² per finite-difference
-    /// radius `r`) along x and exactly zero curvature along y (it doesn't
-    /// depend on y), independent of the sample coordinate -- so the golden
-    /// value here is hand-derived, not just captured from a run: with
-    /// `p2 = 0` (curvature weight fully on the x axis), `p3 = 1` (identity
-    /// contrast exponent), `color = (1,1,1)`, and the default
-    /// `debugDelta/debugHeightFactor/debugTapCount` (0.01/20/4), curvature
-    /// averages to `2 * mean((0.01*i/4)^2 for i in 1...4) = 9.375e-5`,
-    /// scaled by `heightFactor = 20` gives `t = 0.001875`.
+    /// `source = x²` has the same second difference, `2·d²`, at every
+    /// coordinate and every blur offset, and zero along y, so the golden
+    /// value is hand-derived: with `p1 = 3.1` the defaults give
+    /// `delta = 0.01089` and `d = 2·delta = 0.02178`; `p2 = 0` puts all the
+    /// weight on x, and gain `p3 = 1` and `color = (1,1,1)` leave
+    /// `2 · 0.02178² = 9.487368e-4` unchanged.
     @Test func colorGradientCurvature() throws {
         let source = DSLTestNodes.mult(DSLTestNodes.x(), DSLTestNodes.x())
         let node = DSLTestNodes.colorGradientCurvature(source, Constant(3.1), Constant(0.0), ConstantTriplet(Value(1, 1, 1)), Constant(1.0))
-        try assertGolden(node, Value(0.001875, 0.001875, 0.001875))
+        try assertGolden(node, Value(repeating: 9.487368e-4), tolerance: 1e-6)
     }
 
     @Test func bump() throws {

@@ -698,6 +698,30 @@ gives p3, not for a change in the renders.
 The result is linear in the gain, so the bundled golden value
 (`bundledColorGradMatchesGoldenValue`, p3 = 1.35) scales by 1.35 / 2.49.
 
+### 25. color-grad-curvature brought in line with color-grad [2026-10-01]
+
+`color-grad-curvature` (#18) had drifted from `color-grad` since #19: it
+still had the old 4-tap radii, `heightFactor = p3 × 20`, a `lightZ`
+offset, a multiply by `color` and a `signedPow(…, p3)` exponent. It is now
+`color-grad` with one change, the slope: the same debug params and
+defaults, the same `p1` delta, the same 5x5 box blur, `p3` as gain and a
+full `÷ color`, but in place of the light-dotted first difference it
+takes a second difference of the blurred field per axis,
+`h(x − d) + h(x + d) − 2h(x)`, averaged across channels and weighted
+`cos²(p2)` on x and `sin²(p2)` on y as before.
+
+The output stage both nodes share, `slope × gain ÷ color`, is the new
+module `color-grad-core`. The sampling can't be shared that way, because
+module functions can't take a `fn` child, so the two blur blocks are
+still written out in each node.
+
+Because the 4-tap average, the ×20 height factor and the colour
+multiply are gone, Figures that use the old node will look different.
+With `$debugGainFactor` at 1.0, a sharp step gives a curvature about as
+large as its slope, so the two nodes come out at similar brightness.
+The golden value in `colorGradientCurvature()` (source x²) is now
+`2·(2·0.01089)² = 9.487e-4`.
+
 ## Current state of the code (as of this writing)
 
 > Superseded in part by #20: `color-grad` is now the blurred-slope node of

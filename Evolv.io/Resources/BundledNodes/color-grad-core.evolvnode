@@ -1,0 +1,12 @@
+// Shared output stage of color-grad and color-grad-curvature. The two nodes
+// map p1, p2 and p3 the same way and differ only in how they turn the
+// blurred source into a scalar slope; this is everything after that.
+// The sampling itself can't live here: module funcs can't take a fn child.
+//   slope: the node's scalar slope (luminance, unnormalized)
+//   gain:  avgLum(p3) * the node's $debugGainFactor
+//   color: divides the result per channel (ColorGradient.md, section 23)
+module "color-grad-core" {
+	func colorGradShade(slope: float, gain: float, color: float3) -> float3 {
+		return float3(slope * gain) / max(color, float3(1e-6))
+	}
+}

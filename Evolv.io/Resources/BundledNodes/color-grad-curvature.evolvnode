@@ -1,41 +1,56 @@
-// The active "color-grad-curvature" node -- ported off the hand-written
-// ExpressionTree/Nodes/ColorGradientCurvature.swift, which has been
-// deleted now that this file replaces it in NodeRegistry. Not a Sims
-// primitive -- our own invented variant (see ColorGradient.md #18 in git
-// history), kept as its own node/name so it doesn't clash with
-// color-grad's own sample-expression test coverage.
-//
-// debugDelta/debugHeightFactor/debugLightZ/debugTapCount were live-
-// tunable Swift statics there (never actually mutated at runtime, just
-// baked-in constants -- see git history); now hardcoded literals
-// (0.01/20.0/0.0/4) directly below. To tune, edit the literals and use
-// "Reload Custom Nodes".
-node "color-grad-curvature"(source: fn, p1: scalar, p2: scalar, color: vector, p3: scalar) -> vector requires(lighting) {
-	let p1Val: float = avgLum(p1)
-	let deltaLocal: float = (abs(p1Val) / 3.1) * 0.01
+// Our own variant of color-grad, not a Sims primitive (ColorGradient.md,
+// section 18). Since section 25 it is color-grad with one change: the
+// slope is a second difference (curvature) instead of a first difference.
+// The arguments, debug params, 5x5 box blur and output stage (shared via
+// color-grad-core) are the same as color-grad's.
+//   p1: filter radius scale (delta = p1/3.1 * $debugDelta)
+//   p2: curvature anisotropy angle: x curvature weighted by cos^2 p2,
+//       y curvature by sin^2 p2
+//   color: divides the result per channel (result / color)
+//   p3: gain (curvature * p3 * $debugGainFactor)
+// Box-blurs source over a 5x5 grid, takes one second difference of the
+// blurred field per axis (h(x - d) + h(x + d) - 2 h(x)), averages it
+// across the three channels, and returns the weighted curvature divided
+// by color. Flat regions are exactly 0; a rounded step gives curvature of
+// opposite sign on its two shoulders.
+node "color-grad-curvature"(source: fn, p1: scalar, p2: scalar, color: vector, p3: scalar) -> vector requires(lighting, "color-grad-core") {
+	param $debugDelta: float = 0.01089 debug slider(0.0, 0.2)
+	param $debugGainFactor: float = 1.0 debug slider(-10.0, 10.0)
+	param $debugBlur: float = 1.0 debug toggle
+	// Blur half-width and difference half-distance, as fractions of delta.
+	param $debugBlurWidth: float = 0.5913 debug slider(0.0, 2.0)
+	param $debugDiffDistance: float = 2.0 debug slider(0.0, 2.0)
 
-	let p3Val: float = avgLum(p3)
-	let heightFactor: float = p3Val * 20.0
-	let lightZ: float = p3Val * 0.0
+	param $debugDivisor: float = 3.1 debug slider (0.0, 20.0)
+
+	let p1Val: float = avgLum(p1)
+	let deltaLocal: float = (abs(p1Val) / $debugDivisor) * $debugDelta
+
+	let gain: float = avgLum(p3) * $debugGainFactor
 
 	let angle: float = avgLum(p2)
 
-	let center = source(coord)
+	let blurHalfWidth: float = ($debugBlur != 0.0) ? deltaLocal * $debugBlurWidth : 0.0
+	let diff: float = deltaLocal * $debugDiffDistance
 
-	let curvX = average(i in 1...4) {
-		let radius: float = deltaLocal * (float(i) / float(4))
-		source(coord - float2(radius, 0.0)) + source(coord + float2(radius, 0.0)) - 2.0 * center
+	let cx = average(j in 0...4) {
+		average(k in 0...4) {
+			let s: float = blurHalfWidth / 2.0
+			let o: float2 = float2(float(k - 2) * s, float(j - 2) * s)
+			source(coord + o - float2(diff, 0.0)) + source(coord + o + float2(diff, 0.0)) - 2.0 * source(coord + o)
+		}
 	}
-	let curvY = average(i in 1...4) {
-		let radius: float = deltaLocal * (float(i) / float(4))
-		source(coord - float2(0.0, radius)) + source(coord + float2(0.0, radius)) - 2.0 * center
+	let cy = average(j in 0...4) {
+		average(k in 0...4) {
+			let s: float = blurHalfWidth / 2.0
+			let o: float2 = float2(float(k - 2) * s, float(j - 2) * s)
+			source(coord + o - float2(0.0, diff)) + source(coord + o + float2(0.0, diff)) - 2.0 * source(coord + o)
+		}
 	}
 
 	let weightX: float = cos(angle) * cos(angle)
 	let weightY: float = sin(angle) * sin(angle)
-	let curvature = weightX * curvX + weightY * curvY
+	let slope: float = avgLum(cx) * weightX + avgLum(cy) * weightY
 
-	let lightMap = color * (heightFactor * curvature + lightZ)
-
-	return signedPow(lightMap, p3Val)
+	return colorGradShade(slope, gain, color)
 }

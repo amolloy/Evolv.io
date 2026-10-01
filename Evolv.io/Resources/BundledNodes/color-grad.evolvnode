@@ -10,6 +10,8 @@
 // blurred field, averages that difference across the three channels
 // (luminance slope, not per-channel), and returns the raw (unnormalized)
 // directional slope divided by color. See ColorGradient.md, section 20.
+// color-grad-curvature is this node with a second difference in place of
+// the slope; the output stage they share is color-grad-core.
 //
 // Full divide since the Figure 10 colour probe (ColorGradient.md, section
 // 23). This reverses section 22, where p3 was the colour exponent
@@ -20,7 +22,7 @@
 //
 // p3 is the gain again since section 24, replacing the fixed 2.49. With
 // the factor at 1.0, Figure 9's gain is 1.35 and Figure 10's is 3.03.
-node "color-grad"(source: fn, p1: scalar, p2: scalar, color: vector, p3: scalar) -> vector requires(lighting) {
+node "color-grad"(source: fn, p1: scalar, p2: scalar, color: vector, p3: scalar) -> vector requires(lighting, "color-grad-core") {
 	param $debugDelta: float = 0.01089 debug slider(0.0, 0.2)
 	param $debugGainFactor: float = 1.0 debug slider(-10.0, 10.0)
 	param $debugBlur: float = 1.0 debug toggle
@@ -57,7 +59,7 @@ node "color-grad"(source: fn, p1: scalar, p2: scalar, color: vector, p3: scalar)
 
 	let lightDx: float = -cos(angle)
 	let lightDy: float = sin(angle)
-	let lightMap: float = -(avgLum(gx) * lightDx + avgLum(gy) * lightDy) * gain
+	let slope: float = -(avgLum(gx) * lightDx + avgLum(gy) * lightDy)
 
-	return lightMap / max(color, float3(1e-6))
+	return colorGradShade(slope, gain, color)
 }
