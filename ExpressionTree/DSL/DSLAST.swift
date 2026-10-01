@@ -30,6 +30,13 @@ indirect enum DSLExpr {
 	/// `$param`), since this unrolls `body` once per iteration rather than
 	/// emitting a runtime MSL loop.
 	case reduce(variable: String, lo: DSLExpr, hi: DSLExpr, body: [DSLStmt], result: DSLExpr)
+	/// `percell(at, spacing) { <stmts>* <trailingExpr> }` -- a block whose
+	/// value is a function of which grid cell `at` (a name in scope, always
+	/// a cell centre `(float2(i, j) + 0.5) * spacing`) is. The renderer may
+	/// compute it once per cell into a texture and read that instead (see
+	/// `DSLInterpreter.evaluatePercell`). `spacing` follows `fn grid(...)`'s
+	/// rules.
+	case percell(at: String, spacing: DSLExpr, body: [DSLStmt], result: DSLExpr)
 }
 
 /// One statement in a node, module `func`, `average` or `loop` body.

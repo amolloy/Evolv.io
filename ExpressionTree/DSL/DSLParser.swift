@@ -68,12 +68,16 @@
 //    unary      := ('-'|'!')? postfix
 //    postfix    := primary ('.' IDENT | '(' argList ')')*
 //    primary    := NUMBER | IDENT genericSuffix? | '$' IDENT | '(' expr ')' | reduceExpr
+//                  | percellExpr
 //    genericSuffix := '<' IDENT '>'                 -- folds into one identifier,
 //                  e.g. `as_type<uint3>`, so it can be called like any other
 //                  passthrough MSL builtin (see DSLInterpreter's unbound-call
 //                  handling) without the grammar needing real generics
 //    reduceExpr := 'average' '(' IDENT 'in' expr '...' expr ')'
 //                  '{' stmt* expr '}'     -- no breakStmt, even inside a loop
+//    percellExpr := 'percell' '(' IDENT ',' expr ')' '{' stmt* expr '}'
+//                  -- a block that depends only on which grid cell IDENT
+//                  is; the spacing follows grid(...)'s rules
 //
 //  Bare (non-call) identifiers that aren't bound to a child/let/param are
 //  passed through as literal text too (not just in call position) -- see
@@ -565,6 +569,9 @@ final class DSLParser {
 		if checkIdentifier("average") {
 			return try parseReduce()
 		}
+		if checkIdentifier("percell") {
+			return try parsePercell()
+		}
 		switch peek() {
 			case .number(let text):
 				pos += 1
@@ -633,6 +640,31 @@ final class DSLParser {
 		loopDepth = savedLoopDepth
 		try expect(.rbrace)
 		return .reduce(variable: variable, lo: lo, hi: hi, body: body, result: result)
+	}
+
+	private func parsePercell() throws -> DSLExpr {
+		try expectIdentifier("percell")
+		try expect(.lparen)
+		let at = try expectAnyIdentifier()
+		try expect(.comma)
+		let spacing = try parseExpr()
+		try validateGridSpacing(spacing, param: "percell(\(at), ...)")
+		try expect(.rparen)
+		try expect(.lbrace)
+		// The block may be skipped (its value read from a texture), so no
+		// `break` out of an enclosing loop from in here either.
+		let savedLoopDepth = loopDepth
+		loopDepth = 0
+		scopes.append([:])
+		var body: [DSLStmt] = []
+		while let stmt = try parseStmt() {
+			body.append(stmt)
+		}
+		let result = try parseExpr()
+		scopes.removeLast()
+		loopDepth = savedLoopDepth
+		try expect(.rbrace)
+		return .percell(at: at, spacing: spacing, body: body, result: result)
 	}
 
 	// MARK: - Token helpers

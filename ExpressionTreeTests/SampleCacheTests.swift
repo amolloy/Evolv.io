@@ -114,6 +114,60 @@ import Foundation
 		}
 	}
 
+	/// Renders `expression` with blur's `percell` sums read from textures
+	/// and computed in place; returns the largest difference.
+	private static func percellDifference(_ expression: String, size: Int = 128) throws -> Double {
+		let node = try Parser().parse(expression)
+		defer {
+			DSLInterpreter.cachesPercellBlocks = true
+			MetalRenderContext.shared.clearPipelineCache()
+		}
+		var images: [[Value]] = []
+		for cached in [true, false] {
+			DSLInterpreter.cachesPercellBlocks = cached
+			MetalRenderContext.shared.clearPipelineCache()
+			images.append(try MetalRenderContext.shared.render(node: node, width: size, height: size, bounds: square, supersample: 1))
+		}
+		let maxDifference = compare(images[0], images[1]).maxDifference
+		print("PERCELL \(expression) max \(maxDifference)")
+		return maxDifference
+	}
+
+	/// The cached sums are the same sums, but compiled in another function,
+	/// which can round differently in the last bit or two (fast math); on
+	/// its own blur is off by about 1e-7. grad-direction's finite
+	/// differences magnify that.
+	@Test func percellBlurMatchesComputingInPlace() throws {
+		#expect(try Self.percellDifference("(blur (sin (* x 7)) 3.1)") < 1e-6)
+		#expect(try Self.percellDifference("(blur (* x y) 0.5)") < 1e-6)
+		#expect(try Self.percellDifference("(grad-direction (blur (sin (* x 7)) 3.1) 1.46 5.9)") < 1e-4)
+	}
+
+	/// How many textures `expression` renders before the main pass.
+	private static func cacheCount(_ expression: String) throws -> Int {
+		let context = MSLCodegenContext(sampleCaching: true)
+		_ = try Parser().parse(expression).codegenMSL(into: context)
+		return context.sampleCaches.count
+	}
+
+	/// The sums are cached only when everything they read besides the cell
+	/// is the same everywhere: a radius depending on x or y computes them in
+	/// place (blur's source is still cached).
+	@Test func percellNeedsAUniformRadius() throws {
+		#expect(try Self.cacheCount("(blur (sin (* x 7)) 3.1)") == 2)
+		#expect(try Self.cacheCount("(blur (sin (* x 7)) (sin 2.0))") == 2)
+		#expect(try Self.cacheCount("(blur (sin (* x 7)) (* x 3))") == 1)
+		#expect(try Self.cacheCount("(blur (sin (* x 7)) (bw-noise 0.3 0.5))") == 1)
+		#expect(try Self.percellDifference("(blur (sin (* x 7)) (+ 2 (* x 3)))", size: 64) == 0)
+	}
+
+	@Test func percellSpacingFollowsGridRules() throws {
+		#expect(throws: DSLParseError.self) {
+			_ = try DSLParser("node \"p\"(v) { let c: float2 = coord\n let s = percell(c, coord.x) { v }\n return s }").parseTemplate()
+		}
+		_ = try DSLParser("node \"p\"(v) { let c: float2 = coord\n let s = percell(c, 2.0 / $w) { v }\n return s }").parseTemplate()
+	}
+
 	/// Not a check: prints how long Figure 13 takes with and without the
 	/// texture, for comparing render-path changes.
 	@Test func timeFigure13() throws {

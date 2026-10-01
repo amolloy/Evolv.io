@@ -342,7 +342,8 @@ final class MetalRenderContext {
 	/// of evaluating the child's whole subtree at every tap. Blur takes 1764
 	/// taps per call, and Figure 13 calls it 4 times per sample, so this
 	/// replaces about 7000 evaluations of its source per sample with one per
-	/// cell.
+	/// cell. A DSL `percell` block (blur's weighted sum at each grid point)
+	/// is filled the same way, after the caches it reads.
 	///
 	/// A texture covers the image bounds plus a quarter of their size on
 	/// each side, plus `sampleCacheMarginCells` cells, since a node samples

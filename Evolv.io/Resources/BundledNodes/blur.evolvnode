@@ -23,6 +23,11 @@
 // grid(2.0 / $debugImageWidth): the renderer evaluates it once per CM-2
 // pixel into a texture and the taps read that, instead of evaluating
 // source's whole subtree 1764 times per call.
+// The weighted sum at each CM-2 pixel centre is a `percell` block: when
+// radius is the same everywhere (Figure 13's 3.1), the renderer computes
+// it once per CM-2 pixel into a texture too, and each call only reads its
+// four corners. A radius that varies with the coordinate computes the sums
+// here, per call, as before.
 node "blur"(source: fn grid(2.0 / $debugImageWidth), radius: scalar) {
 	param $debugImageWidth: float = 256.0 debug slider(64.0, 1024.0)
 	param $debugSigmaScale: float = 1.0 debug slider(0.0, 2.0)
@@ -44,10 +49,12 @@ node "blur"(source: fn grid(2.0 / $debugImageWidth), radius: scalar) {
 			let cell: float2 = (g0 + float2(float(a), float(b)) + float2(0.5)) * px
 			let wa: float = (a == 0) ? 1.0 - f.x : f.x
 			let wb: float = (b == 0) ? 1.0 - f.y : f.y
-			let s = average(j in 0...20) {
-				average(k in 0...20) {
-					let o: float2 = float2(float(k - 10), float(j - 10)) * stepPx
-					source(cell + o * px) * exp(-dot(o, o) * invTwoSigma2)
+			let s = percell(cell, 2.0 / $debugImageWidth) {
+				average(j in 0...20) {
+					average(k in 0...20) {
+						let o: float2 = float2(float(k - 10), float(j - 10)) * stepPx
+						source(cell + o * px) * exp(-dot(o, o) * invTwoSigma2)
+					}
 				}
 			}
 			s * (wa * wb * 4.0)

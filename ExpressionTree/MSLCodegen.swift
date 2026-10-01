@@ -268,11 +268,18 @@ public final class MSLCodegenContext {
 	/// a future debug-annotated `color-grad` nested inside another
 	/// `color-grad`'s `source`, exactly Figure 9's shape.
 	public func emitFunction(for node: any Node) -> String {
+		emitFunction { node.codegenMSL(into: $0).variableName }
+	}
+
+	/// Like `emitFunction(for:)`, but the body is whatever `build` emits
+	/// into the fresh sub-context it's given; `build` returns the MSL text of
+	/// the function's float3 result.
+	public func emitFunction(_ build: (MSLCodegenContext) -> String) -> String {
 		let name = "fn\(functionNameCounter.next)"
 		functionNameCounter.next += 1
 
 		let subContext = MSLCodegenContext(sharingCodegenPassStateWith: self)
-		let result = node.codegenMSL(into: subContext)
+		let result = build(subContext)
 		resourceRequirements.formUnion(subContext.resourceRequirements)
 		customModuleTexts.merge(subContext.customModuleTexts) { existing, _ in existing }
 
@@ -287,11 +294,14 @@ public final class MSLCodegenContext {
 		extraFunctions.append("""
 		__attribute__((noinline)) float3 \(name)(float2 coord, constant float* debugValues EVOLV_CACHE_PARAMS) {
 			\(subContext.body())
-			return \(result.variableName);
+			return \(result);
 		}
 		""")
 		return name
 	}
+
+	/// Whether `registerGridCache`/`registerPercellCache` cache anything.
+	public var sampleCachingEnabled: Bool { sampleCacheRegistry.enabled }
 
 	/// Every grid cache registered in this codegen pass, in fill order: a
 	/// cache's function only ever reads caches registered before it.
@@ -328,6 +338,39 @@ public final class MSLCodegenContext {
 				return sampleCache\(index).read(uint2(texel)).xyz;
 			}
 			return \(functionName)(coord, debugValues EVOLV_CACHE_ARGS);
+		}
+		""")
+		return name
+	}
+
+	/// For a DSL `percell` block emitted as `functionName` (by
+	/// `emitFunction(_:)`: the block's value at grid-cell centre `coord`),
+	/// returns the name of a function
+	/// `bool name(float2 at, thread float3& value, debugValues ...)` that
+	/// reads `value` from a texture `MetalRenderContext` fills once per cell
+	/// before the main pass, like `registerGridCache`'s, and returns false
+	/// (leaving `value` alone) when `at` is off the grid or outside the
+	/// texture -- the caller then computes the block itself. Only call this
+	/// with caching on. `spacingExpression` follows `registerGridCache`'s
+	/// rules.
+	public func registerPercellCache(functionName: String, spacingExpression: String) -> String {
+		precondition(sampleCacheRegistry.enabled, "registerPercellCache needs sample caching on")
+		let index = sampleCacheRegistry.caches.count
+		sampleCacheRegistry.caches.append(SampleCache(index: index, functionName: functionName, kind: .grid, measureExpression: spacingExpression))
+		let name = "\(functionName)_read"
+		// The same on-grid test as `registerGridCache`'s. noinline: one call
+		// per lookup site rather than a copy of the test inlined into each.
+		extraFunctions.append("""
+		__attribute__((noinline)) bool \(name)(float2 coord, thread float3& value, constant float* debugValues EVOLV_CACHE_PARAMS) {
+			float spacing = \(spacingExpression);
+			float2 g = coord / spacing;
+			float2 cell = floor(g);
+			int2 texel = int2(cell) - cacheInfo[\(index)].origin;
+			if (all(abs(g - cell - 0.5) < 0.01) && all(texel >= 0) && all(texel < cacheInfo[\(index)].size)) {
+				value = sampleCache\(index).read(uint2(texel)).xyz;
+				return true;
+			}
+			return false;
 		}
 		""")
 		return name
@@ -402,12 +445,14 @@ public final class MSLCodegenContext {
 	}
 }
 
-/// One `fn grid(...)` or `fn taps(...)` child rendered into a texture before
-/// the main pass -- see `MSLCodegenContext.registerGridCache` and
-/// `registerTapCache`.
+/// One `fn grid(...)` or `fn taps(...)` child, or DSL `percell` block,
+/// rendered into a texture before the main pass -- see
+/// `MSLCodegenContext.registerGridCache`, `registerTapCache` and
+/// `registerPercellCache`.
 public struct SampleCache: Sendable {
 	public enum Kind: Sendable {
-		/// One texel per grid cell, read only at cell centres.
+		/// One texel per grid cell, read only at cell centres (a grid
+		/// child or a `percell` block).
 		case grid
 		/// Interpolated texels a multiple of the output's resolution.
 		/// `scope` is the tap scope around this node's own taps child;

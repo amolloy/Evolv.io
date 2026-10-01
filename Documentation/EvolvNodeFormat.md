@@ -294,6 +294,43 @@ affordable.
 - Only valid on a `fn` param. `MSLTreeEvaluator` (the parity-test
   evaluator) ignores it and always calls the child directly.
 
+### Per-cell blocks (`percell(at, spacing) { ... }`)
+
+```
+let s = percell(cell, 2.0 / $debugImageWidth) {
+	average(j in 0...20) { ... source(cell + o * px) ... }
+}
+```
+
+The same idea for a value the body computes rather than a child: a
+`percell` block promises that `at` (a name in scope) is always a grid cell
+centre at `spacing`, and that the block's value depends only on that cell.
+When it can, the renderer computes the block once per cell into a texture
+before the main pass, and the block here only reads its cell. Blur's
+weighted sum at each of its four surrounding CM-2 pixels is one, so a blur
+call is four texel reads instead of 1764 taps.
+
+- The block runs in place, exactly as written, whenever the renderer
+  can't cache it: when `at` is off the grid or outside the texture (as
+  with `grid`), and whenever the block reads anything besides `at` that
+  could differ between coordinates -- `coord`, a value child that
+  depends on the coordinate (blur with a radius like `(* x 3)`), a `let`
+  computed from either, a local of an enclosing block, or a `var`. Only
+  constants and DSL nodes that never mention `coord` count as the same
+  everywhere. Function children, `$param`s, modules and top-level `let`s
+  built from those are fine.
+- To fill the texture, the renderer recomputes the top-level `let`s and
+  value children the block reads at each cell centre, then the block
+  with `at` bound to that centre. That's the same statements on the same
+  values, but the Metal compiler (fast math) may round a long sum
+  differently in a different function, so texels can differ from the
+  in-place result in the last bits.
+- `spacing` follows `grid`'s rules. The block may not assign to
+  anything outside itself (it wouldn't happen on a texture read), and
+  only `float3` and `float` blocks are cached.
+- Off without sample caching, so `MSLTreeEvaluator` always runs the
+  block in place.
+
 ## Preferred argument types (for random generation)
 
 A child param can also name the type the random expression generator

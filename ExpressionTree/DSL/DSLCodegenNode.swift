@@ -152,9 +152,18 @@ public final class DSLCodegenNode: Node {
 			env[decl.name] = .sampledFunction(context.registerTapCache(functionName: fnName, maxOffsetExpression: maxOffset, scope: tapScope))
 		}
 
-		let interpreter = DSLInterpreter(context: context, params: effectiveParams, env: env, liveParamText: liveParamText)
+		// What a `percell` block's per-cell function may recompute: the
+		// children and the top-level lets, recorded as they're declared.
+		var valueChildren: [String: any Node] = [:]
+		for (decl, child) in zip(template.params, children) where !decl.isFunction {
+			valueChildren[decl.name] = child
+		}
+		let nodeScope = DSLNodeScope(env: env, valueChildren: valueChildren)
+		let interpreter = DSLInterpreter(context: context, params: effectiveParams, env: env, liveParamText: liveParamText, nodeScope: nodeScope)
 		for stmt in template.body {
+			let before = interpreter.environment
 			interpreter.execute(stmt)
+			nodeScope.record(stmt, envBefore: before, envAfter: interpreter.environment)
 		}
 		return interpreter.evaluate(template.returnExpr)
 	}
@@ -265,13 +274,22 @@ final class DSLInterpreter {
 	/// register debug controls of their own, but do inherit this dictionary
 	/// unchanged when they share the same `DSLInterpreter`/sub-interpreter).
 	private let liveParamText: [String: String]
+	/// The node whose body this is, for `percell` blocks; nil in module
+	/// functions and in a `percell` block's own per-cell function, where a
+	/// `percell` is just computed in place.
+	private let nodeScope: DSLNodeScope?
 
-	init(context: MSLCodegenContext, params: [String: DSLParamValue], env: [String: DSLBinding], liveParamText: [String: String] = [:]) {
+	init(context: MSLCodegenContext, params: [String: DSLParamValue], env: [String: DSLBinding], liveParamText: [String: String] = [:],
+		 nodeScope: DSLNodeScope? = nil) {
 		self.context = context
 		self.params = params
 		self.env = env
 		self.liveParamText = liveParamText
+		self.nodeScope = nodeScope
 	}
+
+	/// The current bindings, for `DSLNodeScope.record`.
+	var environment: [String: DSLBinding] { env }
 
 	func execute(_ stmt: DSLStmt) {
 		switch stmt {
@@ -280,6 +298,8 @@ final class DSLInterpreter {
 				let text: String
 				if case .reduce(let variable, let lo, let hi, let body, let result) = decl.value {
 					text = evaluateReduce(variable: variable, lo: lo, hi: hi, body: body, result: result, type: type)
+				} else if case .percell(let at, let spacing, let body, let result) = decl.value {
+					text = evaluatePercell(at: at, spacing: spacing, body: body, result: result, type: type)
 				} else {
 					text = evaluate(decl.value)
 				}
@@ -321,7 +341,7 @@ final class DSLInterpreter {
 
 		var bodyEnv = env
 		bodyEnv[loop.variable] = .literal(counter)
-		let body = DSLInterpreter(context: context, params: params, env: bodyEnv, liveParamText: liveParamText)
+		let body = DSLInterpreter(context: context, params: params, env: bodyEnv, liveParamText: liveParamText, nodeScope: nodeScope)
 		for stmt in loop.body {
 			body.execute(stmt)
 		}
@@ -398,7 +418,76 @@ final class DSLInterpreter {
 				// Nothing here says what type the terms are, so this can't
 				// declare an accumulator: unroll.
 				return evaluateReduce(variable: variable, lo: lo, hi: hi, body: body, result: result, type: nil)
+
+			case .percell(let at, let spacing, let body, let result):
+				return evaluatePercell(at: at, spacing: spacing, body: body, result: result, type: "float3")
 		}
+	}
+
+	/// False computes every `percell` block in place, as if it weren't
+	/// marked -- for tests comparing the two.
+	nonisolated(unsafe) static var cachesPercellBlocks = true
+
+	/// `percell(at, spacing) { body; result }` as the value of a `type`
+	/// local. Computed in place, it's just the block: `body` in its own
+	/// scope, then `result` (an `average` result accumulating as `type`,
+	/// exactly as if the `let` had been initialized with it directly).
+	///
+	/// With sample caching on, inside a node, and when everything the block
+	/// reads besides `at` is the same at every coordinate (see
+	/// `DSLNodeScope.cellInputs`), the block is also emitted as a function
+	/// of the cell centre: its own copies of the top-level lets and value
+	/// children it needs, then the block with `at` bound to the function's
+	/// `coord`. The renderer runs that once per cell into a texture
+	/// (`MSLCodegenContext.registerPercellCache`), and here the block is
+	/// only computed when the read misses. Both run the same statements on
+	/// the same values, so a texel holds what the block would have computed.
+	/// Only float3 and float blocks are cached.
+	private func evaluatePercell(at: String, spacing: DSLExpr, body: [DSLStmt], result: DSLExpr, type: String) -> String {
+		let isScalar = type == "float"
+		guard Self.cachesPercellBlocks, context.sampleCachingEnabled, isScalar || type == "float3", let nodeScope,
+			  let inputs = nodeScope.cellInputs(at: at, body: body, result: result, env: env) else {
+			return evaluateBlock(body: body, result: result, type: type)
+		}
+
+		let cellFunction = context.emitFunction { cellContext in
+			var cellEnv = nodeScope.env.filter { if case .value = $0.value { return false } else { return true } }
+			for (name, child) in inputs.valueChildren {
+				cellEnv[name] = .value(child.codegenMSL(into: cellContext))
+			}
+			let cell = DSLInterpreter(context: cellContext, params: params, env: cellEnv, liveParamText: liveParamText)
+			for decl in inputs.lets {
+				cell.execute(.constant(decl))
+			}
+			cell.env[at] = .literal("coord")
+			let value = cell.evaluateBlock(body: body, result: result, type: type)
+			return isScalar ? "float3(\(value))" : value
+		}
+		let spacingText = DSLInterpreter(context: context, params: params, env: [:], liveParamText: liveParamText).evaluate(spacing)
+		let read = context.registerPercellCache(functionName: cellFunction, spacingExpression: spacingText)
+
+		let value = context.freshVariableName()
+		context.emitStatement("float3 \(value);")
+		context.emitStatement("if (!\(read)(\(evaluate(.identifier(at))), \(value), debugValues EVOLV_CACHE_ARGS)) {")
+		let computed = evaluateBlock(body: body, result: result, type: type)
+		context.emitStatement("\(value) = \(isScalar ? "float3(\(computed))" : computed);")
+		context.emitStatement("}")
+		return isScalar ? "\(value).x" : value
+	}
+
+	/// A `percell` block computed in place.
+	private func evaluateBlock(body: [DSLStmt], result: DSLExpr, type: String) -> String {
+		let block = DSLInterpreter(context: context, params: params, env: env, liveParamText: liveParamText, nodeScope: nodeScope)
+		for stmt in body {
+			block.execute(stmt)
+		}
+		if case .reduce(let variable, let lo, let hi, let reduceBody, let reduceResult) = result {
+			return block.evaluateReduce(variable: variable, lo: lo, hi: hi, body: reduceBody, result: reduceResult, type: type)
+		}
+		if case .percell(let innerAt, let innerSpacing, let innerBody, let innerResult) = result {
+			return block.evaluatePercell(at: innerAt, spacing: innerSpacing, body: innerBody, result: innerResult, type: type)
+		}
+		return block.evaluate(result)
 	}
 
 	/// False makes every `average` unroll, as all of them did before they
@@ -429,7 +518,7 @@ final class DSLInterpreter {
 			context.emitStatement("for (int \(counter) = \(loValue); \(counter) <= \(hiValue); \(counter)++) {")
 			var bodyEnv = env
 			bodyEnv[variable] = .literal(counter)
-			let iteration = DSLInterpreter(context: context, params: params, env: bodyEnv, liveParamText: liveParamText)
+			let iteration = DSLInterpreter(context: context, params: params, env: bodyEnv, liveParamText: liveParamText, nodeScope: nodeScope)
 			for stmt in body {
 				iteration.execute(stmt)
 			}
@@ -448,7 +537,7 @@ final class DSLInterpreter {
 		for i in loValue...hiValue {
 			var iterEnv = env
 			iterEnv[variable] = .literal(String(i))
-			let iteration = DSLInterpreter(context: context, params: params, env: iterEnv, liveParamText: liveParamText)
+			let iteration = DSLInterpreter(context: context, params: params, env: iterEnv, liveParamText: liveParamText, nodeScope: nodeScope)
 			for stmt in body {
 				iteration.execute(stmt)
 			}
@@ -472,5 +561,199 @@ final class DSLInterpreter {
 			default:
 				preconditionFailure("DSL: average bounds and loop lo/max must be integer literals or int params")
 		}
+	}
+}
+
+/// What a node's `percell` blocks may recompute in their per-cell function
+/// (see `DSLInterpreter.evaluatePercell`): the node's children and its
+/// top-level lets, as long as none of it depends on `coord`, since the
+/// per-cell function recomputes them at the cell centre rather than at the
+/// point the node was asked for.
+final class DSLNodeScope {
+	/// The bindings the node's body starts with: `coord`, modules, children.
+	let env: [String: DSLBinding]
+	private let valueChildren: [String: any Node]
+
+	private struct TopLevelLet {
+		let decl: DSLLetStmt
+		/// Its MSL local, which is how a reference to it is recognised.
+		let variableName: String
+		/// Whether its value is the same at every coordinate, so a cell
+		/// function may recompute it.
+		let uniform: Bool
+		/// Earlier top-level lets (indices) and value children it reads.
+		let lets: Set<Int>
+		let children: Set<String>
+	}
+	private var lets: [TopLevelLet] = []
+	private var independentChildren: [String: Bool] = [:]
+
+	init(env: [String: DSLBinding], valueChildren: [String: any Node]) {
+		self.env = env
+		self.valueChildren = valueChildren
+	}
+
+	/// Called after each top-level statement of the node's body runs. Only
+	/// a `let` is recorded: a block reading any other local (a `var`, a
+	/// loop's) isn't cached.
+	func record(_ stmt: DSLStmt, envBefore: [String: DSLBinding], envAfter: [String: DSLBinding]) {
+		guard case .constant(let decl) = stmt, case .value(let value)? = envAfter[decl.name] else { return }
+		let free = dslFreeNames(body: [], result: decl.value)
+		let resolved = resolve(free.read, env: envBefore)
+		lets.append(TopLevelLet(decl: decl, variableName: value.variableName,
+								uniform: resolved != nil && free.assigned.isEmpty && !dslContainsPercell(decl.value),
+								lets: resolved?.lets ?? [], children: resolved?.children ?? []))
+	}
+
+	/// What a cell function needs to compute `percell(at, ...) { body;
+	/// result }` from the cell centre alone -- the top-level lets in
+	/// declaration order and the value children -- or nil if the block
+	/// reads anything that could differ between coordinates besides `at`
+	/// (`coord`, a coordinate-dependent child or let, a local of an
+	/// enclosing block) or assigns to anything outside itself.
+	func cellInputs(at: String, body: [DSLStmt], result: DSLExpr, env: [String: DSLBinding]) -> (lets: [DSLLetStmt], valueChildren: [(String, any Node)])? {
+		let free = dslFreeNames(body: body, result: result)
+		guard free.assigned.isEmpty, let direct = resolve(free.read.subtracting([at]), env: env) else { return nil }
+		var needed = Set<Int>()
+		var children = direct.children
+		var pending = Array(direct.lets)
+		while let index = pending.popLast() {
+			guard needed.insert(index).inserted else { continue }
+			guard lets[index].uniform else { return nil }
+			pending.append(contentsOf: lets[index].lets)
+			children.formUnion(lets[index].children)
+		}
+		for name in children where !isIndependent(name) {
+			return nil
+		}
+		return (needed.sorted().map { lets[$0].decl }, children.sorted().map { ($0, valueChildren[$0]!) })
+	}
+
+	/// Sorts names read under `env` into top-level lets and value children;
+	/// nil if one is `coord` or a local that isn't a top-level let.
+	/// Modules, function children and unbound names (MSL builtins) are
+	/// the same everywhere.
+	private func resolve(_ names: Set<String>, env: [String: DSLBinding]) -> (lets: Set<Int>, children: Set<String>)? {
+		var foundLets = Set<Int>()
+		var children = Set<String>()
+		for name in names {
+			if name == "coord" { return nil }
+			guard let binding = env[name] else { continue }
+			if let topLevel = self.env[name], topLevel.text == binding.text {
+				if case .value = binding { children.insert(name) }
+				continue
+			}
+			guard case .value(let value) = binding,
+				  let index = lets.lastIndex(where: { $0.variableName == value.variableName }) else {
+				return nil
+			}
+			foundLets.insert(index)
+		}
+		return (foundLets, children)
+	}
+
+	private func isIndependent(_ child: String) -> Bool {
+		if let known = independentChildren[child] { return known }
+		let independent = dslIsCoordinateIndependent(valueChildren[child]!)
+		independentChildren[child] = independent
+		return independent
+	}
+}
+
+/// Whether `node`'s value is the same at every coordinate: constants, and
+/// DSL nodes whose definition never mentions `coord` and whose value
+/// children are themselves independent. (A function child is only ever
+/// called at points the node computes, which can't depend on the
+/// coordinate without mentioning `coord`.) Anything else counts as
+/// dependent.
+func dslIsCoordinateIndependent(_ node: any Node) -> Bool {
+	if node is Constant || node is ConstantTriplet { return true }
+	guard let dsl = node as? DSLCodegenNode else { return false }
+	let free = dslFreeNames(body: dsl.template.body, result: dsl.template.returnExpr)
+	guard !free.read.contains("coord") else { return false }
+	for (decl, child) in zip(dsl.template.params, dsl.children) where !decl.isFunction {
+		guard dslIsCoordinateIndependent(child) else { return false }
+	}
+	return true
+}
+
+/// The names `body` then `result` read, and assign, without binding them
+/// first. Called names count as read (an unbound one is an MSL builtin).
+func dslFreeNames(body: [DSLStmt], result: DSLExpr?) -> (read: Set<String>, assigned: Set<String>) {
+	var read = Set<String>()
+	var assigned = Set<String>()
+	func expr(_ e: DSLExpr, _ bound: Set<String>) {
+		switch e {
+			case .number, .param:
+				break
+			case .identifier(let name):
+				if !bound.contains(name) { read.insert(name) }
+			case .unary(_, let operand):
+				expr(operand, bound)
+			case .binary(_, let lhs, let rhs):
+				expr(lhs, bound)
+				expr(rhs, bound)
+			case .ternary(let cond, let then, let else_):
+				expr(cond, bound)
+				expr(then, bound)
+				expr(else_, bound)
+			case .call(let callee, let args):
+				expr(callee, bound)
+				args.forEach { expr($0, bound) }
+			case .member(let base, _):
+				expr(base, bound)
+			case .reduce(let variable, let lo, let hi, let body, let result):
+				expr(lo, bound)
+				expr(hi, bound)
+				block(body, result, bound.union([variable]))
+			case .percell(let at, let spacing, let body, let result):
+				expr(.identifier(at), bound)
+				expr(spacing, bound)
+				block(body, result, bound)
+		}
+	}
+	func block(_ stmts: [DSLStmt], _ result: DSLExpr?, _ outer: Set<String>) {
+		var bound = outer
+		for stmt in stmts {
+			switch stmt {
+				case .constant(let decl), .variable(let decl):
+					expr(decl.value, bound)
+					bound.insert(decl.name)
+				case .assign(let name, let value):
+					expr(value, bound)
+					if !bound.contains(name) { assigned.insert(name) }
+				case .loop(let loop):
+					expr(loop.lo, bound)
+					expr(loop.hi, bound)
+					expr(loop.max, bound)
+					block(loop.body, nil, bound.union([loop.variable]))
+				case .breakIf(let cond):
+					expr(cond, bound)
+			}
+		}
+		if let result { expr(result, bound) }
+	}
+	block(body, result, [])
+	return (read, assigned)
+}
+
+/// Whether `e` contains a `percell` block.
+private func dslContainsPercell(_ e: DSLExpr) -> Bool {
+	switch e {
+		case .percell: return true
+		case .number, .param, .identifier: return false
+		case .unary(_, let operand): return dslContainsPercell(operand)
+		case .binary(_, let lhs, let rhs): return dslContainsPercell(lhs) || dslContainsPercell(rhs)
+		case .ternary(let c, let t, let f): return [c, t, f].contains(where: dslContainsPercell)
+		case .call(let callee, let args): return dslContainsPercell(callee) || args.contains(where: dslContainsPercell)
+		case .member(let base, _): return dslContainsPercell(base)
+		case .reduce(_, let lo, let hi, let body, let result):
+			return dslContainsPercell(lo) || dslContainsPercell(hi) || dslContainsPercell(result) || body.contains {
+				switch $0 {
+					case .constant(let d), .variable(let d): return dslContainsPercell(d.value)
+					case .assign(_, let v), .breakIf(let v): return dslContainsPercell(v)
+					case .loop: return true
+				}
+			}
 	}
 }
