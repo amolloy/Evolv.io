@@ -261,8 +261,14 @@ final class DSLInterpreter {
 	func execute(_ stmt: DSLStmt) {
 		switch stmt {
 			case .constant(let decl), .variable(let decl):
-				let text = evaluate(decl.value)
-				env[decl.name] = .value(context.declare(text, type: decl.type ?? "float3"))
+				let type = decl.type ?? "float3"
+				let text: String
+				if case .reduce(let variable, let lo, let hi, let body, let result) = decl.value {
+					text = evaluateReduce(variable: variable, lo: lo, hi: hi, body: body, result: result, type: type)
+				} else {
+					text = evaluate(decl.value)
+				}
+				env[decl.name] = .value(context.declare(text, type: type))
 
 			case .assign(let name, let value):
 				// The parser only lets a `var` in scope be assigned, so the
@@ -374,18 +380,54 @@ final class DSLInterpreter {
 				return "\(evaluate(callee))(\(argsText))"
 
 			case .reduce(let variable, let lo, let hi, let body, let result):
-				return evaluateReduce(variable: variable, lo: lo, hi: hi, body: body, result: result)
+				// Nothing here says what type the terms are, so this can't
+				// declare an accumulator: unroll.
+				return evaluateReduce(variable: variable, lo: lo, hi: hi, body: body, result: result, type: nil)
 		}
 	}
 
-	/// Unrolls `average(variable in lo...hi) { body; result }` at codegen
-	/// time (not as a runtime MSL loop) into `lo...hi` independently-scoped
-	/// copies of `body`/`result`, then averages their results -- the DSL
-	/// equivalent of ColorGradient's Swift-side per-tap loop.
-	private func evaluateReduce(variable: String, lo: DSLExpr, hi: DSLExpr, body: [DSLStmt], result: DSLExpr) -> String {
+	/// False makes every `average` unroll, as all of them did before they
+	/// could become loops -- for tests comparing the two.
+	nonisolated(unsafe) static var emitsReductionLoops = true
+
+	/// `average(variable in lo...hi) { body; result }`: the mean of `result`
+	/// over the range, summed left to right and then divided by the count.
+	///
+	/// With a known `type` (the `let` it initializes, or the enclosing
+	/// `average` whose result it is) it becomes a runtime MSL `for` loop
+	/// adding each iteration's result into an accumulator of that type, so
+	/// blur's 21x21 taps are one loop body instead of 441 copies. The
+	/// accumulator starts at 0 and 0 + t == t, so the sum is the same as
+	/// the unrolled `t0 + t1 + ...`; scalar terms into a vector accumulator
+	/// broadcast, which is what declaring the unrolled sum as that type did.
+	/// Without a type it unrolls `body`/`result` once per iteration instead,
+	/// each copy independently scoped.
+	private func evaluateReduce(variable: String, lo: DSLExpr, hi: DSLExpr, body: [DSLStmt], result: DSLExpr, type: String?) -> String {
 		let loValue = resolveInt(lo)
 		let hiValue = resolveInt(hi)
 		precondition(loValue <= hiValue, "DSL: empty reduce range \(loValue)...\(hiValue)")
+		let count = mslFloatLiteral(ComponentType(hiValue - loValue + 1))
+
+		if let type, Self.emitsReductionLoops {
+			let sum = context.declare("0.0", type: type)
+			let counter = context.freshVariableName()
+			context.emitStatement("for (int \(counter) = \(loValue); \(counter) <= \(hiValue); \(counter)++) {")
+			var bodyEnv = env
+			bodyEnv[variable] = .literal(counter)
+			let iteration = DSLInterpreter(context: context, params: params, env: bodyEnv, liveParamText: liveParamText)
+			for stmt in body {
+				iteration.execute(stmt)
+			}
+			let term: String
+			if case .reduce(let innerVariable, let innerLo, let innerHi, let innerBody, let innerResult) = result {
+				term = iteration.evaluateReduce(variable: innerVariable, lo: innerLo, hi: innerHi, body: innerBody, result: innerResult, type: type)
+			} else {
+				term = iteration.evaluate(result)
+			}
+			context.emitStatement("\(sum.variableName) = \(sum.variableName) + \(term);")
+			context.emitStatement("}")
+			return "(\(sum.variableName) / \(count))"
+		}
 
 		var terms: [String] = []
 		for i in loValue...hiValue {
@@ -397,7 +439,6 @@ final class DSLInterpreter {
 			}
 			terms.append(iteration.evaluate(result))
 		}
-		let count = mslFloatLiteral(ComponentType(hiValue - loValue + 1))
 		return "((\(terms.joined(separator: " + "))) / \(count))"
 	}
 
