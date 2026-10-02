@@ -5,8 +5,9 @@
 //  The random grid window (File > New Window): a 3x3 grid of random genotypes from
 //  RandomExpressionGenerator (see Documentation/RandomGeneration.md). Each
 //  image's context menu shows it full size, in the Debug View or the
-//  expression tree viewer, shows or copies its expression, or saves it as a
-//  genotype file. The menu works while the image is still rendering. File > Open
+//  expression tree viewer, shows or copies its expression, saves it as a
+//  genotype file, or exports it as an image (see ImageExport.swift); the full
+//  size view's context menu exports it as an image too. The menu works while the image is still rendering. File > Open
 //  Genotype shows a saved genotype file full size, and File > Save Genotype
 //  saves the one in the key full size view. The genotype library
 //  (ContentView) is the window that opens at launch.
@@ -42,6 +43,10 @@ struct RandomGridView: View {
 	@State private var treeGenotype: RandomGenotype?
 	@State private var expressionGenotype: RandomGenotype?
 	@State private var savingGenotype: RandomGenotype?
+	@State private var exportingGenotype: RandomGenotype?
+	/// Export Image… from the full size view, which presents its own sheet
+	/// on top of the full size one.
+	@State private var exportingFullSizeGenotype: RandomGenotype?
 
 	var body: some View {
 		Grid(horizontalSpacing: 12, verticalSpacing: 12) {
@@ -84,10 +89,16 @@ struct RandomGridView: View {
 				VStack(alignment: .leading) {
 					RenderedImageView(nodeRenderer: NodeRenderer(node: genotype.node,
 																 evaluator: Evaluator(size: CGSize(width: 800, height: 800))))
+						.contextMenu {
+							Button("Export Image…") { exportingFullSizeGenotype = genotype }
+						}
 					ExpressionTextView(text: genotype.text)
 						.frame(width: 800, height: 120)
 				}
 				.padding()
+			}
+			.sheet(item: $exportingFullSizeGenotype) { genotype in
+				ExportImageSheet(genotype: genotype)
 			}
 #if os(macOS)
 			// Set inside the sheet so File > Save Genotype follows whichever
@@ -125,6 +136,9 @@ struct RandomGridView: View {
 		.sheet(item: $savingGenotype) { genotype in
 			SaveGenotypeSheet(expression: genotype.text)
 		}
+		.sheet(item: $exportingGenotype) { genotype in
+			ExportImageSheet(genotype: genotype)
+		}
 	}
 
 	private func cell(for genotype: RandomGenotype) -> some View {
@@ -153,6 +167,7 @@ struct RandomGridView: View {
 #else
 				Button("Save as Genotype…") { savingGenotype = genotype }
 #endif
+				Button("Export Image…") { exportingGenotype = genotype }
 			}
 	}
 

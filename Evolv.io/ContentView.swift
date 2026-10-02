@@ -16,6 +16,7 @@ struct ContentView: View {
 	@State private var selectedID: String? = nil
 	@State private var showingTreeVisualizer = false
 	@State private var showingDebugView = false
+	@State private var exportingGenotype: RandomGenotype?
 
 	var body: some View {
 		NavigationSplitView {
@@ -40,6 +41,9 @@ struct ContentView: View {
 					Button("Copy Image") {
 						nodeRenderer.copyImageToPasteboard()
 					}
+					Button("Export Image…") {
+						exportingGenotype = RandomGenotype(text: genotype.expression, node: node, name: genotype.displayName)
+					}
 					Button("Show Expression Tree") {
 						showingTreeVisualizer = true
 					}
@@ -50,6 +54,9 @@ struct ContentView: View {
 				.clipShape(RoundedRectangle(cornerRadius: 12))
 				.shadow(radius: 5)
 				.navigationTitle(genotype.displayName)
+				.sheet(item: $exportingGenotype) { genotype in
+					ExportImageSheet(genotype: genotype)
+				}
 				.sheet(isPresented: $showingTreeVisualizer) {
 					NavigationStack {
 						TreeVisualizerView(evaluator: Evaluator(size: CGSize(width: 64, height: 64)),

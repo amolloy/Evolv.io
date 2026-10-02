@@ -87,3 +87,32 @@ struct TreeLayoutTests {
 		}
 	}
 }
+
+struct ImageExporterTests {
+
+	@Test func listsPNGAndJPEGFirstAndLeavesOutTextureFormats() {
+		#expect(Array(ImageExporter.formats.prefix(2)) == [.png, .jpeg])
+		let identifiers = ImageExporter.formats.map(\.identifier)
+		#expect(!identifiers.contains("org.khronos.ktx"))
+		#expect(!identifiers.contains("com.apple.icns"))
+	}
+
+	@Test func rendersAtTheRequestedSizeAndStoresTheGenotype() async throws {
+		// Long enough to rule out IPTC's 2000 byte caption limit.
+		let expression = "(+ x y)" + String(repeating: " ", count: 3000)
+		let genotype = RandomGenotype(text: expression, node: try Parser().parse(expression), name: "Test")
+		let image = try await ImageExporter.render(node: genotype.node, size: 32, supersample: 2)
+		#expect(image.width == 32 && image.height == 32)
+
+		for format in ImageExporter.formats {
+			let data = try ImageExporter.encode(image, as: format, quality: 0.8, genotype: genotype)
+			#expect(!data.isEmpty, "\(format.identifier)")
+			if ImageExporter.metadataFormats.contains(format) {
+				#expect(ImageExporter.embeddedExpression(in: data) == expression, "\(format.identifier)")
+			}
+		}
+
+		let bare = try ImageExporter.encode(image, as: .png, quality: 1, genotype: nil)
+		#expect(ImageExporter.embeddedExpression(in: bare) == nil)
+	}
+}
