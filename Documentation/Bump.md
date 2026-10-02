@@ -231,6 +231,43 @@ that remains fits Sims' horizon sitting slightly higher on the left. Light
 direction and strength were not swept; the roles of positions 2, 3 and
 6-8 are still guesses.
 
+### 8. Light height first, Lambert shading [shipped 2026-10-02]
+
+Found through Figure 12, which became renderable with `warped-ifs`,
+`atan` and `vector`. Its outer `bump` adds to `color-grad` inside
+`(log (invert y) …)`, and below the horizon each channel is darker the
+farther its sum is from 1. With #7's reading a flat surface sits 0.69 of
+the way from `color1` to `color2`, about (0.72, 0.06, 0.32): red is
+nearer 1 than green, so the bands under the horizon came out green where
+Sims has brown. Brown needs red's value around 0.15–0.25.
+
+Two changes, each still a guess:
+
+- The trailing scalars are read as `(lightHeight, dirX, dirY)`, so the
+  light is `(a7, a8, a6)`. Figure 12's calls light from
+  `(8.7, 3.7, 1.47)` and `(8.7, 2.6, 0.83)`; Figure 10's from
+  `(0.23, 0.91, 10.6)`, nearly overhead.
+- `t = max(dot(n, l), 0)` (Lambert) in place of `(dot + 1) / 2`.
+
+A flat surface now sits at `t = l.z`, 0.15 for Figure 12, so its outer
+`bump` is about (0.24, 0.06, 0.15). Figure 12's lower bands turn olive
+and brown, the sky cream and pale yellow, and the garish magenta and
+green highlights become white and blue; the mountains get fainter.
+Figure 9 has no `bump`.
+
+Before `color-grad`'s light became `(p1, p2)` (ColorGradient.md #26),
+this reading flattened Figure 10's right half to the left's level and
+lost #7's lower band on the right. With #26 in place, Figure 10 is
+nearly identical to before and keeps that band.
+
+The mountains' shape also depends on `bump`: Figure 12's inner
+`(bump (warped-ifs …) …)` is the step size B of `(round (+ y x) B)`,
+the staircase the mountains are made of. Constant B of 0.15–0.3 gives
+jagged sawtooth ridges much like Sims' lower mountain; 0.6–1.0 gives a
+few large smooth swoops.
+
+The golden value in `bump()` changed to match.
+
 ## Open threads / not yet resolved
 
 - **Per #6**: does the reordered mapping actually render better, even

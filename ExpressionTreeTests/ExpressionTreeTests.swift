@@ -79,7 +79,7 @@ enum DSLTestNodes {
     static func warpedColorNoise(_ u: any Node, _ v: any Node, _ e2: any Node, _ e3: any Node) -> any Node { make("warped-color-noise", [u, v, e2, e3]) }
     static func gradientDirection(_ source: any Node, _ dirX: any Node, _ dirY: any Node) -> any Node { make("grad-direction", [source, dirX, dirY]) }
     static func colorGradientCurvature(_ source: any Node, _ p1: any Node, _ p2: any Node, _ color: any Node, _ p3: any Node) -> any Node { make("color-grad-curvature", [source, p1, p2, color, p3]) }
-    static func bump(_ source: any Node, _ multiplier: any Node, _ strength: any Node, _ color1: any Node, _ color2: any Node, _ dirX: any Node, _ dirY: any Node, _ lightHeight: any Node) -> any Node { make("bump", [source, multiplier, strength, color1, color2, dirX, dirY, lightHeight]) }
+    static func bump(_ source: any Node, _ multiplier: any Node, _ strength: any Node, _ color1: any Node, _ color2: any Node, _ lightHeight: any Node, _ dirX: any Node, _ dirY: any Node) -> any Node { make("bump", [source, multiplier, strength, color1, color2, lightHeight, dirX, dirY]) }
 }
 
 /// Regression tests for generated MSL, checked against golden values.
@@ -272,8 +272,9 @@ struct MetalRenderRegressionTests {
             Constant(0.8)
         )
         // Golden updated when bump became a height field: h = 0.5x, so
-        // gx = 0.5 and the normal is normalize(-0.35, 0, 1).
-        try assertGolden(node, Value(0.2218643758167541, 0.10000000149011612, 0.7781356241832459), tolerance: 1e-3)
+        // gx = 0.5 and the normal is normalize(-0.35, 0, 1). Updated again
+        // for Bump.md #8: light (0.4, 0.8, 0.3), t = max(dot, 0).
+        try assertGolden(node, Value(0.771937554332894, 0.10000000149011612, 0.228062445667106), tolerance: 1e-3)
     }
 
     @Test func rotateVector() throws {

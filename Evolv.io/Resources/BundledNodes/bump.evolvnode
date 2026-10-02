@@ -1,12 +1,12 @@
 // Height-field bump: differentiates source (scaled per channel by
 // multiplier, then reduced to luminance) with a central difference, builds
-// the normal (-strength*gx, -strength*gy, 1), lights it from
-// (dirX, dirY, lightHeight), and blends color1 -> color2 by the result.
-// The argument mapping is still a best-effort reconstruction (Bump.md #5/#6);
-// the change in Bump.md #7 is only the maths: reading source as a normal
-// turned Figure 10's (if x 10.7 y) into a lower-left-quadrant switch and a
-// black bar along y = 0.
-node "bump"(source: fn taps(abs($debugDelta)), multiplier, strength: scalar, color1: vector, color2: vector, dirX: scalar, dirY: scalar, lightHeight: scalar) -> vector requires(lighting) {
+// the normal (-strength*gx, -strength*gy, 1), lights it Lambert-style
+// (max(dot, 0)) from (dirX, dirY, lightHeight), and blends
+// color1 -> color2 by the result. The argument mapping is still a
+// best-effort reconstruction (Bump.md #5/#6); since Bump.md #8 the light's
+// height is the first of the three trailing scalars, not the last, which
+// puts a flat surface near color1 (Figure 12's browns below the horizon).
+node "bump"(source: fn taps(abs($debugDelta)), multiplier, strength: scalar, color1: vector, color2: vector, lightHeight: scalar, dirX: scalar, dirY: scalar) -> vector requires(lighting) {
 	param $debugDelta: float = 0.01 debug slider(0.0, 0.2)
 	let strengthVal: float = avgLum(strength)
 	let d: float = $debugDelta
@@ -20,6 +20,6 @@ node "bump"(source: fn taps(abs($debugDelta)), multiplier, strength: scalar, col
 	let lightRaw = float3(avgLum(dirX), avgLum(dirY), avgLum(lightHeight))
 	let lightLen: float = length(lightRaw)
 	let l = (lightLen < 1e-9) ? float3(0.0, 0.0, 1.0) : lightRaw / lightLen
-	let t: float = clamp((dot(n, l) + 1.0) * 0.5, 0.0, 1.0)
+	let t: float = clamp(dot(n, l), 0.0, 1.0)
 	return mix(color1, color2, t)
 }
