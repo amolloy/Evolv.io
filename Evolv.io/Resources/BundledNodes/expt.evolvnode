@@ -1,0 +1,14 @@
+// expt: Common Lisp's (expt base power), per channel. Both papers list it
+// among the "standard common lisp functions"; the 1993 Figure 6 calls it as
+// (expt (blur ...) 0.12) and Figure 15 as (expt (max ...) 3.5).
+// Common Lisp gives a complex number for a negative base and a fractional
+// power; this returns its real part, |base|^power * cos(pi * power), which
+// is continuous in power and exactly base^power for whole-number powers.
+// Results that come out inf or NaN (zero to a negative power) are 0, as
+// in log.
+node "expt"(base, power) {
+	let magnitude = pow(abs(base), power)
+	let result = select(magnitude, magnitude * cos(power * 3.14159265), base < float3(0.0))
+	let finite = select(result, float3(0.0), isinf(result))
+	return select(finite, float3(0.0), isnan(finite))
+}

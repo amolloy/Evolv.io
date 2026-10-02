@@ -1,0 +1,11 @@
+---
+name: 1993 Figure 6
+---
+(dissolve (/ (warped-bw-noise (expt (blur (kaleidoscope 2.1 6.9 y
+(vector 0.96 0.42 0.51)) 7.6) 0.12) 0.5 0.17 9.6) (vector 0.49 0.53
+0.92)) (color-grad (warped-bw-noise (expt (blur (kaleidoscope 1.6
+6.9 y (vector 0.30 0.45 -0.14)) 3.8) 0.12) (bump (ifs 4.5 0.82 0.22
+3.8 0.45 0.049 3.7 16.1 -0.87 2.3 0.10 0.46 -5.0 7.6 12.6 0.05)
+6.4 0.007 (vector 0.98 0.12 0.18) (vector 0.11 0.59 0.014) 1.07
+8.1 12.1) 0.17 9.6) 2.8 2.0 (vector 0.47 0.04 0.22) 2.0) 0.48)
+
