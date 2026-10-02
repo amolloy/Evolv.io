@@ -1,8 +1,10 @@
 // Promoted from the experimental color-grad-slope variant (see
 // Documentation/ColorGradient.md, section 19).
-//   p1: filter radius scale (delta = p1/3.1 * $debugDelta)
-//   p2: light angle in radians, measured from -x (light = (-cos p2, sin p2);
-//       see ColorGradient.md, section 21)
+//   p1, p2: the light's x and y components, unnormalised, so their size
+//       sets the light's strength (ColorGradient.md, section 26). The
+//       vector is divided by |(3.1, 1.9)|, so the 1991 Figure 9 and 10
+//       calls light at about their former strength; Figure 12's
+//       (3.1, 6.8) lights about twice as hard.
 //   color: divides the result per channel (result / color)
 //   p3: gain (slope * p3 * $debugGainFactor; see ColorGradient.md,
 //       section 24)
@@ -24,11 +26,8 @@
 // the factor at 1.0, Figure 9's gain is 1.35 and Figure 10's is 3.03.
 //
 // source's taps reach (diff + blur half-width) along an axis, i.e.
-// delta * ($debugDiffDistance + $debugBlurWidth); taps(...) assumes
-// |p1| <= 2 * $debugDivisor (it's 3.1 in Figures 9 and 10). With tap
-// caching on, taps further out than that near the image edge skip the
-// cache, which only costs speed.
-node "color-grad"(source: fn taps(2.0 * $debugDelta * (abs($debugDiffDistance) + abs($debugBlurWidth))), p1: scalar, p2: scalar, color: vector, p3: scalar) -> vector requires(lighting, "color-grad-core") {
+// $debugDelta * ($debugDiffDistance + $debugBlurWidth).
+node "color-grad"(source: fn taps($debugDelta * (abs($debugDiffDistance) + abs($debugBlurWidth))), p1: scalar, p2: scalar, color: vector, p3: scalar) -> vector requires(lighting, "color-grad-core") {
 	param $debugDelta: float = 0.01089 debug slider(0.0, 0.2)
 	param $debugGainFactor: float = 1.0 debug slider(-10.0, 10.0)
 	param $debugBlur: float = 1.0 debug toggle
@@ -36,14 +35,9 @@ node "color-grad"(source: fn taps(2.0 * $debugDelta * (abs($debugDiffDistance) +
 	param $debugBlurWidth: float = 0.5913 debug slider(0.0, 2.0)
 	param $debugDiffDistance: float = 2.0 debug slider(0.0, 2.0)
 
-	param $debugDivisor: float = 3.1 debug slider (0.0, 20.0)
-
-	let p1Val: float = avgLum(p1)
-	let deltaLocal: float = (abs(p1Val) / $debugDivisor) * $debugDelta
+	let deltaLocal: float = $debugDelta
 
 	let gain: float = avgLum(p3) * $debugGainFactor
-
-	let angle: float = avgLum(p2)
 
 	let blurHalfWidth: float = ($debugBlur != 0.0) ? deltaLocal * $debugBlurWidth : 0.0
 	let diff: float = deltaLocal * $debugDiffDistance
@@ -63,8 +57,9 @@ node "color-grad"(source: fn taps(2.0 * $debugDelta * (abs($debugDiffDistance) +
 		}
 	}
 
-	let lightDx: float = -cos(angle)
-	let lightDy: float = sin(angle)
+	// |(3.1, 1.9)|
+	let lightDx: float = avgLum(p1) / 3.6346
+	let lightDy: float = avgLum(p2) / 3.6346
 	let slope: float = -(avgLum(gx) * lightDx + avgLum(gy) * lightDy)
 
 	return colorGradShade(slope, gain, color)

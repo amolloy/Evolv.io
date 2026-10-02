@@ -3,9 +3,9 @@
 // slope is a second difference (curvature) instead of a first difference.
 // The arguments, debug params, 5x5 box blur and output stage (shared via
 // color-grad-core) are the same as color-grad's.
-//   p1: filter radius scale (delta = p1/3.1 * $debugDelta)
-//   p2: curvature anisotropy angle: x curvature weighted by cos^2 p2,
-//       y curvature by sin^2 p2
+//   p1, p2: curvature anisotropy: x curvature weighted by
+//       p1^2 / (p1^2 + p2^2), y curvature by p2^2 / (p1^2 + p2^2), the
+//       direction of color-grad's light (p1, p2)
 //   color: divides the result per channel (result / color)
 //   p3: gain (curvature * p3 * $debugGainFactor)
 // Box-blurs source over a 5x5 grid, takes one second difference of the
@@ -21,14 +21,13 @@ node "color-grad-curvature"(source: fn, p1: scalar, p2: scalar, color: vector, p
 	param $debugBlurWidth: float = 0.5913 debug slider(0.0, 2.0)
 	param $debugDiffDistance: float = 2.0 debug slider(0.0, 2.0)
 
-	param $debugDivisor: float = 3.1 debug slider (0.0, 20.0)
-
-	let p1Val: float = avgLum(p1)
-	let deltaLocal: float = (abs(p1Val) / $debugDivisor) * $debugDelta
+	let deltaLocal: float = $debugDelta
 
 	let gain: float = avgLum(p3) * $debugGainFactor
 
-	let angle: float = avgLum(p2)
+	let lx: float = avgLum(p1)
+	let ly: float = avgLum(p2)
+	let lenSq: float = max(lx * lx + ly * ly, 1e-12)
 
 	let blurHalfWidth: float = ($debugBlur != 0.0) ? deltaLocal * $debugBlurWidth : 0.0
 	let diff: float = deltaLocal * $debugDiffDistance
@@ -48,8 +47,8 @@ node "color-grad-curvature"(source: fn, p1: scalar, p2: scalar, color: vector, p
 		}
 	}
 
-	let weightX: float = cos(angle) * cos(angle)
-	let weightY: float = sin(angle) * sin(angle)
+	let weightX: float = lx * lx / lenSq
+	let weightY: float = ly * ly / lenSq
 	let slope: float = avgLum(cx) * weightX + avgLum(cy) * weightY
 
 	return colorGradShade(slope, gain, color)

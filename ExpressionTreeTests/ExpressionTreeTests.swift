@@ -469,7 +469,9 @@ struct DSLLibraryTests {
         // came back and p3 became unused (ColorGradient.md section 23).
         // Gain 2.49 = 1.35 * 1.845, so this is the pre-exponent value again.
         // Scaled by 1.35 / 2.49 when p3 became the gain again (section 24).
-        let expected = Value(-0.017658807786114245, -0.02396552542965096, -0.02843367362237838)
+        // Scaled by (3.1 / |(3.1, 1.9)|) / -cos(1.86) when p1 and p2 became
+        // the light vector (section 26).
+        let expected = Value(-0.05281211865271257, -0.07167359132594267, -0.08503646244217836)
         let diff = abs(actual - expected)
         #expect(Swift.max(diff.x, Swift.max(diff.y, diff.z)) < 1e-3, "expected \(expected), got \(actual)")
     }

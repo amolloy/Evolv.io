@@ -722,6 +722,59 @@ large as its slope, so the two nodes come out at similar brightness.
 The golden value in `colorGradientCurvature()` (source x²) is now
 `2·(2·0.01089)² = 9.487e-4`.
 
+### 26. p1 and p2 are the light vector; fixed delta [shipped 2026-10-02]
+
+The constants of the five known calls, from the papers' text:
+
+| Call | p1 | p2 | color | p3 |
+| :--- | :--- | :--- | :--- | :--- |
+| 1991 Fig 9, inner | 3.1 | 1.86 | #(0.95 0.7 0.59) | 1.35 |
+| 1991 Fig 9, outer | 3.1 | 1.9 | #(0.95 0.7 0.35) | 1.35 |
+| 1991 Fig 10 | 3.1 | 1.93 | #(0.95 0.7 0.35) | 3.03 |
+| 1991 Fig 12 | 3.1 | 6.8 | #(0.95 0.7 0.59) | 0.57 |
+| 1993 Fig 6 (Primordial Dance) | 2.8 | 2.0 | (vector 0.47 0.04 0.22) | 2.0 |
+
+p2 is about 1.9 everywhere except Figure 12, which is also the figure
+whose highlights and shadows are much starker than ours. As an angle,
+6.8 is just 0.52 rad and its size is lost. Figure 12's mountains only
+appear where the sum inside its `(log (invert y) …)` passes 1, and
+probes showed color-grad has to be several times stronger there for
+that to happen (3.5× starts to show them, 10× brings them out).
+
+Now p1 and p2 are the light's x and y components, unnormalised, so
+their size sets the light's strength. The vector is divided by
+`|(3.1, 1.9)| = 3.6346`, which keeps the 1991 Figure 9 and 10 calls at
+about their former strength; Figure 12's (3.1, 6.8) lights about twice
+as hard, from the upper right at about 65°. p1 no longer scales delta:
+`p1 / 3.1` was exactly 1 in every 1991 call, so the delta is now just
+`$debugDelta` and `$debugDivisor` is gone. Each argument keeps one job,
+and p1, p2 are now an adjacent scalar pair like every other
+direction-like pair in the corpus (Bump.md #5).
+
+Effect, rendered with the half-turn sin, cos and atan of the same day:
+
+- Figure 12: both mountains come out, a dark ridged mass at the upper
+  right and a bright peak rising at the centre below the horizon.
+  Colours are still garish.
+- Figure 9: the light moves from nearly overhead, (0.32, 0.95), to about
+  30° above the right horizon, (0.85, 0.52). The left half barely
+  changes; the right half gains yellow and blue stripes along the bands,
+  a bit like Sims'. Known cost: a hard diagonal seam in the grey area at
+  the lower right.
+- Figure 10: the spikes are much more colourful (greens and blues on the
+  left, oranges on the right), closer to Sims' coloured spikes, and the
+  right side keeps a lower orange-to-purple band.
+
+Also tried: light `(1, p2)` with the old delta, which lit Figure 12 3.2×
+harder from nearly overhead and left Figure 9 almost unchanged, but
+flattened Figure 10's lower right band.
+
+`color-grad-curvature` follows: fixed delta, and its x and y curvature
+weights are `p1² / (p1² + p2²)` and `p2² / (p1² + p2²)`, the direction of
+the same vector in place of `cos²(p2)` and `sin²(p2)`. Its golden test
+(p2 = 0) is unchanged. `bundledColorGradMatchesGoldenValue` (gy = 0
+there) scales by `(3.1 / 3.6346) / −cos(1.86)`.
+
 ## Current state of the code (as of this writing)
 
 > Superseded in part by #20: `color-grad` is now the blurred-slope node of
