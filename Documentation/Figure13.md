@@ -46,8 +46,9 @@ channel across the width.
   4.1 of the paper mentions normalised sin and cos. A period sweep (1, 2,
   3, 4, 2π) found 2 the only value with no ramp from the `+ x` term that
   still gives local darks and Sims' brown/blue palette; 1 over-saturates,
-  and 4 or more brings the ramp back. Only Figure 13 uses `sin`. `cos`
-  (used by Figures 6 and 12) was not changed.
+  and 4 or more brings the ramp back. Only Figure 13 uses `sin`. Since
+  2026-10-02 `cos` follows the same convention, and `atan` returns
+  half-turns (its angle divided by π), which fits Figure 12's background.
 - **`blur` uses sigma = radius pixels** (sigma scale 1, was 0.5) on a 9×9
   grid over ±3σ (was 5×5 over ±2σ). At 0.5 the blur barely showed; 1
   softens the worms toward Sims'; 2 over-softens.

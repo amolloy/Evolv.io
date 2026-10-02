@@ -1,4 +1,4 @@
-
+// Half-turns in, 0...1 out: (cos(pi * v) + 1) / 2. Shared with sin and atan.
 node "cos"(v0) {
-	return cos(v0)
+	return (cos(v0 * 3.14159265) + float3(1.0)) * 0.5
 }

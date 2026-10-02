@@ -1,12 +1,4 @@
-// sin with a period of 2 (sin(pi * v)) and its output normalised to 0...1.
-// Sims (1991, section 4.1) mentions versions of sin and cos that normalise
-// their results to 0...1. Figure 13 is the only bundled figure that calls
-// sin. Plain sin(v) there gave a left-to-right ramp, from the "+ x" term,
-// clipped to black on the left. A sweep of periods 1, 2, 3, 4 and 2*pi
-// found 2 the only one without the ramp that still gave Karl's brown and
-// blue palette and local darks (1 over-saturates, 4 and up bring back the
-// ramp). cos is unchanged: Figures 6 and 12 use it and were not re-checked.
-// See Documentation/Figure13.md.
+// Half-turns in, 0...1 out: (sin(pi * v) + 1) / 2. Shared with cos and atan.
 node "sin"(v0) {
 	return (sin(v0 * 3.14159265) + float3(1.0)) * 0.5
 }

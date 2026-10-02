@@ -1,9 +1,11 @@
 // Three arguments, as both published calls use it: Figure 7
 // (atan 2.25 (dissolve 0.1 0.11 time) 0.15) and Figure 12
-// (atan (log ...) #(0.17 0.08 0.75) 0.37). The first two are Common
-// Lisp's (atan y x). Neither paper says what the third does; it is a
-// scalar constant in both calls, so it is taken as a scale on the
-// result. The result is left in radians, -pi...pi before scaling.
-node "atan"(y, x, scale: scalar) {
-	return atan2(y, x) * scale
+// (atan (log ...) #(0.17 0.08 0.75) 0.37). Neither paper says what the
+// arguments do, so this follows Figure 12: the angle is
+// atan2(v1 * scale, v0), returned in half-turns (divided by pi, so
+// -1...1) to match sin and cos. Figure 12's first argument is a log that
+// changes sign at y = 0; with it on the x side, the outer cos gives a light
+// top and a dark bottom, as in Sims' image.
+node "atan"(v0, v1, scale: scalar) {
+	return atan2(v1 * scale, v0) / 3.14159265
 }
