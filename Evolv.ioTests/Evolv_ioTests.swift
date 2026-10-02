@@ -108,11 +108,13 @@ struct ImageExporterTests {
 			let data = try ImageExporter.encode(image, as: format, quality: 0.8, genotype: genotype)
 			#expect(!data.isEmpty, "\(format.identifier)")
 			if ImageExporter.metadataFormats.contains(format) {
-				#expect(ImageExporter.embeddedExpression(in: data) == expression, "\(format.identifier)")
+				let embedded = ImageExporter.embeddedGenotype(in: data)
+				#expect(embedded?.expression == expression, "\(format.identifier)")
+				#expect(embedded?.name == "Test", "\(format.identifier)")
 			}
 		}
 
 		let bare = try ImageExporter.encode(image, as: .png, quality: 1, genotype: nil)
-		#expect(ImageExporter.embeddedExpression(in: bare) == nil)
+		#expect(ImageExporter.embeddedGenotype(in: bare) == nil)
 	}
 }

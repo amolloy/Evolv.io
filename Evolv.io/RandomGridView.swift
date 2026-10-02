@@ -7,17 +7,16 @@
 //  image's context menu shows it full size, in the Debug View or the
 //  expression tree viewer, shows or copies its expression, saves it as a
 //  genotype file, or exports it as an image (see ImageExport.swift); the full
-//  size view's context menu exports it as an image too. The menu works while the image is still rendering. File > Open
-//  Genotype shows a saved genotype file full size, and File > Save Genotype
-//  saves the one in the key full size view. The genotype library
-//  (ContentView) is the window that opens at launch.
+//  size view's context menu exports it as an image too. The menu works while
+//  the image is still rendering. File > Save Genotype saves the one in the key
+//  full size view (File > Open Genotype is in GenotypeWindow.swift). The
+//  genotype library (ContentView) is the window that opens at launch.
 //
 
 import SwiftUI
 import ExpressionTree
 #if os(macOS)
 import AppKit
-import UniformTypeIdentifiers
 #endif
 
 /// One genotype's expression and the node tree parsed from it: generated
@@ -44,9 +43,6 @@ struct RandomGridView: View {
 	@State private var expressionGenotype: RandomGenotype?
 	@State private var savingGenotype: RandomGenotype?
 	@State private var exportingGenotype: RandomGenotype?
-	/// Export Image… from the full size view, which presents its own sheet
-	/// on top of the full size one.
-	@State private var exportingFullSizeGenotype: RandomGenotype?
 
 	var body: some View {
 		Grid(horizontalSpacing: 12, verticalSpacing: 12) {
@@ -81,30 +77,10 @@ struct RandomGridView: View {
 			if genotypes.isEmpty { generate() }
 		}
 		.onChange(of: maxDepth) { generate() }
-#if os(macOS)
-		.focusedSceneValue(\.openGenotype, openWithPanel)
-#endif
 		.sheet(item: $fullSizeGenotype) { genotype in
 			sheet(title: genotype.name ?? "Full Size", dismiss: { fullSizeGenotype = nil }) {
-				VStack(alignment: .leading) {
-					RenderedImageView(nodeRenderer: NodeRenderer(node: genotype.node,
-																 evaluator: Evaluator(size: CGSize(width: 800, height: 800))))
-						.contextMenu {
-							Button("Export Image…") { exportingFullSizeGenotype = genotype }
-						}
-					ExpressionTextView(text: genotype.text)
-						.frame(width: 800, height: 120)
-				}
-				.padding()
+				FullSizeGenotypeView(genotype: genotype)
 			}
-			.sheet(item: $exportingFullSizeGenotype) { genotype in
-				ExportImageSheet(genotype: genotype)
-			}
-#if os(macOS)
-			// Set inside the sheet so File > Save Genotype follows whichever
-			// full size view is key, when several grid windows have one open.
-			.focusedSceneValue(\.saveGenotype, { saveWithPanel(genotype) })
-#endif
 		}
 		.sheet(item: $debugGenotype) { genotype in
 			sheet(title: "Debug View", dismiss: { debugGenotype = nil }) {
@@ -159,7 +135,7 @@ struct RandomGridView: View {
 				Button("Show Expression…") { expressionGenotype = genotype }
 				Divider()
 #if os(macOS)
-				Button("Save as Genotype…") { saveWithPanel(genotype) }
+				Button("Save as Genotype…") { GenotypeFilePanels.save(genotype) }
 				Button("Copy Expression") {
 					NSPasteboard.general.clearContents()
 					NSPasteboard.general.setString(genotype.text, forType: .string)
@@ -182,70 +158,6 @@ struct RandomGridView: View {
 				}
 		}
 	}
-
-#if os(macOS)
-	/// The type macOS gives `.evolvgenotype` files. The app doesn't declare
-	/// one, so this has to be the plain extension-based type: asking for one
-	/// that conforms to plain text makes a different type, and the open
-	/// panel greys out the files.
-	private static let genotypeContentType = UTType(filenameExtension: GenotypeLibrary.fileExtension) ?? .data
-
-	/// Asks where to save the expression as an `.evolvgenotype` file, starting
-	/// in the user Genotypes folder so it shows up in the genotype library,
-	/// but it can go anywhere. The file name becomes the genotype's name.
-	private func saveWithPanel(_ genotype: RandomGenotype) {
-		let panel = NSSavePanel()
-		panel.title = "Save as Genotype"
-		panel.nameFieldStringValue = genotype.name ?? "Untitled"
-		panel.allowedContentTypes = [Self.genotypeContentType]
-		panel.canCreateDirectories = true
-		panel.directoryURL = GenotypeLibrary.containerGenotypesDirectory
-		let expression = genotype.text
-		let completion: (NSApplication.ModalResponse) -> Void = { response in
-			guard response == .OK, let url = panel.url else { return }
-			do {
-				try GenotypeStore.shared.writeGenotype(expression: expression, to: url)
-			} catch {
-				NSAlert(error: error).runModal()
-			}
-		}
-		if let window = NSApp.keyWindow {
-			panel.beginSheetModal(for: window, completionHandler: completion)
-		} else {
-			panel.begin(completionHandler: completion)
-		}
-	}
-
-	/// Asks for an `.evolvgenotype` file, from anywhere, and shows it full
-	/// size. It isn't added to the genotype library.
-	private func openWithPanel() {
-		let panel = NSOpenPanel()
-		panel.title = "Open Genotype"
-		panel.allowedContentTypes = [Self.genotypeContentType]
-		panel.allowsMultipleSelection = false
-		panel.canChooseDirectories = false
-		panel.directoryURL = GenotypeLibrary.containerGenotypesDirectory
-		let completion: (NSApplication.ModalResponse) -> Void = { response in
-			guard response == .OK, let url = panel.url else { return }
-			do {
-				let text = try String(contentsOf: url, encoding: .utf8)
-				let genotype = try GenotypeLibrary.parse(text, fileURL: url, source: .user).genotype
-				let node = try ContentView.parser.parse(genotype.expression)
-				fullSizeGenotype = RandomGenotype(text: genotype.expression, node: node, name: genotype.name ?? genotype.id)
-			} catch {
-				let alert = NSAlert()
-				alert.messageText = "Couldn't open \(url.lastPathComponent)"
-				alert.informativeText = (error as? GenotypeParseError)?.message ?? error.localizedDescription
-				alert.runModal()
-			}
-		}
-		if let window = NSApp.keyWindow {
-			panel.beginSheetModal(for: window, completionHandler: completion)
-		} else {
-			panel.begin(completionHandler: completion)
-		}
-	}
-#endif
 
 	/// Nine new genotypes from a fresh seed. The seed is shown in the window
 	/// subtitle, so a grid can be regenerated from it later.
@@ -273,6 +185,37 @@ struct RandomGridView: View {
 	}
 }
 
+/// A genotype rendered at 800 x 800 above its expression: the grid's full
+/// size sheet, and the window File > Open Genotype opens. Its context menu
+/// exports the image, and File > Save Genotype saves the genotype while it's
+/// key.
+struct FullSizeGenotypeView: View {
+	let genotype: RandomGenotype
+
+	@State private var exportingGenotype: RandomGenotype?
+
+	var body: some View {
+		VStack(alignment: .leading) {
+			RenderedImageView(nodeRenderer: NodeRenderer(node: genotype.node,
+														 evaluator: Evaluator(size: CGSize(width: 800, height: 800))))
+				.contextMenu {
+					Button("Export Image…") { exportingGenotype = genotype }
+				}
+			ExpressionTextView(text: genotype.text)
+				.frame(width: 800, height: 120)
+		}
+		.padding()
+		.sheet(item: $exportingGenotype) { genotype in
+			ExportImageSheet(genotype: genotype)
+		}
+#if os(macOS)
+		// Set here so File > Save Genotype follows whichever full size view
+		// is key, when several are open.
+		.focusedSceneValue(\.saveGenotype, { GenotypeFilePanels.save(genotype) })
+#endif
+	}
+}
+
 /// The expression in the full size and Show Expression sheets: read-only, but selectable and
 /// copyable, and scrolls when it's long.
 private struct ExpressionTextView: View {
@@ -294,22 +237,12 @@ private struct ExpressionTextView: View {
 }
 
 #if os(macOS)
-/// File > Open Genotype, published by the focused RandomGridView.
-struct OpenGenotypeKey: FocusedValueKey {
-	typealias Value = () -> Void
-}
-
 /// File > Save Genotype, published by the key full size view.
 struct SaveGenotypeKey: FocusedValueKey {
 	typealias Value = () -> Void
 }
 
 extension FocusedValues {
-	var openGenotype: OpenGenotypeKey.Value? {
-		get { self[OpenGenotypeKey.self] }
-		set { self[OpenGenotypeKey.self] = newValue }
-	}
-
 	var saveGenotype: SaveGenotypeKey.Value? {
 		get { self[SaveGenotypeKey.self] }
 		set { self[SaveGenotypeKey.self] = newValue }
@@ -343,7 +276,7 @@ private struct SelectableTextView: NSViewRepresentable {
 /// Asks for a name and saves the expression as a user genotype (see
 /// GenotypeStore.saveUserGenotype). It then shows up in the genotype
 /// library window.
-/// Used where there's no save panel; on macOS, see saveWithPanel.
+/// Used where there's no save panel; on macOS, see GenotypeFilePanels.save.
 private struct SaveGenotypeSheet: View {
 	let expression: String
 

@@ -104,14 +104,25 @@ enum ImageExporter {
 		return data as Data
 	}
 
-	/// The expression an exported image stored with `encode`, if any.
-	static func embeddedExpression(in data: Data) -> String? {
-		guard let source = CGImageSourceCreateWithData(data as CFData, nil),
-			  let metadata = CGImageSourceCopyMetadataAtIndex(source, 0, nil),
-			  let tag = CGImageMetadataCopyTagWithPath(metadata, nil, "\(xmpPrefix):expression" as CFString) else {
-			return nil
+	/// The expression and name an exported image stored with `encode`, if any.
+	static func embeddedGenotype(in data: Data) -> (expression: String, name: String?)? {
+		guard let source = CGImageSourceCreateWithData(data as CFData, nil) else { return nil }
+		return embeddedGenotype(in: source)
+	}
+
+	static func embeddedGenotype(at url: URL) -> (expression: String, name: String?)? {
+		guard let source = CGImageSourceCreateWithURL(url as CFURL, nil) else { return nil }
+		return embeddedGenotype(in: source)
+	}
+
+	private static func embeddedGenotype(in source: CGImageSource) -> (expression: String, name: String?)? {
+		guard let metadata = CGImageSourceCopyMetadataAtIndex(source, 0, nil) else { return nil }
+		func value(_ property: String) -> String? {
+			CGImageMetadataCopyTagWithPath(metadata, nil, "\(xmpPrefix):\(property)" as CFString)
+				.flatMap { CGImageMetadataTagCopyValue($0) as? String }
 		}
-		return CGImageMetadataTagCopyValue(tag) as? String
+		guard let expression = value("expression") else { return nil }
+		return (expression, value("name"))
 	}
 
 	struct ExportError: LocalizedError {

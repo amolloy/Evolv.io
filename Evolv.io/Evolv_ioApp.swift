@@ -84,10 +84,23 @@ struct Evolv_ioApp: App {
 #endif
             }
         }
+
+#if os(macOS)
+        // A genotype opened with File > Open Genotype. It comes after the
+        // random grid so File > New Window still opens a grid.
+        WindowGroup("Genotype", id: Self.genotypeWindowID, for: OpenedGenotype.self) { $opened in
+            if let opened {
+                GenotypeWindowView(opened: opened)
+            }
+        }
+        .restorationBehavior(.disabled)
+        .windowResizability(.contentSize)
+#endif
     }
 
     static let genotypeLibraryWindowID = "genotype-library"
     static let randomGridWindowID = "random-grid"
+    static let genotypeWindowID = "genotype"
 }
 
 #if os(macOS)
@@ -103,16 +116,18 @@ private struct GenotypeLibraryMenuItem: View {
     }
 }
 
-/// Opens a genotype file in the focused grid window's full size view.
+/// Opens a genotype file, or an image with a genotype stored in it, in a
+/// window of its own.
 private struct OpenGenotypeMenuItem: View {
-    @FocusedValue(\.openGenotype) private var openGenotype
+    @Environment(\.openWindow) private var openWindow
 
     var body: some View {
         Button("Open Genotype…") {
-            openGenotype?()
+            GenotypeFilePanels.open { opened in
+                openWindow(id: Evolv_ioApp.genotypeWindowID, value: opened)
+            }
         }
         .keyboardShortcut("o")
-        .disabled(openGenotype == nil)
     }
 }
 
