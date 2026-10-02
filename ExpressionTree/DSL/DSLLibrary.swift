@@ -235,21 +235,15 @@ public enum DSLLibrary {
 		return result.sorted { $0.path < $1.path }
 	}
 
-	/// The user-editable Nodes folder inside this sandboxed app's own
-	/// container Documents -- created on first access if missing. This
-	/// app's entitlements (app-sandbox + files.user-selected.read-only
-	/// only, see Evolv_io.entitlements) can't watch an arbitrary
-	/// user-chosen folder without a one-time picker + security-scoped
-	/// bookmark, so the container's own Documents (always readable/
-	/// writable by a sandboxed app, no extra permission) is the folder --
-	/// reachable via the "Reveal Nodes Folder" menu item.
+	/// The user-editable Nodes folder, in the app's iCloud Drive folder
+	/// when iCloud is available and the sandbox container's own Documents
+	/// otherwise (see `UserLibrary`) -- created on first access if
+	/// missing. Either is readable/writable by this sandboxed app with no
+	/// extra permission, unlike an arbitrary user-chosen folder, which
+	/// would need a one-time picker + security-scoped bookmark. Reachable
+	/// via the "Reveal Nodes Folder" menu item.
 	public static var containerNodesDirectory: URL? {
-		guard let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first else {
-			return nil
-		}
-		let nodesDirectory = documents.appendingPathComponent("Nodes")
-		try? FileManager.default.createDirectory(at: nodesDirectory, withIntermediateDirectories: true)
-		return nodesDirectory
+		UserLibrary.directory(named: "Nodes")
 	}
 
 	/// The real roots used in production: the app-bundled node library and

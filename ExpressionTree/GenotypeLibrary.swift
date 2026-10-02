@@ -189,16 +189,11 @@ public enum GenotypeLibrary {
 		return result.sorted { $0.path < $1.path }
 	}
 
-	/// The user-editable Genotypes folder, beside the user Nodes folder in
-	/// the app container's Documents (see `DSLLibrary.containerNodesDirectory`
-	/// for why the container). Created on first access if missing.
+	/// The user-editable Genotypes folder, beside the user Nodes folder
+	/// (see `DSLLibrary.containerNodesDirectory` and `UserLibrary` for
+	/// where that is). Created on first access if missing.
 	public static var containerGenotypesDirectory: URL? {
-		guard let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first else {
-			return nil
-		}
-		let genotypesDirectory = documents.appendingPathComponent("Genotypes")
-		try? FileManager.default.createDirectory(at: genotypesDirectory, withIntermediateDirectories: true)
-		return genotypesDirectory
+		UserLibrary.directory(named: "Genotypes")
 	}
 
 	/// The app bundle's resources (where Xcode flattens

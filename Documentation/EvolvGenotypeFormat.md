@@ -69,8 +69,10 @@ only to keep their order; user files can do the same if order matters.
   `BundledNodes`, Xcode flattens these into the built app's
   `Contents/Resources/`; a new file here ships on the next build with no
   project-file edit.
-- **User-editable**: `Genotypes/` beside the user `Nodes/` folder in the
-  app's container Documents
+- **User-editable**: `Genotypes/` beside the user `Nodes/` folder: the
+  **Evolv.io** folder in iCloud Drive when iCloud is available (shared
+  between Macs on the same Apple ID), otherwise the app's container
+  Documents
   (`~/Library/Containers/com.amolloy.Evolv-io/Data/Documents/Genotypes/`),
   scanned recursively. The **Reveal Genotypes Folder** menu item opens it.
 - **Reload Genotypes** (app menu) re-scans both without relaunching. The MCP

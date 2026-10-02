@@ -16,6 +16,10 @@ struct Evolv_ioApp: App {
     @AppStorage(UserDefaults.supersamplingEnabledKey) private var supersamplingEnabled = true
 
     init() {
+        // Settles iCloud vs. local before anything reads the user Nodes or
+        // Genotypes folders (and moves any local files into iCloud).
+        print("User library: \(UserLibrary.documentsDirectory?.path ?? "unavailable")")
+
         // NodeRegistry.shared is otherwise built lazily on first parse --
         // touch it here so its load log (and any load issues) always show
         // up at launch, not only once something happens to render.

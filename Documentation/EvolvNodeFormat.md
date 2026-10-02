@@ -26,7 +26,9 @@ shape into MSL), `DSLLibrary.swift` (scans folders, resolves namespacing).
   subfolders, so this location is deliberately one level deep, no nesting.
   Drop a new file here and it's automatically part of the app the next time
   it's built — no project-file editing needed.
-- **User-editable**: the app's own sandboxed container Documents folder
+- **User-editable**: `Nodes/` in the **Evolv.io** folder in iCloud Drive
+  when iCloud is available (shared between Macs on the same Apple ID),
+  otherwise the app's own sandboxed container Documents folder
   (`~/Library/Containers/com.amolloy.Evolv-io/Data/Documents/Nodes/`),
   reachable via the app's **Reveal Nodes Folder** menu item. This one *is*
   scanned recursively, and supports the namespacing scheme below.
