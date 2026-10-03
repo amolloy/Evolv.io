@@ -253,6 +253,32 @@ struct RandomExpressionGeneratorTests {
 			.call("bw-noise", [.scalar(0.15), .call("x", [])]),
 			.scalar(3.1), .scalar(-0.04), .vector(0.95, 0.7, 0.59), .scalar(1.35),
 		])
-		#expect(expression.description == "(color-grad (bw-noise 0.15 x) 3.1 -0.04 #(0.95 0.7 0.59) 1.4)")
+		#expect(expression.description == "(color-grad (bw-noise 0.15 x) 3.1 -0.04 #(0.95 0.7 0.59) 1.35)")
+	}
+
+	/// Printing is exact, so genotype text read in prints back unchanged;
+	/// generated constants are rounded to two significant figures when
+	/// they're made instead.
+	@Test func descriptionIsExact() {
+		#expect(GeneratedExpression.scalar(15.5).description == "15.5")
+		#expect(GeneratedExpression.scalar(2).description == "2")
+		#expect(GeneratedExpression.scalar(-31).description == "-31")
+		#expect(GeneratedExpression.scalar(1.86).description == "1.86")
+	}
+
+	@Test func generatedConstantsHaveTwoSignificantFigures() {
+		func check(_ expression: GeneratedExpression) {
+			switch expression {
+				case .scalar(let value):
+					#expect(value == GeneratedExpression.rounded(value, significantFigures: 2))
+				case .vector(let r, let g, let b):
+					for value in [r, g, b] {
+						#expect(value == GeneratedExpression.rounded(value, significantFigures: 2))
+					}
+				case .call(_, let arguments):
+					arguments.forEach(check)
+			}
+		}
+		sample().forEach(check)
 	}
 }

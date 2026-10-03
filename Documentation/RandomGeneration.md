@@ -209,7 +209,9 @@ randomArgument(type, depth):
   Tree sizes barely change with the weight.
 - **Constants**: scalar literals uniform in -1 to 1, vector components
   uniform in 0 to 1, rounded to two significant figures to match the
-  papers. Sims' larger scalars (10.7, 15.5, -31) most likely came from
+  papers. They're rounded when they're made; `description` prints exactly,
+  so genotype text read back for mutation keeps its constants (see
+  [Mutation.md](Mutation.md)). Sims' larger scalars (10.7, 15.5, -31) most likely came from
   mutation adding up over generations, so there's no need to generate
   them directly.
 - **No per-node weights**, because Sims never mentions them. An untyped

@@ -83,7 +83,7 @@ enum MCPRenderTool {
         ])
     )
 
-    private struct Failure: Error {
+    struct Failure: Error {
         let message: String
     }
 
@@ -99,26 +99,7 @@ enum MCPRenderTool {
 
     private static func render(arguments args: [String: MCP.Value]) async throws -> CallTool.Result {
         // Expression
-        let expression: String
-        let label: String
-        if case .string(let text)? = args["expression"] {
-            expression = text
-            label = "expression"
-        } else if case .string(let name)? = args["sample"] {
-            let genotypes = await MainActor.run { GenotypeStore.shared.genotypes }
-            let matches = { (genotype: Genotype) in
-                genotype.displayName.caseInsensitiveCompare(name) == .orderedSame
-                    || genotype.id.caseInsensitiveCompare(name) == .orderedSame
-            }
-            guard let match = genotypes.first(where: matches) else {
-                let available = genotypes.map { $0.name ?? $0.id }
-                throw Failure(message: "No genotype named \"\(name)\". Available: \(available.joined(separator: ", "))")
-            }
-            expression = match.expression
-            label = "genotype \"\(match.displayName)\""
-        } else {
-            throw Failure(message: "render requires a string argument \"expression\" or \"sample\".")
-        }
+        let (expression, label) = try await expression(from: args, tool: "render")
 
         let node: any Node
         do {
@@ -238,9 +219,30 @@ enum MCPRenderTool {
         return CallTool.Result(content: content)
     }
 
+    /// `expression`, or else the sidebar genotype named by `sample`, with a
+    /// label for messages. Shared with `mutate_genotype`.
+    static func expression(from args: [String: MCP.Value], tool: String) async throws -> (expression: String, label: String) {
+        if case .string(let text)? = args["expression"] {
+            return (text, "expression")
+        }
+        guard case .string(let name)? = args["sample"] else {
+            throw Failure(message: "\(tool) requires a string argument \"expression\" or \"sample\".")
+        }
+        let genotypes = await MainActor.run { GenotypeStore.shared.genotypes }
+        let matches = { (genotype: Genotype) in
+            genotype.displayName.caseInsensitiveCompare(name) == .orderedSame
+                || genotype.id.caseInsensitiveCompare(name) == .orderedSame
+        }
+        guard let match = genotypes.first(where: matches) else {
+            let available = genotypes.map { $0.name ?? $0.id }
+            throw Failure(message: "No genotype named \"\(name)\". Available: \(available.joined(separator: ", "))")
+        }
+        return (match.expression, "genotype \"\(match.displayName)\"")
+    }
+
     // MARK: - Rendering
 
-    private static func renderImage(node: any Node, bounds: CGRect, width: Int, height: Int, supersample: Int) throws -> (image: CGImage, minValue: SIMD3<Double>, maxValue: SIMD3<Double>) {
+    static func renderImage(node: any Node, bounds: CGRect, width: Int, height: Int, supersample: Int) throws -> (image: CGImage, minValue: SIMD3<Double>, maxValue: SIMD3<Double>) {
         let evaluator = Evaluator(size: CGSize(width: width, height: height))
         let data = try evaluator.render(node: node, bounds: bounds, supersample: supersample)
         var minValue = SIMD3<Double>(repeating: .infinity)
@@ -277,7 +279,7 @@ enum MCPRenderTool {
 
     /// The app's -1...1 square cropped (never widened) to `aspect` --
     /// Sims' published figures cut off the top and bottom.
-    private static func croppedSquare(aspect: Double) -> CGRect {
+    static func croppedSquare(aspect: Double) -> CGRect {
         let halfWidth = min(1, aspect)
         let halfHeight = min(1, 1 / aspect)
         return CGRect(x: -halfWidth, y: -halfHeight, width: 2 * halfWidth, height: 2 * halfHeight)
@@ -338,7 +340,7 @@ enum MCPRenderTool {
         return image
     }
 
-    private static func png(_ image: CGImage) throws -> Tool.Content {
+    static func png(_ image: CGImage) throws -> Tool.Content {
         guard let data = image.pngData() else {
             throw Failure(message: "Failed to encode PNG.")
         }

@@ -15,7 +15,7 @@
 
 import Foundation
 
-public indirect enum GeneratedExpression: Equatable, Sendable, CustomStringConvertible {
+public indirect enum GeneratedExpression: Hashable, Sendable, CustomStringConvertible {
 	case scalar(Double)
 	case vector(Double, Double, Double)
 	/// A node call. A variable (`x`, `y`) is a call with no arguments.
@@ -34,9 +34,19 @@ public indirect enum GeneratedExpression: Equatable, Sendable, CustomStringConve
 		}
 	}
 
-	/// Two significant figures, like the constants in Sims' genotypes.
+	/// The shortest text that reads back as exactly `value`, without a
+	/// trailing `.0`, so a parsed genotype prints its constants as written.
+	/// Generated and mutated constants are rounded when they're made
+	/// (`rounded(_:significantFigures:)`), not here.
 	private static func format(_ value: Double) -> String {
-		String(format: "%.2g", value)
+		let text = "\(value)"
+		return text.hasSuffix(".0") ? String(text.dropLast(2)) : text
+	}
+
+	/// `value` to `figures` significant figures, like the constants in
+	/// Sims' genotypes (two for new ones, three after a mutation).
+	public static func rounded(_ value: Double, significantFigures figures: Int) -> Double {
+		Double(String(format: "%.\(figures)g", value)) ?? value
 	}
 }
 
@@ -111,17 +121,19 @@ public struct RandomExpressionGenerator {
 	}
 
 	public let configuration: Configuration
-	private let functions: [NodeSignature]
+	let signatures: [String: NodeSignature]
+	let functions: [NodeSignature]
 	/// The no-argument nodes: by definition terminals, so they're the
 	/// "variable" form rather than functions.
-	private let variables: [NodeSignature]
-	private let rootFunctions: [NodeSignature]
+	let variables: [NodeSignature]
+	let rootFunctions: [NodeSignature]
 
 	/// `signatures` is normally `NodeRegistry.shared.signatures`. Every node
 	/// that isn't excluded is either a function or a variable (a terminal:
 	/// no arguments, and not marked `nonconst`).
 	public init(signatures: [String: NodeSignature], configuration: Configuration = Configuration()) {
 		self.configuration = configuration
+		self.signatures = signatures
 		let nodes = signatures.values
 			.filter { !configuration.excludedFunctions.contains($0.name) }
 			// Sorted so a seeded generator gives the same expression on
@@ -139,7 +151,7 @@ public struct RandomExpressionGenerator {
 		randomCall(from: rootFunctions, fitting: nil, depth: 0, using: &rng)
 	}
 
-	private func randomCall<G: RandomNumberGenerator>(from functions: [NodeSignature], fitting type: NodeValueType?, depth: Int, using rng: inout G) -> GeneratedExpression {
+	func randomCall<G: RandomNumberGenerator>(from functions: [NodeSignature], fitting type: NodeValueType?, depth: Int, using rng: inout G) -> GeneratedExpression {
 		let candidates = functions.filter { type == nil || $0.outputType == nil || $0.outputType == type }
 		guard let function = candidates.randomElement(using: &rng) else {
 			preconditionFailure("RandomExpressionGenerator: no functions to pick from")
@@ -156,7 +168,7 @@ public struct RandomExpressionGenerator {
 	/// Two steps, as Andy suggested: first decide whether the argument is a
 	/// sub-expression or a terminal, then `randomTerminal` decides which
 	/// terminal.
-	private func randomArgument<G: RandomNumberGenerator>(preferring type: NodeValueType?, depth: Int, using rng: inout G) -> GeneratedExpression {
+	func randomArgument<G: RandomNumberGenerator>(preferring type: NodeValueType?, depth: Int, using rng: inout G) -> GeneratedExpression {
 		if depth < configuration.maxDepth && Double.random(in: 0..<1, using: &rng) < expressionProbability(atDepth: depth) {
 			return randomCall(from: functions, fitting: type, depth: depth, using: &rng)
 		}
@@ -167,7 +179,7 @@ public struct RandomExpressionGenerator {
 	/// type allows, picked by `terminalWeights`. A variable fits a slot the
 	/// same way a function does, by its output type, so `x` and `y` never
 	/// land in a vector slot but a user's vector-valued variable could.
-	private func randomTerminal<G: RandomNumberGenerator>(preferring type: NodeValueType?, using rng: inout G) -> GeneratedExpression {
+	func randomTerminal<G: RandomNumberGenerator>(preferring type: NodeValueType?, using rng: inout G) -> GeneratedExpression {
 		let weights = configuration.terminalWeights
 		let fittingVariables = variables.filter { type == nil || $0.outputType == nil || $0.outputType == type }
 		var forms: [(Form, Double)]
@@ -197,15 +209,20 @@ public struct RandomExpressionGenerator {
 
 		switch form {
 			case .scalar:
-				return .scalar(Double.random(in: configuration.scalarRange, using: &rng))
+				return .scalar(Self.literal(Double.random(in: configuration.scalarRange, using: &rng)))
 			case .vector:
 				let range = configuration.vectorComponentRange
-				return .vector(Double.random(in: range, using: &rng),
-							   Double.random(in: range, using: &rng),
-							   Double.random(in: range, using: &rng))
+				return .vector(Self.literal(Double.random(in: range, using: &rng)),
+							   Self.literal(Double.random(in: range, using: &rng)),
+							   Self.literal(Double.random(in: range, using: &rng)))
 			case .variable:
 				return .call(fittingVariables.randomElement(using: &rng)!.name, [])
 		}
+	}
+
+	/// Two significant figures, like the constants in Sims' genotypes.
+	private static func literal(_ value: Double) -> Double {
+		GeneratedExpression.rounded(value, significantFigures: 2)
 	}
 }
 

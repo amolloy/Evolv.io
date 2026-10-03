@@ -226,6 +226,45 @@ It only generates; render the expressions with `render`. Source:
 - `max_depth` (optional, default 10): the grid's Depth stepper.
 - `exclude` (optional): node names never picked as functions.
 
+### `mutate_genotype(expression | sample, count, seed, mutations_per_child, max_depth, exclude)`
+
+One generation of asexual reproduction: mutated children of one parent from
+`ExpressionMutator`, Sims' recursive mutation scheme (see
+[Mutation.md](Mutation.md)). Stateless: evolving is calling it again on the
+child you pick, and `write_genotype` keeps one. Source:
+`Evolv.io/MCP/MCPMutateTool.swift`.
+
+- `expression` or `sample`: the parent, as for `render`. Every node it
+  calls must be loaded.
+- `count` (optional, 1-100, default 19, as in Sims' figures).
+- `seed` (optional): as for `generate_genotypes`. The same seed and parent
+  give the same children.
+- `mutations_per_child` (optional, default 1): each node mutates with this
+  chance divided by the parent's node count.
+- `max_depth`, `exclude` (optional): as for `generate_genotypes`, applied
+  to new material. Excluded nodes already in the parent stay.
+
+Returns pretty JSON: `seed`, `parent`, `parent_node_count`,
+`max_node_count` (the size cap), and `children`, each with `expression`,
+`node_count` and `mutations` (`kind`, `path` as argument indices from the
+root, `before`, `after`). Children never equal the parent; each is checked
+with `Parser` and redrawn if it fails.
+
+### `render_grid(expressions, columns, cell_width, cell_height, supersample, numbers)`
+
+Renders up to 100 expressions into one numbered PNG contact sheet, left to
+right, top to bottom, numbered from 0. For a generation, pass the parent
+first, so it's cell 0 and child *n* is cell *n*. Source:
+`Evolv.io/MCP/MCPRenderGridTool.swift`.
+
+- `columns` (default 5, Sims' 5x4 layout for a parent and 19 children).
+- `cell_width` (default 200), `cell_height` (default `cell_width`). Each
+  cell shows the -1...1 square cropped to its aspect, like `render`.
+- `supersample` (default 2, lower than `render`'s 4 for speed).
+- `numbers` (default true).
+- An expression that fails to parse or render is a grey cell and listed in
+  the text block. The whole sheet is limited to 8192 pixels per side.
+
 ## What's *not* exposed yet
 
 A `list_nodes`/`get_node` read-back tool for the user Nodes folder.
