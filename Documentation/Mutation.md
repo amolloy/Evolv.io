@@ -28,7 +28,8 @@ implemented yet. There's no UI; it's reached through the MCP
      `(+ (abs X) (* Y .6))` to `(+ (abs (* Y .6)) (* Y .6))`.
 - Shrinking should be **slightly more probable than growing**, so
   expressions don't drift toward large, slow forms; growth should come from
-  selection.
+  selection. (We deliberately drift slightly the other way; see
+  [Size drift](#size-drift-slightly-upward-by-andys-choice).)
 - The overall mutation frequency is **scaled inversely to the parent's
   length**, so large parents stay stable.
 - Offspring estimated to be **too slow** are thrown away and redrawn before
@@ -70,10 +71,10 @@ mutate(parent):
 
 | # | Kind | Applies to | What it does |
 |---|---|---|---|
-| 1 | `new-expression` | any node | `RandomExpressionGenerator.randomArgument` at the node's depth, so it thins out like first-generation material and respects `maxDepth`. At the root, a whole new genotype. |
+| 1 | `new-expression` | any node | `RandomExpressionGenerator.randomArgument` at the node's depth, so it respects `maxDepth`, but with its sub-expression chance read at depth 1.5 (`newMaterialChanceDepth`) wherever it lands: about 0.64, then halving per level. At the root, a whole new genotype. |
 | 2 | `adjust-scalar` | scalar | Adds a Gaussian with standard deviation 0.25 times the value's size (at least 0.5), rounded to 3 significant figures. |
 | 3 | `adjust-vector` | vector | Adds a Gaussian with standard deviation 0.1 to each element, 3 significant figures. |
-| 4 | `swap-function` | call with arguments | Any other function that fits the slot. Old arguments stay in their positions where they fit the new slot types; the rest are generated; extras are dropped. |
+| 4 | `swap-function` | call with arguments | Any other function that fits the slot. Old arguments stay in their positions where they fit the new slot types; the rest are generated like new expressions (see 1); extras are dropped. |
 | 4 | `swap-variable` | variable | Another variable that fits (`x` to `y`). Mutation 4 for a function with no arguments. |
 | 5 | `wrap` | any node | A function that fits the slot and has a slot of its own this node fits. The node goes in a random fitting slot, random terminals in the others. |
 | 6 | `hoist` | call with arguments | One of its arguments that fits the slot. |
@@ -94,14 +95,35 @@ new constants get, so a small nudge to 1.86 isn't rounded away.
 | literal | 1 | 5 | | 1 | | 1 |
 
 Literals are mostly nudged: Sims' constants (15.5, 1.86, -31) look like the
-sum of many small steps. Hoist outweighs wrap so shrinking wins slightly.
-2,000 children of each of the six published figures (2026-10-03):
+sum of many small steps. Hoist outweighs wrap, as Sims asks.
 
-| wrap, hoist | Smaller | Bigger | Mean change |
-|---|---|---|---|
-| 1.5, 2 | 27% | 33% | -1.4 nodes |
-| **1, 2** | **29%** | **28%** | **-1.7** |
-| 1, 3 | 31% | 27% | -2.1 |
+### Size drift: slightly upward, by Andy's choice
+
+Sims wants shrinking slightly more probable than growing. Andy chose the
+opposite (2026-10-03): random first-generation trees are small (median 21
+nodes), and lineages seemed to lose complexity over generations, so trees
+should drift *very slightly* upward instead.
+
+The lever is the size of new random material. Read at its real depth, the
+generator's sub-expression chance (0.9, halving per level) makes a new
+expression deep in a tree almost always a bare terminal, so replacing a
+branch loses far more than a wrap adds. `newMaterialChanceDepth` reads the
+chance at a fixed depth instead. Mean change in node count per child,
+before selection (20 children each of 400 random genotypes, and 500 each of
+the six published figures over 30 nodes):
+
+| New material chance read at | Random, 15-40 nodes | 40-100 | 100+ | Published figures |
+|---|---|---|---|---|
+| real depth (Sims-style, before) | +0.9 | +0.3 | -1.1 | -2.0 |
+| 1 (0.9) | +4.6 | +3.5 | +2.4 | 0.0 |
+| 1.25 (0.76) | +4.1 | +2.1 | +1.1 | +0.1 |
+| **1.5 (0.64)** | **+2.5** | **+1.5** | **+0.4** | **-0.8** |
+
+1.5 keeps every size of random tree drifting slightly up and big ones
+nearly level, while the hand-tuned figures still shrink a little. These
+means come from a few large jumps (a hoist or a new expression near the
+root); the median change is 0 everywhere, and 40-45% of children are
+bigger against 20-25% smaller. Wrap and hoist stay at 1 and 2.
 
 Tiny parents (`x`, `(abs x)`) can only grow, which is what lets evolution
 start from them.

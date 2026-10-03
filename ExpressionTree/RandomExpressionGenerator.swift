@@ -151,26 +151,36 @@ public struct RandomExpressionGenerator {
 		randomCall(from: rootFunctions, fitting: nil, depth: 0, using: &rng)
 	}
 
-	func randomCall<G: RandomNumberGenerator>(from functions: [NodeSignature], fitting type: NodeValueType?, depth: Int, using rng: inout G) -> GeneratedExpression {
+	/// `chanceDepth` is the depth `expressionProbability` is read at, normally
+	/// the same as `depth`; see `randomArgument`.
+	func randomCall<G: RandomNumberGenerator>(from functions: [NodeSignature], fitting type: NodeValueType?, depth: Int, chanceDepth: Double? = nil, using rng: inout G) -> GeneratedExpression {
 		let candidates = functions.filter { type == nil || $0.outputType == nil || $0.outputType == type }
 		guard let function = candidates.randomElement(using: &rng) else {
 			preconditionFailure("RandomExpressionGenerator: no functions to pick from")
 		}
-		let arguments = function.argumentTypes.map { randomArgument(preferring: $0, depth: depth + 1, using: &rng) }
+		let chanceDepth = chanceDepth ?? Double(depth)
+		let arguments = function.argumentTypes.map { randomArgument(preferring: $0, depth: depth + 1, chanceDepth: chanceDepth + 1, using: &rng) }
 		return .call(function.name, arguments)
 	}
 
 	/// `depth` is the argument's depth: 1 for the root's arguments.
-	func expressionProbability(atDepth depth: Int) -> Double {
-		configuration.expressionProbability * pow(configuration.expressionProbabilityDecay, Double(depth - 1))
+	func expressionProbability(atDepth depth: Double) -> Double {
+		configuration.expressionProbability * pow(configuration.expressionProbabilityDecay, depth - 1)
 	}
 
 	/// Two steps, as Andy suggested: first decide whether the argument is a
 	/// sub-expression or a terminal, then `randomTerminal` decides which
 	/// terminal.
-	func randomArgument<G: RandomNumberGenerator>(preferring type: NodeValueType?, depth: Int, using rng: inout G) -> GeneratedExpression {
-		if depth < configuration.maxDepth && Double.random(in: 0..<1, using: &rng) < expressionProbability(atDepth: depth) {
-			return randomCall(from: functions, fitting: type, depth: depth, using: &rng)
+	///
+	/// `depth` is where the argument really sits, which `maxDepth` limits.
+	/// `chanceDepth` (default `depth`) is the depth the sub-expression chance
+	/// is read at. Mutation passes 1 for new material deep in a tree, so a
+	/// replacement subtree is sized like a root argument rather than almost
+	/// always coming out a terminal.
+	func randomArgument<G: RandomNumberGenerator>(preferring type: NodeValueType?, depth: Int, chanceDepth: Double? = nil, using rng: inout G) -> GeneratedExpression {
+		let chanceDepth = chanceDepth ?? Double(depth)
+		if depth < configuration.maxDepth && Double.random(in: 0..<1, using: &rng) < expressionProbability(atDepth: chanceDepth) {
+			return randomCall(from: functions, fitting: type, depth: depth, chanceDepth: chanceDepth, using: &rng)
 		}
 		return randomTerminal(preferring: type, using: &rng)
 	}

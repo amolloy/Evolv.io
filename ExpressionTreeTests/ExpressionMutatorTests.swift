@@ -307,21 +307,32 @@ struct ExpressionMutatorTests {
 		}
 	}
 
-	/// Sims wants shrinking slightly more likely than growing. Over many
-	/// children of the published figures (tiny parents like `x` can only
-	/// grow), the mean change in size should be below zero.
-	@Test func sizeDriftIsNotUpward() throws {
-		let mutator = mutator()
-		var rng = SeededRandomNumberGenerator(seed: 13)
-		var changes: [Int] = []
-		for parent in parents where parent.nodeCount > 30 {
-			for _ in 0..<500 {
-				let child = try #require(mutator.mutate(parent, using: &rng))
-				changes.append(child.expression.nodeCount - parent.nodeCount)
-			}
+	/// Andy wants trees to drift very slightly bigger (Mutation.md): over
+	/// many children of random genotypes of 40+ nodes, the mean change is
+	/// small and positive, and bigger than when new material is sized at
+	/// its real depth (the Sims-style setting).
+	@Test func sizeDriftIsSlightlyUpward() throws {
+		var founderRNG = SeededRandomNumberGenerator(seed: 99)
+		var founders: [GeneratedExpression] = []
+		while founders.count < 150 {
+			let founder = generator.generate(using: &founderRNG)
+			if founder.nodeCount >= 40 { founders.append(founder) }
 		}
-		#expect(changes.count >= 3000)
-		#expect(changes.reduce(0, +) < 0)
+		func meanChange(_ mutator: ExpressionMutator) throws -> Double {
+			var rng = SeededRandomNumberGenerator(seed: 13)
+			var total = 0
+			for parent in founders {
+				for _ in 0..<20 {
+					total += try #require(mutator.mutate(parent, using: &rng)).expression.nodeCount - parent.nodeCount
+				}
+			}
+			return Double(total) / Double(founders.count * 20)
+		}
+		let drift = try meanChange(mutator())
+		let realDepth = try meanChange(mutator { $0.newMaterialChanceDepth = nil })
+		#expect(drift > 0)
+		#expect(drift < 4)
+		#expect(drift > realDepth)
 	}
 
 	@Test func sizeCap() throws {

@@ -155,11 +155,8 @@ public struct ExpressionMutator {
 		/// `mutationsPerChild / nodeCount`, so a child averages this many
 		/// mutations whatever the parent's size.
 		public var mutationsPerChild: Double = 1
-		/// Sims wants shrinking slightly more likely than growing, so
-		/// hoist (6) outweighs wrap (5). Over 2,000 children of each of
-		/// the six published genotypes, these give 29% of children
-		/// smaller than the parent, 28% bigger and a mean change of -1.7
-		/// nodes (wrap 1.5 gave 27% smaller, 33% bigger).
+		/// Hoist (6) outweighs wrap (5), as Sims asks. Overall size drift is
+		/// set by `newMaterialChanceDepth` instead (see Mutation.md).
 		public var callWeights = Weights(newExpression: 1, swap: 3, wrap: 1, hoist: 2, copy: 1)
 		public var variableWeights = Weights(newExpression: 1, swap: 2, wrap: 1, copy: 1)
 		/// Literals are mostly nudged: Sims' constants (15.5, 1.86, -31)
@@ -186,6 +183,14 @@ public struct ExpressionMutator {
 		/// Draws before giving up on a child that changes something and
 		/// fits the size cap.
 		public var maxAttempts: Int = 1000
+		/// The depth new random material (mutations 1 and 4) reads the
+		/// generator's sub-expression chance at, wherever it lands; it still
+		/// stops at `maxDepth`. 1.5 starts it at about 0.64, halving per
+		/// level, so random trees drift slightly bigger over generations, as
+		/// Andy chose (2026-10-03) over Sims' slight shrinking. nil reads it
+		/// at the node's real depth, where deep replacements are nearly
+		/// always terminals and big trees shrink. See Mutation.md.
+		public var newMaterialChanceDepth: Double? = 1.5
 
 		public init() {}
 	}
@@ -359,7 +364,7 @@ public struct ExpressionMutator {
 	private func newExpression<G: RandomNumberGenerator>(slot: NodeValueType?, depth: Int, using rng: inout G) -> GeneratedExpression {
 		depth == 0
 			? generator.generate(using: &rng)
-			: generator.randomArgument(preferring: slot, depth: depth, using: &rng)
+			: generator.randomArgument(preferring: slot, depth: depth, chanceDepth: configuration.newMaterialChanceDepth, using: &rng)
 	}
 
 	/// 2.
@@ -391,7 +396,7 @@ public struct ExpressionMutator {
 			if index < arguments.count && Self.fits(valueType(of: arguments[index]), type) {
 				return arguments[index]
 			}
-			return generator.randomArgument(preferring: type, depth: depth + 1, using: &rng)
+			return generator.randomArgument(preferring: type, depth: depth + 1, chanceDepth: configuration.newMaterialChanceDepth, using: &rng)
 		}
 		return .call(function.name, newArguments)
 	}
