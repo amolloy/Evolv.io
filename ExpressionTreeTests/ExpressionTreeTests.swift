@@ -1089,6 +1089,39 @@ struct GenotypeLibraryTests {
         #expect(issues.first?.fileURL.deletingLastPathComponent().lastPathComponent == "user")
     }
 
+    /// User genotypes in subfolders know their folder, empty folders are
+    /// still listed, and the outline nests them with folders sorted by name.
+    @Test func userFoldersBecomeAnOutline() throws {
+        let user = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: user) }
+        let fileManager = FileManager.default
+        for folder in ["Hunts/Spiral", "Hunts/Ribbon", "empty", ".hidden"] {
+            try fileManager.createDirectory(at: user.appendingPathComponent(folder), withIntermediateDirectories: true)
+        }
+        try "x".write(to: user.appendingPathComponent("top.evolvgenotype"), atomically: true, encoding: .utf8)
+        try "y".write(to: user.appendingPathComponent("Hunts/Spiral/gen-2.evolvgenotype"), atomically: true, encoding: .utf8)
+        try "y".write(to: user.appendingPathComponent("Hunts/Spiral/gen-1.evolvgenotype"), atomically: true, encoding: .utf8)
+        try "z".write(to: user.appendingPathComponent("Hunts/direct.evolvgenotype"), atomically: true, encoding: .utf8)
+
+        let (genotypes, issues) = GenotypeLibrary.scan(roots: [(user, .user)])
+        #expect(issues.isEmpty)
+        #expect(genotypes.first { $0.id == "gen-1" }?.folder == ["Hunts", "Spiral"])
+        #expect(genotypes.first { $0.id == "top" }?.folder == [])
+
+        let folders = GenotypeLibrary.folders(under: user)
+        #expect(folders == [["Hunts"], ["Hunts", "Ribbon"], ["Hunts", "Spiral"], ["empty"]])
+
+        let outline = GenotypeLibrary.outline(of: genotypes, folders: folders)
+        #expect(outline.subfolders.map(\.name) == ["empty", "Hunts"])
+        #expect(outline.genotypes.map(\.id) == ["top"])
+        let hunts = try #require(outline.subfolders.last)
+        #expect(hunts.subfolders.map(\.name) == ["Ribbon", "Spiral"])
+        #expect(hunts.genotypes.map(\.id) == ["direct"])
+        #expect(hunts.subfolders.last?.genotypes.map(\.id) == ["gen-1", "gen-2"])
+        #expect(hunts.genotypeCount == 3)
+        #expect(outline.allFolders.map(\.id) == ["", "empty", "Hunts", "Hunts/Ribbon", "Hunts/Spiral"])
+    }
+
     @Test func bundledGenotypesLoadInSidebarOrder() throws {
         let (genotypes, issues) = GenotypeLibrary.scan(roots: [(Self.bundledGenotypesDirectory, .bundled)])
         #expect(issues.isEmpty, "unexpected load issues: \(issues.map(\.message))")

@@ -59,9 +59,20 @@ A genotype's **id** is its file name without the extension (`11-figure-9`).
 Ids are unique across the library: a user file with the same id as a bundled
 one is a load issue and skipped, so the bundled one wins, as with nodes.
 
-The sidebar lists bundled genotypes first, then user ones, each sorted by
-file path. The bundled files carry numeric prefixes (`01-x`, ..., `13-figure-12`)
-only to keep their order; user files can do the same if order matters.
+The sidebar lists bundled genotypes first, as one flat group, then user ones
+under **My Genotypes**. User genotypes can sit in folders (and folders in
+folders) inside the user Genotypes folder; the sidebar shows them as a
+collapsible outline, folders first sorted by name the way Finder does, then
+that folder's genotypes sorted by file name. The bundled files carry numeric
+prefixes (`01-x`, ..., `13-figure-12`) only to keep their order; user files
+can do the same if order matters. A folder doesn't change a genotype's id, so
+two files with the same name in different folders still collide.
+
+Folders are ordinary folders on disk: from the sidebar, a folder's context
+menu creates, renames, moves or trashes folders, and dragging a genotype or
+folder onto a folder (or using **Move To**) moves it. Dragging a
+`.evolvgenotype` in from Finder copies it into that folder. Changes made in
+Finder show up after **Reload Genotypes**.
 
 ## Where files live
 
@@ -76,7 +87,9 @@ only to keep their order; user files can do the same if order matters.
   (`~/Library/Containers/com.amolloy.Evolv-io/Data/Documents/Genotypes/`),
   scanned recursively. The **Reveal Genotypes Folder** menu item opens it.
 - **Reload Genotypes** (app menu) re-scans both without relaunching. The MCP
-  `write_genotype`/`delete_genotype` tools reload automatically.
+  `write_genotype`/`delete_genotype` tools reload automatically;
+  `write_genotype` takes an optional `folder` and `list_genotypes` reports
+  each user genotype's folder.
 
 Load issues print to the console as `Genotype load issue (<file>): <message>`
 and are returned by the MCP `list_genotypes` tool.

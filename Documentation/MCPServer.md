@@ -180,12 +180,13 @@ that renderer's `LiveDebugValues` at call time.
 
 Lists every genotype in the sidebar, in sidebar order, as pretty JSON:
 `genotypes` (each with `id`, `source`, `expression`, the file's full
-`content`, and `name`/`original_image` when the header sets them) and
-`load_issues` (`file`, `message`). The format is described in
+`content`, `name`/`original_image` when the header sets them, and `folder`
+for a user genotype in a subfolder), `folders` (every user folder, empty ones
+included, `/`-separated) and `load_issues` (`file`, `message`). The format is described in
 [EvolvGenotypeFormat.md](EvolvGenotypeFormat.md). Source:
 `Evolv.io/MCP/MCPGenotypeTools.swift`, like the two tools below.
 
-### `write_genotype(name, content)`
+### `write_genotype(name, content, folder?)`
 
 Writes an `.evolvgenotype` file into the user Genotypes folder
 (`GenotypeLibrary.containerGenotypesDirectory`, what **Reveal Genotypes
@@ -194,7 +195,12 @@ Folder** opens) and reloads `GenotypeStore`, so the sidebar updates at once.
 - `name`: bare file name, `.evolvgenotype` appended if missing, `/` and `..`
   rejected. It becomes the genotype's id. Reusing a bundled id is reported
   as a collision and the user file is ignored (bundled wins).
-- `content`: the full file, overwriting any existing user file of that name.
+- `content`: the full file, overwriting the existing user genotype with that
+  id, in whatever folder it's in.
+- `folder` (optional): `/`-separated folder inside the user Genotypes folder,
+  created if missing; `""` is the top level. Given for an existing id in a
+  different folder, the genotype moves there. Omitted, an existing genotype
+  stays put and a new one goes at the top level.
 - Returns `isError: true`, after writing, if the file has load issues, its
   expression doesn't parse with the current node registry, or its
   `original_image` can't be found.
@@ -204,8 +210,8 @@ port a good user genotype there by hand to ship it.
 
 ### `delete_genotype(name)`
 
-Deletes a user `.evolvgenotype` file and reloads the list. Same `name`
-rules; `isError: true` if there's no such user file. Bundled genotypes can't
+Deletes a user `.evolvgenotype` file, in whichever folder it's in, and
+reloads the list. Same `name` rules; emptied folders are left in place; `isError: true` if there's no such user file. Bundled genotypes can't
 be deleted this way.
 
 ### `generate_genotypes(seed, count, max_depth, exclude)`

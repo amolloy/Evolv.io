@@ -22,14 +22,22 @@ enum MCPGenotypeTools {
         ),
     ])
 
+    private static let folderSchema: MCP.Value = .object([
+        "type": .string("string"),
+        "description": .string(
+            "Optional folder inside the user Genotypes folder, \"/\"-separated, e.g. \"Hunts/Spiral\"; created if missing. \"\" means the top level. Omit to keep an existing genotype where it is (new ones go at the top level)."
+        ),
+    ])
+
     static let tools: [Tool] = [
         Tool(
             name: "list_genotypes",
             description: """
-            Lists every genotype in the app's sidebar, in sidebar order, as JSON: id (file name \
-            without extension), source ("bundled" or "user"), name and original_image from the \
-            header when set, the expression, and the file's full contents. Also lists any load \
-            issues (bad headers, empty files, ids colliding with a bundled genotype).
+            Lists every genotype in the app's sidebar as JSON: id (file name without extension), \
+            source ("bundled" or "user"), folder ("/"-separated, for user genotypes in a \
+            subfolder), name and original_image from the header when set, the expression, and \
+            the file's full contents. Also lists every user folder (empty ones included) and any \
+            load issues (bad headers, empty files, ids colliding with another genotype).
             """,
             inputSchema: .object([
                 "type": .string("object"),
@@ -41,7 +49,8 @@ enum MCPGenotypeTools {
             description: """
             Writes an .evolvgenotype file into Evolv.io's user-editable Genotypes folder and \
             reloads the genotype list, so it appears in the sidebar immediately. Overwrites any \
-            existing user file with the same name. Content is an optional header between "---" \
+            existing user genotype with the same id wherever it is, moving it if `folder` names a \
+            different folder. Content is an optional header between "---" \
             lines (name, original_image) followed by the expression. Reports load issues and \
             whether the expression parses with the current node registry.
             """,
@@ -49,6 +58,7 @@ enum MCPGenotypeTools {
                 "type": .string("object"),
                 "properties": .object([
                     "name": nameSchema,
+                    "folder": folderSchema,
                     "content": .object([
                         "type": .string("string"),
                         "description": .string("Full contents of the .evolvgenotype file."),
@@ -60,8 +70,9 @@ enum MCPGenotypeTools {
         Tool(
             name: "delete_genotype",
             description: """
-            Deletes an .evolvgenotype file from Evolv.io's user-editable Genotypes folder and \
-            reloads the genotype list. Bundled genotypes are never touched.
+            Deletes a user genotype's .evolvgenotype file, in whichever folder it's in, and \
+            reloads the genotype list. Bundled genotypes are never touched. Folders are left in \
+            place even when emptied.
             """,
             inputSchema: .object([
                 "type": .string("object"),
@@ -83,7 +94,11 @@ enum MCPGenotypeTools {
                   case .string(let content)? = arguments?["content"] else {
                 return errorResult("write_genotype requires string arguments \"name\" and \"content\".")
             }
-            return await write(name: rawName, content: content)
+            var folder: String?
+            if case .string(let rawFolder)? = arguments?["folder"] {
+                folder = rawFolder
+            }
+            return await write(name: rawName, folder: folder, content: content)
         case "delete_genotype":
             guard case .string(let rawName)? = arguments?["name"] else {
                 return errorResult("delete_genotype requires string argument \"name\".")
@@ -99,17 +114,30 @@ enum MCPGenotypeTools {
     }
 
     /// Resolves a tool's `name` argument to a file URL inside the user
-    /// Genotypes folder, the same way `write_node` does for Nodes.
-    private static func userGenotypeFileURL(for rawName: String) throws(ToolError) -> URL {
+    /// Genotypes folder, the same way `write_node` does for Nodes: the
+    /// existing user genotype with that id wherever it is when `folder` is
+    /// nil, otherwise that file name inside `folder`.
+    @MainActor
+    private static func userGenotypeFileURL(for rawName: String, folder rawFolder: String? = nil) throws(ToolError) -> URL {
         let suffix = "." + GenotypeLibrary.fileExtension
         let fileName = rawName.hasSuffix(suffix) ? rawName : rawName + suffix
         guard !fileName.contains("/"), !fileName.contains("..") else {
             throw ToolError(message: "Invalid file name \"\(rawName)\": must be a bare file name, no path separators.")
         }
-        guard let genotypesDirectory = GenotypeLibrary.containerGenotypesDirectory else {
+        let id = String(fileName.dropLast(suffix.count))
+        if rawFolder == nil, let existing = GenotypeStore.shared.genotypes.first(where: { $0.id == id && $0.source == .user }) {
+            return existing.fileURL
+        }
+        let folder = (rawFolder ?? "").split(separator: "/").map(String.init)
+        for component in folder {
+            if let problem = GenotypeStore.folderNameProblem(component) {
+                throw ToolError(message: "Invalid folder \"\(rawFolder ?? "")\": \(problem)")
+            }
+        }
+        guard let directory = try? GenotypeStore.shared.folderURL(folder) else {
             throw ToolError(message: "Could not resolve the container Genotypes directory.")
         }
-        return genotypesDirectory.appendingPathComponent(fileName)
+        return directory.appendingPathComponent(fileName)
     }
 
     @MainActor
@@ -125,6 +153,9 @@ enum MCPGenotypeTools {
             if let name = genotype.name {
                 entry["name"] = name
             }
+            if !genotype.folder.isEmpty {
+                entry["folder"] = genotype.folder.joined(separator: "/")
+            }
             if let originalImageName = genotype.originalImageName {
                 entry["original_image"] = originalImageName
             }
@@ -133,7 +164,8 @@ enum MCPGenotypeTools {
         let issues: [[String: Any]] = store.loadIssues.map {
             ["file": $0.fileURL.lastPathComponent, "message": $0.message]
         }
-        let json: [String: Any] = ["genotypes": genotypes, "load_issues": issues]
+        let folders = store.userOutline.allFolders.dropFirst().map { $0.path.joined(separator: "/") }
+        let json: [String: Any] = ["genotypes": genotypes, "folders": folders, "load_issues": issues]
         do {
             let data = try JSONSerialization.data(withJSONObject: json, options: [.prettyPrinted, .sortedKeys])
             return CallTool.Result(content: [.text(text: String(decoding: data, as: UTF8.self), annotations: nil, _meta: nil)])
@@ -143,17 +175,24 @@ enum MCPGenotypeTools {
     }
 
     @MainActor
-    private static func write(name rawName: String, content: String) -> CallTool.Result {
+    private static func write(name rawName: String, folder: String?, content: String) -> CallTool.Result {
         let fileURL: URL
         do {
-            fileURL = try userGenotypeFileURL(for: rawName)
+            fileURL = try userGenotypeFileURL(for: rawName, folder: folder)
         } catch {
             return errorResult(error.message)
         }
         let fileName = fileURL.lastPathComponent
+        let id = fileURL.deletingPathExtension().lastPathComponent
+        // Writing an existing id into a different folder moves it there.
+        let previous = GenotypeStore.shared.genotypes.first { $0.id == id && $0.source == .user && $0.fileURL.standardizedFileURL != fileURL.standardizedFileURL }
 
         do {
+            try FileManager.default.createDirectory(at: fileURL.deletingLastPathComponent(), withIntermediateDirectories: true)
             try content.write(to: fileURL, atomically: true, encoding: .utf8)
+            if let previous {
+                try FileManager.default.removeItem(at: previous.fileURL)
+            }
         } catch {
             return errorResult("Failed to write \(fileName): \(error.localizedDescription)")
         }
@@ -164,7 +203,6 @@ enum MCPGenotypeTools {
         var problems = store.loadIssues
             .filter { $0.fileURL.lastPathComponent == fileName }
             .map(\.message)
-        let id = fileURL.deletingPathExtension().lastPathComponent
         if let genotype = store.genotypes.first(where: { $0.id == id && $0.source == .user }) {
             do {
                 _ = try Parser().parse(genotype.expression)

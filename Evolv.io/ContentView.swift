@@ -20,12 +20,7 @@ struct ContentView: View {
 
 	var body: some View {
 		NavigationSplitView {
-			List(selection: $selectedID) {
-				ForEach(store.genotypes, id: \.id) { genotype in
-					Text(genotype.displayName)
-						.tag(genotype.id)
-				}
-			}
+			GenotypeSidebar(selectedID: $selectedID)
 			.frame(minWidth: 200)
 			.onChange(of: selectedID, initial: true) { _, newValue in
 				MCPLiveUIState.selectedGenotypeID = newValue

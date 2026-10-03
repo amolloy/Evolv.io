@@ -40,6 +40,9 @@ public struct Genotype: Hashable, Sendable {
 	public let expression: String
 	public let fileURL: URL
 	public let source: Source
+	/// The subfolders between the user Genotypes folder and the file, e.g.
+	/// `["Hunts", "Spiral"]`; empty at the top level and for bundled files.
+	public let folder: [String]
 
 	public var displayName: String {
 		name ?? expression
@@ -75,7 +78,7 @@ public enum GenotypeLibrary {
 	/// Parses one file's text. Throws a message suitable for a load issue.
 	/// A file whose only problem is an unknown header key still loads; the
 	/// key comes back in `warnings`.
-	public static func parse(_ text: String, fileURL: URL, source: Genotype.Source) throws(GenotypeParseError) -> (genotype: Genotype, warnings: [String]) {
+	public static func parse(_ text: String, fileURL: URL, source: Genotype.Source, folder: [String] = []) throws(GenotypeParseError) -> (genotype: Genotype, warnings: [String]) {
 		var header: [String: String] = [:]
 		var warnings: [String] = []
 		var body = Substring(text)
@@ -115,7 +118,8 @@ public enum GenotypeLibrary {
 			originalImageName: header["original_image"],
 			expression: expression,
 			fileURL: fileURL,
-			source: source
+			source: source,
+			folder: folder
 		)
 		return (genotype, warnings)
 	}
@@ -154,7 +158,8 @@ public enum GenotypeLibrary {
 
 				let parsed: (genotype: Genotype, warnings: [String])
 				do {
-					parsed = try parse(text, fileURL: fileURL, source: root.source)
+					let folder = root.source == .user ? relativeFolder(of: fileURL, under: root.url) : []
+					parsed = try parse(text, fileURL: fileURL, source: root.source, folder: folder)
 				} catch {
 					issues.append(GenotypeLoadIssue(fileURL: fileURL, message: error.message))
 					continue
@@ -189,6 +194,52 @@ public enum GenotypeLibrary {
 		return result.sorted { $0.path < $1.path }
 	}
 
+	/// Every folder under `root` (not `root` itself) as a path relative to
+	/// it, empty ones included, so the sidebar can show a folder before
+	/// anything is in it. Hidden folders and packages are skipped.
+	public static func folders(under root: URL) -> [[String]] {
+		guard let enumerator = FileManager.default.enumerator(
+			at: root,
+			includingPropertiesForKeys: [.isDirectoryKey],
+			options: [.skipsHiddenFiles, .skipsPackageDescendants]
+		) else {
+			return []
+		}
+		var result: [[String]] = []
+		for case let url as URL in enumerator {
+			guard (try? url.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory == true else {
+				continue
+			}
+			result.append(relativeFolder(of: url.appendingPathComponent("_"), under: root))
+		}
+		return result.sorted { $0.joined(separator: "/") < $1.joined(separator: "/") }
+	}
+
+	/// The folders between `root` and the file at `fileURL`.
+	private static func relativeFolder(of fileURL: URL, under root: URL) -> [String] {
+		let rootComponents = root.standardizedFileURL.pathComponents
+		let parentComponents = fileURL.deletingLastPathComponent().standardizedFileURL.pathComponents
+		guard parentComponents.starts(with: rootComponents) else {
+			return []
+		}
+		return Array(parentComponents.dropFirst(rootComponents.count))
+	}
+
+	/// Arranges user genotypes and folders (see `folders(under:)`) into a
+	/// tree rooted at the Genotypes folder itself. Subfolders sort by name
+	/// the way Finder does; genotypes keep the order they're given in.
+	public static func outline(of genotypes: [Genotype], folders: [[String]]) -> GenotypeFolder {
+		var root = GenotypeFolder(path: [])
+		for path in folders {
+			root.insertFolder(path[...])
+		}
+		for genotype in genotypes {
+			root.insert(genotype, at: genotype.folder[...])
+		}
+		root.sortSubfolders()
+		return root
+	}
+
 	/// The user-editable Genotypes folder, beside the user Nodes folder
 	/// (see `DSLLibrary.containerNodesDirectory` and `UserLibrary` for
 	/// where that is). Created on first access if missing.
@@ -208,6 +259,61 @@ public enum GenotypeLibrary {
 			roots.append((container, .user))
 		}
 		return roots
+	}
+}
+
+/// One folder of the user genotype library, see `GenotypeLibrary.outline`.
+public struct GenotypeFolder: Hashable, Sendable, Identifiable {
+	/// Relative to the Genotypes folder; empty for the Genotypes folder itself.
+	public let path: [String]
+	public internal(set) var subfolders: [GenotypeFolder] = []
+	public internal(set) var genotypes: [Genotype] = []
+
+	public init(path: [String]) {
+		self.path = path
+	}
+
+	public var id: String { path.joined(separator: "/") }
+	public var name: String { path.last ?? "" }
+
+	/// Every genotype in this folder and all of its subfolders.
+	public var genotypeCount: Int {
+		genotypes.count + subfolders.reduce(0) { $0 + $1.genotypeCount }
+	}
+
+	/// This folder and every folder under it, depth first.
+	public var allFolders: [GenotypeFolder] {
+		[self] + subfolders.flatMap(\.allFolders)
+	}
+
+	mutating func insertFolder(_ rest: ArraySlice<String>) {
+		guard let first = rest.first else { return }
+		let index = subfolderIndex(named: first)
+		subfolders[index].insertFolder(rest.dropFirst())
+	}
+
+	mutating func insert(_ genotype: Genotype, at rest: ArraySlice<String>) {
+		guard let first = rest.first else {
+			genotypes.append(genotype)
+			return
+		}
+		let index = subfolderIndex(named: first)
+		subfolders[index].insert(genotype, at: rest.dropFirst())
+	}
+
+	mutating func sortSubfolders() {
+		subfolders.sort { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+		for index in subfolders.indices {
+			subfolders[index].sortSubfolders()
+		}
+	}
+
+	private mutating func subfolderIndex(named name: String) -> Int {
+		if let index = subfolders.firstIndex(where: { $0.name == name }) {
+			return index
+		}
+		subfolders.append(GenotypeFolder(path: path + [name]))
+		return subfolders.count - 1
 	}
 }
 
