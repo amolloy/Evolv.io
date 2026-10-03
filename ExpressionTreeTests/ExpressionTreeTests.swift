@@ -1093,7 +1093,7 @@ struct GenotypeLibraryTests {
         let (genotypes, issues) = GenotypeLibrary.scan(roots: [(Self.bundledGenotypesDirectory, .bundled)])
         #expect(issues.isEmpty, "unexpected load issues: \(issues.map(\.message))")
         #expect(genotypes.map(\.displayName).prefix(3) == ["x", "y", "(abs x)"])
-        #expect(genotypes.suffix(5).map(\.displayName) == ["Figure 6", "Figure 9", "Figure 10", "Figure 12", "Figure 13"])
+        #expect(genotypes.suffix(6).map(\.displayName) == ["Figure 6", "Figure 9", "Figure 10", "Figure 12", "Figure 13", "1993 Figure 6"])
         #expect(genotypes.first { $0.name == "Figure 13" }?.originalImageName == "OriginalFigure13.gif")
         #expect(genotypes.first { $0.name == "Figure 9" }?.originalImageName == "OriginalFigure9.gif")
     }
