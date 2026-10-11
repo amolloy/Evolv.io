@@ -8,12 +8,22 @@
 //  member or everything bred from it, whichever is taller. Breeding only
 //  adds space below and to the right, so nothing above or to the left of
 //  the parent moves. Unexplored siblings in a litter someone has moved past
-//  shrink to chips. See Documentation/EvolutionUI.md.
+//  shrink to chips. With `.vertical` orientation everything is transposed:
+//  generations top to bottom, siblings side by side. See
+//  Documentation/EvolutionUI.md.
 //
 
 import CoreGraphics
 
 public struct FamilyLayout: Equatable, Sendable {
+	/// Which way generations run.
+	public enum Orientation: String, CaseIterable, Sendable {
+		/// Left to right, siblings stacked vertically.
+		case horizontal
+		/// Top to bottom, siblings side by side.
+		case vertical
+	}
+
 	public struct Metrics: Equatable, Sendable {
 		/// A full-size member's width and height, and a column's width.
 		public var cellSize: CGFloat = 128
@@ -64,6 +74,7 @@ public struct FamilyLayout: Equatable, Sendable {
 	/// How many descendants each collapsed member is hiding.
 	public private(set) var hiddenDescendants: [String: Int] = [:]
 	public private(set) var size: CGSize = .zero
+	public private(set) var orientation: Orientation = .horizontal
 
 	/// - Parameters:
 	///   - expandedLitters: more litters to show every member of full size,
@@ -71,7 +82,10 @@ public struct FamilyLayout: Equatable, Sendable {
 	///     marked `expanded` in the family.
 	///   - focus: when set (Show Path), only these members are full size;
 	///     everyone else is a chip, `expandedLitters` notwithstanding.
-	public init(family: Family, metrics: Metrics = Metrics(), expandedLitters: Set<String> = [], focus: Set<String>? = nil) {
+	///   - orientation: `.vertical` transposes the whole layout. Connectors
+	///     then run from a parent's bottom edge to the top of its litter.
+	public init(family: Family, metrics: Metrics = Metrics(), expandedLitters: Set<String> = [], focus: Set<String>? = nil,
+				orientation: Orientation = .horizontal) {
 		var builder = Builder(family: family, metrics: metrics, expandedLitters: expandedLitters, focus: focus)
 		var y: CGFloat = 0
 		for litter in family.litters where litter.parents.isEmpty {
@@ -87,6 +101,24 @@ public struct FamilyLayout: Equatable, Sendable {
 		let width = cells.values.map(\.frame.maxX).max() ?? 0
 		let padding = family.litters.isEmpty ? 0 : metrics.litterPadding
 		size = CGSize(width: width + padding, height: y + padding)
+		if orientation == .vertical {
+			transpose()
+		}
+	}
+
+	/// Swaps x and y everywhere. Cells are square, so a member's frame
+	/// keeps its size; a chip grid's rows become columns.
+	private mutating func transpose() {
+		func flip(_ rect: CGRect) -> CGRect { CGRect(x: rect.minY, y: rect.minX, width: rect.height, height: rect.width) }
+		func flip(_ point: CGPoint) -> CGPoint { CGPoint(x: point.y, y: point.x) }
+		cells = cells.mapValues { Cell(frame: flip($0.frame), isChip: $0.isChip) }
+		litterFrames = litterFrames.mapValues(flip)
+		litterOutlines = litterOutlines.mapValues(flip)
+		connectors = connectors.map {
+			Connector(parent: $0.parent, litter: $0.litter, from: flip($0.from), to: flip($0.to), isPrimary: $0.isPrimary)
+		}
+		size = CGSize(width: size.height, height: size.width)
+		orientation = orientation == .horizontal ? .vertical : .horizontal
 	}
 
 	private struct Builder {

@@ -22,6 +22,8 @@ struct FamilyWindowView: View {
 
 	@Environment(\.undoManager) private var undoManager
 	@AppStorage("familyThumbnailSize") private var thumbnailSize: Double = 128
+	/// Generations left to right, or top to bottom. For every family window.
+	@AppStorage("familyOrientation") private var orientation = FamilyLayout.Orientation.horizontal
 	@State private var selection: Set<String> = []
 	/// The order members were added to the selection, so the first of two
 	/// picked for mating is the primary parent.
@@ -159,7 +161,7 @@ struct FamilyWindowView: View {
 
 	private var lineage: some View {
 		let path = highlightedPath
-		let layout = FamilyLayout(family: family, metrics: metrics, focus: path)
+		let layout = FamilyLayout(family: family, metrics: metrics, focus: path, orientation: orientation)
 		let byID = Dictionary(uniqueKeysWithValues: family.members.map { ($0.id, $0) })
 		// Cells within a screen of the visible area, in content coordinates
 		// (the layout's, offset by the margin).
@@ -226,6 +228,20 @@ struct FamilyWindowView: View {
 		return metrics
 	}
 
+	/// Switching keeps the first selected member (or the first member) in
+	/// place on screen.
+	private var orientationBinding: Binding<FamilyLayout.Orientation> {
+		Binding {
+			orientation
+		} set: { newValue in
+			let before = currentLayout()
+			orientation = newValue
+			if let anchor = orderedSelection.first ?? family.members.first?.id {
+				keepInPlace(anchor, before: before, revealing: nil)
+			}
+		}
+	}
+
 	/// Whether a litter has siblings that shrink to chips: someone in it
 	/// has been bred from, and someone else hasn't (and isn't starred).
 	private func canShrink(_ litter: Family.Litter) -> Bool {
@@ -282,10 +298,17 @@ struct FamilyWindowView: View {
 			for connector in layout.connectors {
 				var line = Path()
 				line.move(to: connector.from)
-				let midX = (connector.from.x + connector.to.x) / 2
-				line.addCurve(to: connector.to,
-							  control1: CGPoint(x: midX, y: connector.from.y),
-							  control2: CGPoint(x: midX, y: connector.to.y))
+				if layout.orientation == .vertical {
+					let midY = (connector.from.y + connector.to.y) / 2
+					line.addCurve(to: connector.to,
+								  control1: CGPoint(x: connector.from.x, y: midY),
+								  control2: CGPoint(x: connector.to.x, y: midY))
+				} else {
+					let midX = (connector.from.x + connector.to.x) / 2
+					line.addCurve(to: connector.to,
+								  control1: CGPoint(x: midX, y: connector.from.y),
+								  control2: CGPoint(x: midX, y: connector.to.y))
+				}
 				let onPath = path.map { $0.contains(connector.parent) && pathLitters!.contains(connector.litter) }
 				let isMating = family.litter(id: connector.litter)?.parents.count == 2
 				let lineColor: Color = isMating ? Self.parentColor(connector.isPrimary ? 0 : 1) : .secondary
@@ -338,14 +361,14 @@ struct FamilyWindowView: View {
 						.clipShape(UnevenRoundedRectangle(bottomLeadingRadius: radius, bottomTrailingRadius: radius))
 				}
 			}
-			.overlay(alignment: .trailing) {
+			.overlay(alignment: orientation == .vertical ? .bottom : .trailing) {
 				if let hidden {
 					Text("+\(hidden)")
 						.font(.caption.bold())
 						.padding(.horizontal, 6)
 						.padding(.vertical, 2)
 						.background(.thinMaterial, in: Capsule())
-						.offset(x: 24)
+						.offset(x: orientation == .vertical ? 0 : 24, y: orientation == .vertical ? 14 : 0)
 				}
 			}
 			.contentShape(Rectangle())
@@ -442,6 +465,15 @@ struct FamilyWindowView: View {
 			}
 			.frame(width: 120)
 			.help("Thumbnail size")
+		}
+		ToolbarItem {
+			Picker("Orientation", selection: orientationBinding) {
+				Label("Generations Left to Right", systemImage: "arrow.right.square").tag(FamilyLayout.Orientation.horizontal)
+				Label("Generations Top to Bottom", systemImage: "arrow.down.square").tag(FamilyLayout.Orientation.vertical)
+			}
+			.pickerStyle(.segmented)
+			.labelStyle(.iconOnly)
+			.help("Run generations left to right or top to bottom")
 		}
 		ToolbarItem {
 			Button("Family Settings", systemImage: "slider.horizontal.3") { showingSettings = true }
@@ -545,7 +577,7 @@ struct FamilyWindowView: View {
 		// Root litters go at the bottom of the first column.
 		let layout = currentLayout()
 		if let frame = layout.litterFrames[litter.id] {
-			scrollPosition.scrollTo(point: CGPoint(x: 0, y: max(0, frame.minY)))
+			scrollPosition.scrollTo(point: CGPoint(x: max(0, frame.minX), y: max(0, frame.minY)))
 		}
 	}
 
@@ -565,7 +597,7 @@ struct FamilyWindowView: View {
 #endif
 
 	private func currentLayout() -> FamilyLayout {
-		FamilyLayout(family: family, metrics: metrics, focus: highlightedPath)
+		FamilyLayout(family: family, metrics: metrics, focus: highlightedPath, orientation: orientation)
 	}
 
 	/// Shows (or with nil, hides) the path to `memberID`. Everything off
@@ -596,7 +628,7 @@ struct FamilyWindowView: View {
 			let litter = try document.addSeedLitter(expressions: expressions, names: names, source: source, undoManager: undoManager)
 			let layout = currentLayout()
 			if let frame = layout.litterFrames[litter.id] {
-				scrollPosition.scrollTo(point: CGPoint(x: 0, y: max(0, frame.minY)))
+				scrollPosition.scrollTo(point: CGPoint(x: max(0, frame.minX), y: max(0, frame.minY)))
 			}
 			let ids = family.members(ofLitter: litter.id).map(\.id)
 			selection = Set(ids)
@@ -656,11 +688,19 @@ struct FamilyWindowView: View {
 		let after = currentLayout()
 		let visibleRect = scrollTracker.visibleRect
 		guard !visibleRect.isEmpty, let old = before.cells[anchor]?.frame, let new = after.cells[anchor]?.frame else { return }
-		var offset = CGPoint(x: visibleRect.minX, y: visibleRect.minY + new.minY - old.minY)
-		if let litterID, let litterFrame = after.litterFrames[litterID] {
-			let right = litterFrame.maxX + 2 * Self.margin
-			if right > offset.x + visibleRect.width {
-				offset.x = right - visibleRect.width
+		var offset = CGPoint(x: visibleRect.minX + new.minX - old.minX, y: visibleRect.minY + new.minY - old.minY)
+		// The next generation is to the right, or below.
+		if let litterID, let litterFrame = after.litterOutlines[litterID] ?? after.litterFrames[litterID] {
+			if after.orientation == .vertical {
+				let bottom = litterFrame.maxY + 2 * Self.margin
+				if bottom > offset.y + visibleRect.height {
+					offset.y = bottom - visibleRect.height
+				}
+			} else {
+				let right = litterFrame.maxX + 2 * Self.margin
+				if right > offset.x + visibleRect.width {
+					offset.x = right - visibleRect.width
+				}
 			}
 		}
 		offset.x = max(0, offset.x)

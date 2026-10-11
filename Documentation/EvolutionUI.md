@@ -171,6 +171,12 @@ stepper and context menu move here).
   parent moves up; the view adjusts the scroll so it stays under the
   pointer.
 - A **thumbnail size** slider in the toolbar, as in Finder.
+- An **orientation** toggle in the toolbar: generations left to right
+  (the default) or top to bottom. Top to bottom is the same layout
+  transposed (`FamilyLayout`'s `orientation`), so siblings sit side by
+  side and lines run from a parent's bottom edge to the top of its litter.
+  It's an app-wide setting, and switching keeps the selected member in
+  place on screen.
 - After a breed, the view scrolls to the new litter.
 
 ### Actions

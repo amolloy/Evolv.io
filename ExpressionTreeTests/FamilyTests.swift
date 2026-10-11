@@ -265,6 +265,24 @@ struct FamilyLayoutTests {
 		#expect(focused.cells[family.members[1].id]?.isChip == true)
 	}
 
+	@Test func verticalIsTheHorizontalLayoutTransposed() throws {
+		var family = try twoGenerations()
+		try family.breed(family.members(ofLitter: family.litters[1].id)[2].id, signatures: signatures, seed: 9)
+		let across = FamilyLayout(family: family, metrics: metrics)
+		let down = FamilyLayout(family: family, metrics: metrics, orientation: .vertical)
+		#expect(down.orientation == .vertical && down.size == CGSize(width: across.size.height, height: across.size.width))
+		for (id, cell) in across.cells {
+			let flipped = try #require(down.cells[id])
+			#expect(flipped.isChip == cell.isChip)
+			#expect(flipped.frame == CGRect(x: cell.frame.minY, y: cell.frame.minX, width: cell.frame.height, height: cell.frame.width))
+		}
+		// Lines run from a parent's bottom edge to the top of its litter.
+		let line = try #require(down.connectors.first)
+		let parent = try #require(down.cells[line.parent]).frame
+		#expect(line.from == CGPoint(x: parent.midX, y: parent.maxY))
+		#expect(line.to.y == down.litterOutlines[line.litter]!.minY)
+	}
+
 	@Test func collapsedMembersHideTheirBranch() throws {
 		var family = try twoGenerations()
 		let parent = family.members[0].id
