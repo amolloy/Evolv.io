@@ -24,6 +24,10 @@ public struct FamilyLayout: Equatable, Sendable {
 		/// Between two litters stacked in one column.
 		public var litterSpacing: CGFloat = 24
 		public var columnSpacing: CGFloat = 48
+		/// Between a litter's members and the outline around them. Under
+		/// half of `litterSpacing` and `columnSpacing`, so outlines never
+		/// touch.
+		public var litterPadding: CGFloat = 6
 
 		public init() {}
 
@@ -50,8 +54,12 @@ public struct FamilyLayout: Equatable, Sendable {
 
 	/// Visible members by id. Members inside a collapsed branch aren't here.
 	public private(set) var cells: [String: Cell] = [:]
-	/// Each visible litter's block.
+	/// Each visible litter's band: its column, from its first member's top
+	/// to the bottom of everything bred from its members.
 	public private(set) var litterFrames: [String: CGRect] = [:]
+	/// The outline grouping each visible litter's members: around just
+	/// its own cells, `litterPadding` out. Connectors end on its left edge.
+	public private(set) var litterOutlines: [String: CGRect] = [:]
 	public private(set) var connectors: [Connector] = []
 	/// How many descendants each collapsed member is hiding.
 	public private(set) var hiddenDescendants: [String: Int] = [:]
@@ -69,10 +77,12 @@ public struct FamilyLayout: Equatable, Sendable {
 		builder.addSecondaryConnectors()
 		cells = builder.cells
 		litterFrames = builder.litterFrames
+		litterOutlines = builder.litterOutlines
 		connectors = builder.connectors
 		hiddenDescendants = builder.hiddenDescendants
 		let width = cells.values.map(\.frame.maxX).max() ?? 0
-		size = CGSize(width: width, height: y)
+		let padding = family.litters.isEmpty ? 0 : metrics.litterPadding
+		size = CGSize(width: width + padding, height: y + padding)
 	}
 
 	private struct Builder {
@@ -87,6 +97,7 @@ public struct FamilyLayout: Equatable, Sendable {
 
 		var cells: [String: Cell] = [:]
 		var litterFrames: [String: CGRect] = [:]
+		var litterOutlines: [String: CGRect] = [:]
 		var connectors: [Connector] = []
 		var hiddenDescendants: [String: Int] = [:]
 
@@ -136,6 +147,11 @@ public struct FamilyLayout: Equatable, Sendable {
 			}
 
 			litterFrames[litter.id] = CGRect(x: x, y: top, width: metrics.cellSize, height: y - top)
+			let ownCells = members.compactMap { cells[$0.id]?.frame }
+			if let first = ownCells.first {
+				litterOutlines[litter.id] = ownCells.dropFirst().reduce(first) { $0.union($1) }
+					.insetBy(dx: -metrics.litterPadding, dy: -metrics.litterPadding)
+			}
 			if let parent = litter.parents.first, let parentCell = cells[parent] {
 				connectors.append(connector(from: parentCell.frame, parent: parent, to: litter.id, isPrimary: true))
 			}
@@ -188,9 +204,10 @@ public struct FamilyLayout: Equatable, Sendable {
 
 		private func connector(from parentFrame: CGRect, parent: String, to litterID: String, isPrimary: Bool) -> Connector {
 			let litterFrame = litterFrames[litterID]!
+			let outline = litterOutlines[litterID] ?? litterFrame
 			return Connector(parent: parent, litter: litterID,
 							 from: CGPoint(x: parentFrame.maxX, y: parentFrame.midY),
-							 to: CGPoint(x: litterFrame.minX, y: litterFrame.minY + min(metrics.cellSize, litterFrame.height) / 2),
+							 to: CGPoint(x: outline.minX, y: litterFrame.minY + min(metrics.cellSize, litterFrame.height) / 2),
 							 isPrimary: isPrimary)
 		}
 	}

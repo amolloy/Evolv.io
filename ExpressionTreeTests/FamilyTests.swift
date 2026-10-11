@@ -182,7 +182,7 @@ struct FamilyLayoutTests {
 		#expect(layout.connectors == [FamilyLayout.Connector(
 			parent: parent.id, litter: family.litters[1].id,
 			from: CGPoint(x: parentFrame.maxX, y: parentFrame.midY),
-			to: CGPoint(x: litterFrame.minX, y: litterFrame.minY + metrics.cellSize / 2), isPrimary: true)])
+			to: CGPoint(x: litterFrame.minX - metrics.litterPadding, y: litterFrame.minY + metrics.cellSize / 2), isPrimary: true)])
 	}
 
 	@Test func breedingAgainMovesNothingAboveOrInsideTheParentsBranch() throws {
@@ -201,6 +201,30 @@ struct FamilyLayoutTests {
 		}
 		// The new litter goes under the parent's first one.
 		#expect(after.litterFrames[family.litters[3].id]!.minY == before.litterFrames[family.litters[1].id]!.maxY + metrics.litterSpacing)
+	}
+
+	@Test func litterOutlinesSurroundOnlyTheirOwnMembers() throws {
+		let family = try twoGenerations()
+		let layout = FamilyLayout(family: family, metrics: metrics)
+		let pad = metrics.litterPadding
+		for litter in family.litters {
+			let cells = family.members(ofLitter: litter.id).map { layout.cells[$0.id]!.frame }
+			let outline = try #require(layout.litterOutlines[litter.id])
+			#expect(outline.minX == cells.map(\.minX).min()! - pad && outline.maxX == cells.map(\.maxX).max()! + pad)
+			#expect(outline.minY == cells.map(\.minY).min()! - pad && outline.maxY == cells.map(\.maxY).max()! + pad)
+		}
+	}
+
+	@Test func anOutlineStopsAtItsLastMemberNotItsBranch() throws {
+		var family = Family(created: created)
+		let roots = family.addRandomLitter(signatures: signatures, seed: 1)
+		try family.breed(family.members(ofLitter: roots.id)[18].id, signatures: signatures, seed: 2)
+		let layout = FamilyLayout(family: family, metrics: metrics)
+		let outline = layout.litterOutlines[roots.id]!
+		let band = layout.litterFrames[roots.id]!
+		#expect(outline.maxY == layout.cells[family.members(ofLitter: roots.id)[18].id]!.frame.maxY + metrics.litterPadding)
+		#expect(outline.maxY < band.maxY)
+		#expect(!outline.intersects(layout.litterOutlines[family.litters[1].id]!))
 	}
 
 	@Test func collapsedMembersHideTheirBranch() throws {

@@ -158,8 +158,15 @@ struct FamilyWindowView: View {
 		return metrics
 	}
 
+	/// Litter outlines and the lines from parents to litters, behind the
+	/// cells.
 	private func connectors(_ layout: FamilyLayout) -> some View {
 		Canvas { context, _ in
+			for outline in layout.litterOutlines.values {
+				let shape = Path(roundedRect: outline, cornerRadius: 10)
+				context.fill(shape, with: .color(.primary.opacity(0.05)))
+				context.stroke(shape, with: .color(.secondary.opacity(0.6)), lineWidth: 1)
+			}
 			for connector in layout.connectors {
 				var path = Path()
 				path.move(to: connector.from)
