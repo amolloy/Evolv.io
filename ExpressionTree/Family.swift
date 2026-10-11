@@ -47,6 +47,14 @@ public struct Family: Equatable, Sendable {
 		public var excludedFunctions: [String] = []
 		public var excludedRootFunctions: [String] = RandomExpressionGenerator.Configuration.defaultExcludedRootFunctions.sorted()
 		public var excludedVariables: [String] = RandomExpressionGenerator.Configuration.defaultExcludedVariables.sorted()
+		/// `#RRGGBB` colours new vector literals are sometimes taken from
+		/// (RandomExpressionGenerator.Configuration.palette). Optional so
+		/// families and litters saved before palettes decode as nil, which
+		/// draws as they were drawn.
+		public var palette: [String]?
+		/// Chance a new vector literal comes from `palette`; nil is the
+		/// generator's default.
+		public var paletteChance: Double?
 
 		public init() {}
 
@@ -56,6 +64,10 @@ public struct Family: Equatable, Sendable {
 			configuration.excludedFunctions = Set(excludedFunctions)
 			configuration.excludedRootFunctions = Set(excludedRootFunctions)
 			configuration.excludedVariables = Set(excludedVariables)
+			configuration.palette = (palette ?? []).compactMap(RandomExpressionGenerator.paletteColor(hex:))
+			if let paletteChance {
+				configuration.paletteChance = paletteChance
+			}
 			return configuration
 		}
 

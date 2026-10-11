@@ -100,6 +100,7 @@ enum MCPMutateTool {
         var generatorConfiguration = RandomExpressionGenerator.Configuration()
         generatorConfiguration.excludedRootFunctions = UserDefaults.standard.randomExcludedRootNodes
         generatorConfiguration.excludedVariables = UserDefaults.standard.randomExcludedVariables
+        UserDefaults.standard.applyRandomPalette(to: &generatorConfiguration)
         if let maxDepth = try integer(args["max_depth"], "max_depth") {
             guard maxDepth >= 1 else { throw Failure(message: "max_depth must be at least 1.") }
             generatorConfiguration.maxDepth = maxDepth

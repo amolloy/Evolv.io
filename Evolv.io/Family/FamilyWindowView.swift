@@ -760,6 +760,23 @@ private struct FamilyThumbnail: View {
 	}
 }
 
+/// A row of a palette's colours.
+private struct PaletteSwatches: View {
+	let colors: [String]
+
+	var body: some View {
+		HStack(spacing: 2) {
+			ForEach(Array(colors.enumerated()), id: \.offset) { _, hex in
+				let rgb = RandomExpressionGenerator.paletteColor(hex: hex) ?? .zero
+				Rectangle()
+					.fill(Color(red: rgb.x, green: rgb.y, blue: rgb.z))
+					.frame(height: 14)
+			}
+		}
+		.clipShape(RoundedRectangle(cornerRadius: 3))
+	}
+}
+
 /// The family's defaults for new litters. Changes are undoable and don't
 /// touch litters already made.
 private struct FamilySettingsView: View {
@@ -775,9 +792,54 @@ private struct FamilySettingsView: View {
 					value: binding(\.mutationsPerChild, "Change Mutation Rate"), in: 0.25...8, step: 0.25)
 			Stepper("Depth of new material: \(document.family.settings.maxDepth)",
 					value: binding(\.maxDepth, "Change Depth"), in: 1...20)
+			Picker("Palette", selection: paletteBinding) {
+				Text("None").tag("")
+				if paletteName == "Custom" {
+					Text("Custom").tag("Custom")
+				}
+				ForEach(ColorPalette.presets) { palette in
+					Text(palette.name).tag(palette.name)
+				}
+			}
+			if let colors = document.family.settings.palette, !colors.isEmpty {
+				PaletteSwatches(colors: colors)
+				Stepper("Palette colours: \(Int((paletteChance * 100).rounded()))% of new colours",
+						value: binding(\.paletteChance, "Change Palette Share", default: paletteChance),
+						in: 0...1, step: 0.1)
+			}
 		}
 		.padding()
-		.frame(width: 300)
+		.frame(width: 340)
+	}
+
+	private var paletteChance: Double {
+		document.family.settings.paletteChance ?? RandomExpressionGenerator.Configuration.defaultPaletteChance
+	}
+
+	/// A preset's name, "" for none, or "Custom" for colours that aren't a
+	/// preset (set with update_family_settings or the user default).
+	private var paletteName: String {
+		guard let colors = document.family.settings.palette, !colors.isEmpty else { return "" }
+		return ColorPalette.preset(matching: colors)?.name ?? "Custom"
+	}
+
+	private var paletteBinding: Binding<String> {
+		Binding {
+			paletteName
+		} set: { name in
+			guard name != "Custom" else { return }
+			document.change("Change Palette", undoManager: undoManager) {
+				$0.settings.palette = ColorPalette.preset(named: name)?.colors ?? []
+			}
+		}
+	}
+
+	private func binding(_ keyPath: WritableKeyPath<Family.Settings, Double?>, _ actionName: String, default value: Double) -> Binding<Double> {
+		Binding {
+			document.family.settings[keyPath: keyPath] ?? value
+		} set: { newValue in
+			document.change(actionName, undoManager: undoManager) { $0.settings[keyPath: keyPath] = newValue }
+		}
 	}
 
 	private func binding<Value>(_ keyPath: WritableKeyPath<Family.Settings, Value>, _ actionName: String) -> Binding<Value> {

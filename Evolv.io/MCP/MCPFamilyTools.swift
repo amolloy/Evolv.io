@@ -130,6 +130,9 @@ enum MCPFamilyTools {
 					"excluded_functions": nameList("Functions never introduced by a mutation or random litter."),
 					"excluded_root_functions": nameList("Functions never at the root of a random genotype."),
 					"excluded_variables": nameList("Variables (x, y, z) never introduced."),
+					"palette": nameList("Colours new vector literals are sometimes taken from: #RRGGBB colours and preset names (\(ColorPalette.presets.map(\.name).joined(separator: ", "))). Empty turns it off."),
+					"palette_chance": .object(["type": .string("number"),
+											   "description": .string("Chance a new vector literal comes from the palette, 0-1.")]),
 				]),
 			])
 		),
@@ -502,6 +505,7 @@ enum MCPFamilyTools {
 		var configuration = RandomExpressionGenerator.Configuration()
 		configuration.excludedRootFunctions = UserDefaults.standard.randomExcludedRootNodes
 		configuration.excludedVariables = UserDefaults.standard.randomExcludedVariables
+		UserDefaults.standard.applyRandomPalette(to: &configuration)
 		let mutator = ExpressionMutator(generator: RandomExpressionGenerator(signatures: NodeRegistry.shared.signatures,
 																			 configuration: configuration))
 		let unknown = mutator.unknownNodes(in: parents[0]).union(mutator.unknownNodes(in: parents[1]))
@@ -566,6 +570,8 @@ enum MCPFamilyTools {
 			"excluded_functions": settings.excludedFunctions,
 			"excluded_root_functions": settings.excludedRootFunctions,
 			"excluded_variables": settings.excludedVariables,
+			"palette": settings.palette ?? [],
+			"palette_chance": settings.paletteChance ?? RandomExpressionGenerator.Configuration.defaultPaletteChance,
 		]
 	}
 
@@ -598,6 +604,17 @@ enum MCPFamilyTools {
 			let unknown = names.filter { !["x", "y", "z"].contains($0) }
 			guard unknown.isEmpty else { throw Failure(message: "excluded_variables can only hold x, y and z, not \(unknown.joined(separator: ", ")).") }
 			settings.excludedVariables = names.sorted()
+		}
+		if let entries = try names(args["palette"], "palette") {
+			let bad = entries.filter { ColorPalette.colors(resolving: [$0]) == nil }
+			guard bad.isEmpty else {
+				throw Failure(message: "palette entries must be #RRGGBB or a preset name, not \(bad.joined(separator: ", ")).")
+			}
+			settings.palette = ColorPalette.colors(resolving: entries)
+		}
+		if let chance = try number(args["palette_chance"], "palette_chance") {
+			guard (0...1).contains(chance) else { throw Failure(message: "palette_chance must be 0-1.") }
+			settings.paletteChance = chance
 		}
 		if settings != entry.document.family.settings {
 			entry.document.change("Change Family Settings", undoManager: entry.changeUndoManager) { $0.settings = settings }

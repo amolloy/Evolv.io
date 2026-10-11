@@ -248,6 +248,85 @@ struct RandomExpressionGeneratorTests {
 		for _ in 0..<500 { check(generator.generate(using: &rng)) }
 	}
 
+	/// Every vector literal in `expression`, in order.
+	private func vectorLiterals(_ expression: GeneratedExpression) -> [SIMD3<Double>] {
+		switch expression {
+			case .scalar: return []
+			case .vector(let r, let g, let b): return [SIMD3(r, g, b)]
+			case .call(_, let arguments): return arguments.flatMap(vectorLiterals)
+		}
+	}
+
+	@Test func paletteColorReadsHex() {
+		#expect(RandomExpressionGenerator.paletteColor(hex: "#FF0080") == SIMD3(1, 0, 128.0 / 255))
+		#expect(RandomExpressionGenerator.paletteColor(hex: "00ff00") == SIMD3(0, 1, 0))
+		#expect(RandomExpressionGenerator.paletteColor(hex: "#FFF") == nil)
+		#expect(RandomExpressionGenerator.paletteColor(hex: "#GG0000") == nil)
+	}
+
+	/// About `paletteChance` of the vector literals are palette colours
+	/// (rounded to two figures, like any literal).
+	@Test func paletteBiasesVectorLiterals() {
+		var configuration = RandomExpressionGenerator.Configuration()
+		configuration.palette = [SIMD3(0.15, 0.27, 0.33), SIMD3(0.91, 0.44, 0.32)]
+		configuration.paletteChance = 0.3
+		let generator = RandomExpressionGenerator(signatures: bundled.signatures, configuration: configuration)
+		var rng = SeededRandomNumberGenerator(seed: 3)
+		let literals = (0..<2000).flatMap { _ in vectorLiterals(generator.generate(using: &rng)) }
+		let fromPalette = literals.filter { configuration.palette.contains($0) }.count
+		let share = Double(fromPalette) / Double(literals.count)
+		#expect(literals.count > 1000)
+		#expect((0.25...0.35).contains(share), "palette share \(share)")
+	}
+
+	/// No palette means no extra random draw, so a seed gives the same
+	/// genotypes as before palettes existed (families replay unchanged).
+	@Test func emptyPaletteDrawsAsBefore() {
+		var withChance = RandomExpressionGenerator.Configuration()
+		withChance.paletteChance = 1
+		let plain = RandomExpressionGenerator(signatures: bundled.signatures)
+		let empty = RandomExpressionGenerator(signatures: bundled.signatures, configuration: withChance)
+		var a = SeededRandomNumberGenerator(seed: 9)
+		var b = SeededRandomNumberGenerator(seed: 9)
+		for _ in 0..<200 {
+			#expect(plain.generate(using: &a) == empty.generate(using: &b))
+		}
+	}
+
+	@Test func presetsAreValidAndDistinct() {
+		#expect(Set(ColorPalette.presets.map { $0.name.lowercased() }).count == ColorPalette.presets.count)
+		for palette in ColorPalette.presets {
+			#expect(palette.colors.count >= 4, "\(palette.name)")
+			for color in palette.colors {
+				#expect(color == color.uppercased() && RandomExpressionGenerator.paletteColor(hex: color) != nil, "\(palette.name) \(color)")
+			}
+			#expect(ColorPalette.preset(matching: palette.colors) == palette)
+		}
+	}
+
+	@Test func paletteEntriesResolvePresetNames() {
+		let zissou = ColorPalette.preset(named: "zissou")!
+		#expect(ColorPalette.colors(resolving: ["Zissou", "#ffffff"]) == zissou.colors + ["#ffffff"])
+		#expect(ColorPalette.colors(resolving: ["Nope"]) == nil)
+		#expect(ColorPalette.colors(resolving: []) == [])
+	}
+
+	/// Old family settings have no palette keys and decode as off.
+	@Test func familySettingsWithoutPaletteDecode() throws {
+		var settings = Family.Settings()
+		settings.palette = ["#264653"]
+		settings.paletteChance = 0.5
+		var json = try JSONSerialization.jsonObject(with: JSONEncoder().encode(settings)) as! [String: Any]
+		#expect(json["palette"] as? [String] == ["#264653"])
+		json["palette"] = nil
+		json["paletteChance"] = nil
+		let old = try JSONDecoder().decode(Family.Settings.self, from: JSONSerialization.data(withJSONObject: json))
+		#expect(old.palette == nil)
+		#expect(old.generatorConfiguration.palette.isEmpty)
+		#expect(settings.generatorConfiguration.palette.count == 1)
+		#expect(settings.generatorConfiguration.paletteChance == 0.5)
+	}
+
 	@Test func descriptionIsGenotypeText() {
 		let expression = GeneratedExpression.call("color-grad", [
 			.call("bw-noise", [.scalar(0.15), .call("x", [])]),

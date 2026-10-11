@@ -29,6 +29,8 @@ final class FamilyDocument: ReferenceFileDocument {
 		var settings = Family.Settings()
 		settings.excludedRootFunctions = UserDefaults.standard.randomExcludedRootNodes.sorted()
 		settings.excludedVariables = UserDefaults.standard.randomExcludedVariables.sorted()
+		settings.palette = UserDefaults.standard.randomPaletteColors
+		settings.paletteChance = UserDefaults.standard.randomPaletteChance
 		family = Family(settings: settings)
 	}
 

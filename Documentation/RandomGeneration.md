@@ -228,6 +228,45 @@ randomArgument(type, depth):
   (1991 §4.2). A cost check can come later if the multi-tap nodes
   (`blur`, `bump`, `color-grad`) make first generations slow.
 
+## Palette colours
+
+Andy's idea (2026-10-11): pre-chosen colours should turn up a bit more
+often than three uniform randoms would give. When a vector literal is
+drawn, with chance `paletteChance` (default 0.3) it's a palette colour
+instead, rounded to two figures like any literal. This goes for new
+mutation material too, since that comes from the generator.
+
+- The genotype stores a plain `#(r g b)`, not a reference to the
+  palette, so editing the palette never changes a saved genotype, and
+  mutation adjusts the colour like any other vector (so it can drift off
+  the palette).
+- With no palette there's no extra random draw, so a seed gives the same
+  genotypes as before palettes existed.
+- Named presets live in `ExpressionTree/ColorPalette.swift`: Coolors'
+  teal/sand/coral palette, six MetBrewer palettes (Hokusai, Hiroshige,
+  Klimt, Monet, Van Gogh, Isfahan; from paintings at the Met), four
+  wesanderson palettes (Zissou, Grand Budapest, Moonrise Kingdom,
+  Asteroid City) and five stops of viridis. Family Settings has a
+  picker for them, with a swatch row and the palette share.
+- The default for new families is the user default `randomPalette`, an
+  array of `#RRGGBB` colours and preset names (default: `Coolors`), and
+  `randomPaletteChance`. An empty array turns it off:
+
+  ```
+  defaults write com.amolloy.Evolv-io randomPalette -array Hokusai "#FFFFFF"
+  defaults write com.amolloy.Evolv-io randomPaletteChance -float 0.3
+  ```
+
+- A new family copies both into its settings (`palette`,
+  `paletteChance` in `family.json`; `update_family_settings` changes
+  them, and takes preset names too). Families saved before this have none, so they replay as they
+  were made.
+
+A `palette` node (a gradient map from a scalar through the colours) was
+also prototyped as a user node. It only controls colours while nothing
+sits above it in the tree, and a node whose palette changes would
+recolour every genotype using it, so it isn't bundled.
+
 ## Decisions
 
 Andy agreed with the defaults on 2026-09-29:

@@ -97,6 +97,16 @@ public struct RandomExpressionGenerator {
 		public var terminalWeights = TerminalWeights()
 		public var scalarRange: ClosedRange<Double> = -1.0...1.0
 		public var vectorComponentRange: ClosedRange<Double> = 0.0...1.0
+		/// Colours a vector literal is sometimes taken from instead of three
+		/// uniform components, so a palette's colours turn up a bit more
+		/// often than chance. The genotype stores the colour as a plain
+		/// `#(r g b)`, so editing the palette never changes a saved one, and
+		/// mutation nudges it like any other vector. Empty (the default)
+		/// draws exactly as before, so old seeds give the same genotypes.
+		public var palette: [SIMD3<Double>] = []
+		/// Chance a vector literal comes from `palette`, when it isn't empty.
+		public var paletteChance: Double = Self.defaultPaletteChance
+		public static let defaultPaletteChance = 0.3
 		/// Node names never picked at all, as functions or variables.
 		public var excludedFunctions: Set<String> = []
 		/// Node names never picked as the root call, though they can still
@@ -221,6 +231,13 @@ public struct RandomExpressionGenerator {
 			case .scalar:
 				return .scalar(Self.literal(Double.random(in: configuration.scalarRange, using: &rng)))
 			case .vector:
+				// The extra draw only happens with a palette, so seeds made
+				// without one replay unchanged.
+				let palette = configuration.palette
+				if !palette.isEmpty && Double.random(in: 0..<1, using: &rng) < configuration.paletteChance {
+					let color = palette.randomElement(using: &rng)!
+					return .vector(Self.literal(color.x), Self.literal(color.y), Self.literal(color.z))
+				}
 				let range = configuration.vectorComponentRange
 				return .vector(Self.literal(Double.random(in: range, using: &rng)),
 							   Self.literal(Double.random(in: range, using: &rng)),
@@ -228,6 +245,14 @@ public struct RandomExpressionGenerator {
 			case .variable:
 				return .call(fittingVariables.randomElement(using: &rng)!.name, [])
 		}
+	}
+
+	/// `#RRGGBB` (the `#` optional) as 0...1 components, or nil if it
+	/// isn't six hex digits.
+	public static func paletteColor(hex: String) -> SIMD3<Double>? {
+		let digits = hex.hasPrefix("#") ? hex.dropFirst() : Substring(hex)
+		guard digits.count == 6, let value = UInt32(digits, radix: 16) else { return nil }
+		return SIMD3(Double((value >> 16) & 0xFF), Double((value >> 8) & 0xFF), Double(value & 0xFF)) / 255
 	}
 
 	/// Two significant figures, like the constants in Sims' genotypes.
@@ -259,6 +284,42 @@ extension UserDefaults {
 			return RandomExpressionGenerator.Configuration.defaultExcludedVariables
 		}
 		return Set(names)
+	}
+}
+
+extension UserDefaults {
+	public static let randomPaletteKey = "randomPalette"
+	public static let randomPaletteChanceKey = "randomPaletteChance"
+
+	/// The Coolors preset, so the feature is on until Andy picks a palette.
+	public static let defaultRandomPalette = ["Coolors"]
+
+	/// Colours `RandomExpressionGenerator` sometimes takes vector literals
+	/// from, as `#RRGGBB` colours and ColorPalette preset names; an empty
+	/// array turns it off. No UI edits the app-wide default; change it with
+	/// `defaults write <bundle id> randomPalette -array Hokusai "#FFFFFF"`.
+	public var randomPalette: [String] {
+		stringArray(forKey: Self.randomPaletteKey) ?? Self.defaultRandomPalette
+	}
+
+	/// `randomPalette` as `#RRGGBB` colours, skipping entries that are
+	/// neither a colour nor a preset.
+	public var randomPaletteColors: [String] {
+		randomPalette.flatMap { ColorPalette.colors(resolving: [$0]) ?? [] }
+	}
+
+	/// Chance a vector literal comes from `randomPalette`, 0...1.
+	/// `defaults write <bundle id> randomPaletteChance -float 0.3`.
+	public var randomPaletteChance: Double {
+		object(forKey: Self.randomPaletteChanceKey) == nil
+			? RandomExpressionGenerator.Configuration.defaultPaletteChance
+			: double(forKey: Self.randomPaletteChanceKey)
+	}
+
+	/// `randomPalette` and `randomPaletteChance` applied to `configuration`.
+	public func applyRandomPalette(to configuration: inout RandomExpressionGenerator.Configuration) {
+		configuration.palette = randomPaletteColors.compactMap(RandomExpressionGenerator.paletteColor(hex:))
+		configuration.paletteChance = randomPaletteChance
 	}
 }
 
