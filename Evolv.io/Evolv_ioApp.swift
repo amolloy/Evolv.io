@@ -55,7 +55,8 @@ struct Evolv_ioApp: App {
             CommandGroup(after: .newItem) {
                 OpenGenotypeMenuItem()
             }
-            CommandGroup(replacing: .saveItem) {
+            // After, not replacing, the document Save items families use.
+            CommandGroup(after: .saveItem) {
                 SaveGenotypeMenuItem()
             }
 #endif
@@ -96,6 +97,12 @@ struct Evolv_ioApp: App {
         .restorationBehavior(.disabled)
         .windowResizability(.contentSize)
 #endif
+
+        // A family (see Documentation/EvolutionUI.md), through the standard
+        // File > New, Open and Save.
+        DocumentGroup(newDocument: { FamilyDocument() }) { file in
+            FamilyWindowView(document: file.document)
+        }
     }
 
     static let genotypeLibraryWindowID = "genotype-library"
@@ -127,7 +134,8 @@ private struct OpenGenotypeMenuItem: View {
                 openWindow(id: Evolv_ioApp.genotypeWindowID, value: opened)
             }
         }
-        .keyboardShortcut("o")
+        // Shift, since Command-O opens a family.
+        .keyboardShortcut("o", modifiers: [.command, .shift])
     }
 }
 
@@ -140,7 +148,8 @@ private struct SaveGenotypeMenuItem: View {
         Button("Save Genotype…") {
             saveGenotype?()
         }
-        .keyboardShortcut("s")
+        // Option, since Command-S saves a family.
+        .keyboardShortcut("s", modifiers: [.command, .option])
         .disabled(saveGenotype == nil)
     }
 }

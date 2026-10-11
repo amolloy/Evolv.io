@@ -249,14 +249,21 @@ version unless wanted.
 - `ExpressionTree/FamilyLayout.swift`: the lineage view's layout, as
   frames for each member and litter plus connectors.
 - `ExpressionTreeTests/FamilyTests.swift`.
+- `Evolv.io/Family/FamilyDocument.swift`: the document, with undo.
+- `Evolv.io/Family/FamilyWindowView.swift`: the lineage view.
 
 ## Phases
 
 1. **Format and model** (done) in `ExpressionTree`: `Family`, `Litter`,
    `Member`, JSON coding, generation and band layout as pure functions,
    with tests (round-trip, reject rules, layout stability).
-2. **Document**: `FamilyDocument`, the exported type, New/Open Family,
-   undo for breed and reject.
+2. **Document** (done): `FamilyDocument`, the exported type, New/Open Family,
+   undo for breed and reject. File > Open Genotype moved to Shift-Command-O
+   and Save Genotype to Option-Command-S, since Command-O and Command-S
+   now open and save families. A first cut of the lineage view came with
+   it (`Evolv.io/Family/FamilyWindowView.swift`): layout, connectors,
+   selection, breed, reject, star, collapse and an in-memory thumbnail
+   cache.
 3. **Lineage view**: layout, connectors, full-size vs chip cells,
    breeding from the selection, the thumbnail cache, the existing context
    menu. Remove the Random Grid window.
