@@ -97,6 +97,7 @@
 		B4D08EB13065C64D0032F85D /* EvolvNodeFormat.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = EvolvNodeFormat.md; sourceTree = "<group>"; };
 		B4D08F193065C9ED0032F85D /* Bump.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = Bump.md; sourceTree = "<group>"; };
 		B4D08F1A3065C9ED0032F85D /* ColorGradient.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = ColorGradient.md; sourceTree = "<group>"; };
+		B4E5C0013080000000A00000 /* EvolvScorer */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = EvolvScorer; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -123,6 +124,11 @@
 		B448795C2DF60DE9005212B0 /* ExpressionTreeTests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = ExpressionTreeTests;
+			sourceTree = "<group>";
+		};
+		B4E5C0023080000000A00000 /* EvolvScorer */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = EvolvScorer;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -166,6 +172,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		B4E5C0073080000000A00000 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -178,6 +191,7 @@
 				B44879332DF60A69005212B0 /* Evolv.ioUITests */,
 				B448794F2DF60DE9005212B0 /* ExpressionTree */,
 				B448795C2DF60DE9005212B0 /* ExpressionTreeTests */,
+				B4E5C0023080000000A00000 /* EvolvScorer */,
 				B44879192DF60A68005212B0 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -190,6 +204,7 @@
 				B44879302DF60A69005212B0 /* Evolv.ioUITests.xctest */,
 				B448794E2DF60DE9005212B0 /* ExpressionTree.framework */,
 				B44879562DF60DE9005212B0 /* ExpressionTreeTests.xctest */,
+				B4E5C0013080000000A00000 /* EvolvScorer */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -349,6 +364,27 @@
 			productReference = B44879562DF60DE9005212B0 /* ExpressionTreeTests.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
 		};
+		B4E5C0003080000000A00000 /* EvolvScorer */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = B4E5C0033080000000A00000 /* Build configuration list for PBXNativeTarget "EvolvScorer" */;
+			buildPhases = (
+				B4E5C0063080000000A00000 /* Sources */,
+				B4E5C0073080000000A00000 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				B4E5C0023080000000A00000 /* EvolvScorer */,
+			);
+			name = EvolvScorer;
+			packageProductDependencies = (
+			);
+			productName = EvolvScorer;
+			productReference = B4E5C0013080000000A00000 /* EvolvScorer */;
+			productType = "com.apple.product-type.tool";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -377,6 +413,9 @@
 						CreatedOnToolsVersion = 16.4;
 						TestTargetID = B44879172DF60A68005212B0;
 					};
+					B4E5C0003080000000A00000 = {
+						CreatedOnToolsVersion = 27.1;
+					};
 				};
 			};
 			buildConfigurationList = B44879132DF60A67005212B0 /* Build configuration list for PBXProject "Evolv.io" */;
@@ -401,6 +440,7 @@
 				B448792F2DF60A69005212B0 /* Evolv.ioUITests */,
 				B448794D2DF60DE9005212B0 /* ExpressionTree */,
 				B44879552DF60DE9005212B0 /* ExpressionTreeTests */,
+				B4E5C0003080000000A00000 /* EvolvScorer */,
 			);
 		};
 /* End PBXProject section */
@@ -482,6 +522,13 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		B44879522DF60DE9005212B0 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		B4E5C0063080000000A00000 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -951,6 +998,34 @@
 			};
 			name = Release;
 		};
+		B4E5C0043080000000A00000 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				DEAD_CODE_STRIPPING = YES;
+				DEVELOPMENT_TEAM = HWPK93F3PW;
+				ENABLE_HARDENED_RUNTIME = YES;
+				PRODUCT_BUNDLE_IDENTIFIER = com.amolloy.EvolvScorer;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		B4E5C0053080000000A00000 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				DEAD_CODE_STRIPPING = YES;
+				DEVELOPMENT_TEAM = HWPK93F3PW;
+				ENABLE_HARDENED_RUNTIME = YES;
+				PRODUCT_BUNDLE_IDENTIFIER = com.amolloy.EvolvScorer;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -1004,6 +1079,15 @@
 			buildConfigurations = (
 				B44879682DF60DE9005212B0 /* Debug */,
 				B44879692DF60DE9005212B0 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		B4E5C0033080000000A00000 /* Build configuration list for PBXNativeTarget "EvolvScorer" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				B4E5C0043080000000A00000 /* Debug */,
+				B4E5C0053080000000A00000 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
