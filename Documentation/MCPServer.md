@@ -271,6 +271,35 @@ first, so it's cell 0 and child *n* is cell *n*. Source:
 - An expression that fails to parse or render is a grey cell and listed in
   the text block. The whole sheet is limited to 8192 pixels per side.
 
+### Family tools
+
+Tools on the family documents open in windows (see
+[EvolutionUI.md](EvolutionUI.md)). Each family window registers its
+document with `OpenFamilies` while it's open; changes go through
+`FamilyDocument` like the window's own, so they show at once, mark the
+document edited and can be undone in the window. `family` is an id from
+`list_families` (`f1`), the family's name or its path, and can be left out
+when only one is open. Source: `Evolv.io/MCP/MCPFamilyTools.swift`.
+
+- `list_families()`: id, name, path (once saved), and member, litter and
+  generation counts.
+- `read_family(family, generation, include_mutations)`: settings, litters
+  (id, kind, parents, generation, seed, source, member ids) and members
+  (id, litter, index, generation, expression, `bred_from`, name, starred,
+  and with `include_mutations` the mutation log). `generation` limits it to
+  one column.
+- `breed_family(family, parents, seed)`: one litter from each parent, as
+  Return does in the window. With `seed`, the first litter uses it and the
+  next `seed + 1`; the same parent and seed give the same children as
+  `mutate_genotype` with the family's settings.
+- `reject_family_members(family, members, include_descendants)`: fails on
+  a member with descendants unless `include_descendants` is true.
+- `update_family_member(family, member, name, starred)`: `""` removes the
+  name.
+
+New families can't be made over MCP yet; make one in the app (File > New,
+or Start Family From This in the library).
+
 ## What's *not* exposed yet
 
 A `list_nodes`/`get_node` read-back tool for the user Nodes folder.

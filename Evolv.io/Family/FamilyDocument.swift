@@ -108,11 +108,13 @@ final class FamilyDocument: ReferenceFileDocument {
 
 	/// One litter from each of `parentIDs`, in family order, as one undo.
 	@discardableResult
-	func breed(_ parentIDs: Set<String>, undoManager: UndoManager?) throws -> [Family.Litter] {
+	/// With `seed`, the first litter uses it, the next `seed + 1` and so on.
+	func breed(_ parentIDs: Set<String>, seed: UInt64? = nil, undoManager: UndoManager?) throws -> [Family.Litter] {
 		let ordered = family.members.map(\.id).filter(parentIDs.contains)
 		return try change(ordered.count == 1 ? "Breed" : "Breed \(ordered.count)", undoManager: undoManager) { family in
-			try ordered.map { parent in
-				try family.breed(parent, signatures: NodeRegistry.shared.signatures, seed: UInt64.random(in: 0...UInt64.max))
+			try ordered.enumerated().map { index, parent in
+				let litterSeed = seed.map { $0 &+ UInt64(index) } ?? UInt64.random(in: 0...UInt64.max)
+				return try family.breed(parent, signatures: NodeRegistry.shared.signatures, seed: litterSeed)
 			}
 		}
 	}

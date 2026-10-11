@@ -45,7 +45,7 @@ struct Evolv_ioApp: App {
         // File > New, Open and Save. Before the genotype window, so File > New
         // makes a family.
         DocumentGroup(newDocument: { FamilyDocument() }) { file in
-            FamilyWindowView(document: file.document)
+            FamilyWindowView(document: file.document, fileURL: file.fileURL)
         }
         .commands {
 #if os(macOS)

@@ -239,13 +239,52 @@ second parent. That's the usual family-tree compromise. Nothing in the file
 format changes: a mating litter is a litter with two `parents`. Mating
 itself (crossover, graft) is a separate piece of work after this.
 
+## Mating (plan)
+
+### What Sims says
+
+1991 §4.3 gives two methods; 1993 §2.2 keeps only the second.
+
+- **Crossover** (needs similar parents): walk both trees together, copying
+  nodes; wherever they differ, copy one parent's version with equal
+  chance. His example, `(* (abs X) (mod X Y))` with `(* (/ Y X) (* X -.7))`,
+  can only make 4 children, two of them the parents. Parents with
+  different roots make nothing new ("two different species").
+- **Graft** ("crossing over"): pick a random node of one parent and
+  replace it with a random node of the other. Any part of either can land
+  anywhere in the other; his example pair gives 61 different children.
+  1993 adds that the result is checked for legal syntax and redrawn if
+  it isn't.
+- Nothing on probabilities, on which parent receives the graft, or on
+  mutating mated children (1993's dynamical systems say "mutation and/or
+  mating", nothing more).
+
+### Proposal
+
+- **Select two members and Mate** (Shift-Return, toolbar, context menu).
+  The first one selected is the primary parent, so the selection keeps
+  its order. The litter is a `mating` litter with both as `parents`, and
+  a `method`: `graft` or `crossover`.
+- **Graft is the default** (Sims kept only it), into the primary parent:
+  each child is the primary parent with one random node replaced by a
+  random node of the second parent. It reuses the mutator's typing, so a
+  vector slot gets a vector-fitting node and the root stays a call, and
+  the same size cap; a child equal to either parent is redrawn.
+- **Crossover** is the other method, from the Mate menu. Children are
+  drawn with Sims' coin flips, duplicates and copies of either parent
+  are dropped, so its litter is often smaller than 19, and parents with
+  different roots say so instead of making an empty litter.
+- **No mutation on top** of mating, so a mated child shows only what the
+  parents had. Breeding it afterwards mutates it as usual.
+- Same seed, same children, as for breeding, with a `mate_genotypes` MCP
+  tool and `mate_family` for open families.
+
 ## 4. MCP
 
-The existing tools stay stateless. Later, a few tools on the open
-document would let me test the UI and help breed:
-`list_families`, `read_family` (members, litters, generations),
-`breed` and `reject` on a member of an open family. Not in the first
-version unless wanted.
+The existing tools stay stateless. The family tools work on the families
+open in windows: `list_families`, `read_family`, `breed_family`,
+`reject_family_members` and `update_family_member` (see
+[MCPServer.md](MCPServer.md#family-tools)).
 
 ## Where it lives
 
@@ -282,7 +321,7 @@ version unless wanted.
    Family From This (library sidebar context menu), and **Add Roots >
    Paste Genotype** for a copied expression. Each litter is outlined
    (`FamilyLayout.litterOutlines`).
-5. **Later**: MCP family tools, mating.
+5. **MCP family tools** (done), then **mating**.
 
 ## Decisions
 

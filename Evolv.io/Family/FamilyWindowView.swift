@@ -16,6 +16,8 @@ import ExpressionTree
 
 struct FamilyWindowView: View {
 	@ObservedObject var document: FamilyDocument
+	/// Where it's saved, for the MCP family tools; nil until first saved.
+	let fileURL: URL?
 
 	@Environment(\.undoManager) private var undoManager
 	@AppStorage("familyThumbnailSize") private var thumbnailSize: Double = 128
@@ -63,6 +65,9 @@ struct FamilyWindowView: View {
 			}
 		}
 		.frame(minWidth: 480, minHeight: 360)
+		.onAppear { OpenFamilies.shared.register(document, fileURL: fileURL, undoManager: undoManager) }
+		.onChange(of: fileURL) { _, url in OpenFamilies.shared.register(document, fileURL: url, undoManager: undoManager) }
+		.onDisappear { OpenFamilies.shared.unregister(document) }
 #if os(macOS)
 		.navigationSubtitle(family.members.isEmpty ? "" : "\(family.members.count) genotypes")
 #endif

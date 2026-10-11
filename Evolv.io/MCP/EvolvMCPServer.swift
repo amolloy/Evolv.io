@@ -119,7 +119,7 @@ actor EvolvMCPServer {
                 MCPGenerateTool.tool,
                 MCPMutateTool.tool,
                 MCPRenderGridTool.tool,
-            ] + MCPGenotypeTools.tools)
+            ] + MCPGenotypeTools.tools + MCPFamilyTools.tools)
         }
 
         await server.withMethodHandler(CallTool.self) { params in
@@ -147,6 +147,9 @@ actor EvolvMCPServer {
                 return await MCPRenderGridTool.call(arguments: params.arguments)
             default:
                 if let result = await MCPGenotypeTools.call(name: params.name, arguments: params.arguments) {
+                    return result
+                }
+                if let result = await MCPFamilyTools.call(name: params.name, arguments: params.arguments) {
                     return result
                 }
                 return errorResult("Unknown tool: \(params.name)")
