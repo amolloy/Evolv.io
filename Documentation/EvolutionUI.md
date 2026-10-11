@@ -159,8 +159,10 @@ stepper and context menu move here).
   order.
 - **Members someone has bred from are shown full size; unexplored siblings
   in a litter that already has a bred-from member shrink to small chips**
-  in a wrapped mini-grid (a third of the thumbnail size). **Show Siblings
-  Full Size** on a litter's context menu expands them again. A
+  in a wrapped mini-grid (a third of the thumbnail size). A button on the
+  top right of the litter's outline (or **Show Siblings Full Size** on the
+  context menu) expands them again and shrinks them back; it's saved as
+  the litter's `expanded` flag, so the family reopens the same way. A
   litter nobody has bred from yet (the newest) shows everyone full size.
   This is what keeps the view usable: a 19-child litter you've moved past
   costs a few rows of chips, not 19 thumbnails. Chips stay in litter

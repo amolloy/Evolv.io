@@ -253,6 +253,18 @@ struct FamilyLayoutTests {
 		#expect(layout.connectors.contains { $0.parent == children[7].id && $0.from == CGPoint(x: offPath.maxX, y: offPath.midY) })
 	}
 
+	@Test func anExpandedLitterKeepsEverySiblingFullSize() throws {
+		var family = try twoGenerations()
+		let roots = family.litters[0].id
+		family.updateLitter(roots) { $0.expanded = true }
+		let layout = FamilyLayout(family: family, metrics: metrics)
+		#expect(family.members(ofLitter: roots).allSatisfy { layout.cells[$0.id]?.isChip == false })
+		#expect(try Family(json: family.json()).litters[0].expanded)
+		// Show Path still shrinks it.
+		let focused = FamilyLayout(family: family, metrics: metrics, focus: [family.members[0].id])
+		#expect(focused.cells[family.members[1].id]?.isChip == true)
+	}
+
 	@Test func collapsedMembersHideTheirBranch() throws {
 		var family = try twoGenerations()
 		let parent = family.members[0].id

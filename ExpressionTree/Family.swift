@@ -107,13 +107,16 @@ public struct Family: Equatable, Sendable {
 		public let source: String?
 		/// How a `mating` litter was made: a MatingMethod raw value.
 		public let method: String?
+		/// View state: the lineage view shows every member full size, even
+		/// once someone in the litter has been bred from.
+		public var expanded: Bool = false
 		/// The settings the litter was made with, for `random` and
 		/// `mutation`.
 		public let settings: Settings?
 		public let created: Date
 
 		enum CodingKeys: String, CodingKey {
-			case id, kind, parents, seed, source, method, settings, created
+			case id, kind, parents, seed, source, method, settings, created, expanded
 		}
 
 		public init(id: String, kind: Kind, parents: [String], seed: UInt64?, source: String?, method: String? = nil,
@@ -145,6 +148,7 @@ public struct Family: Equatable, Sendable {
 			method = try container.decodeIfPresent(String.self, forKey: .method)
 			settings = try container.decodeIfPresent(Settings.self, forKey: .settings)
 			created = try container.decode(Date.self, forKey: .created)
+			expanded = try container.decodeIfPresent(Bool.self, forKey: .expanded) ?? false
 		}
 
 		public func encode(to encoder: Encoder) throws {
@@ -157,6 +161,7 @@ public struct Family: Equatable, Sendable {
 			try container.encodeIfPresent(method, forKey: .method)
 			try container.encodeIfPresent(settings, forKey: .settings)
 			try container.encode(created, forKey: .created)
+			if expanded { try container.encode(expanded, forKey: .expanded) }
 		}
 	}
 
@@ -458,6 +463,12 @@ public struct Family: Equatable, Sendable {
 		let remainingLitters = Set(members.map(\.litter))
 		litters.removeAll { !remainingLitters.contains($0.id) }
 		return removed
+	}
+
+	/// Changes a litter's view state.
+	public mutating func updateLitter(_ litterID: String, _ change: (inout Litter) -> Void) {
+		guard let index = litters.firstIndex(where: { $0.id == litterID }) else { return }
+		change(&litters[index])
 	}
 
 	/// Changes a member's name, star or collapsed state.

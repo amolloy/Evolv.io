@@ -156,6 +156,12 @@ final class FamilyDocument: ReferenceFileDocument {
 		}
 	}
 
+	func setExpanded(_ expanded: Bool, litter litterID: String, undoManager: UndoManager?) {
+		change(expanded ? "Show Siblings Full Size" : "Shrink Siblings", undoManager: undoManager) { family in
+			family.updateLitter(litterID) { $0.expanded = expanded }
+		}
+	}
+
 	func setCollapsed(_ collapsed: Bool, for memberID: String, undoManager: UndoManager?) {
 		change(collapsed ? "Collapse Branch" : "Expand Branch", undoManager: undoManager) { family in
 			family.update(memberID) { $0.collapsed = collapsed }

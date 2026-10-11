@@ -26,7 +26,6 @@ struct FamilyWindowView: View {
 	/// The order members were added to the selection, so the first of two
 	/// picked for mating is the primary parent.
 	@State private var selectionOrder: [String] = []
-	@State private var expandedLitters: Set<String> = []
 	@State private var fullSize: RandomGenotype?
 	@State private var pendingReject: PendingReject?
 	@State private var errorMessage: String?
@@ -160,7 +159,7 @@ struct FamilyWindowView: View {
 
 	private var lineage: some View {
 		let path = highlightedPath
-		let layout = FamilyLayout(family: family, metrics: metrics, expandedLitters: expandedLitters, focus: path)
+		let layout = FamilyLayout(family: family, metrics: metrics, focus: path)
 		let byID = Dictionary(uniqueKeysWithValues: family.members.map { ($0.id, $0) })
 		// Cells within a screen of the visible area, in content coordinates
 		// (the layout's, offset by the margin).
@@ -176,6 +175,11 @@ struct FamilyWindowView: View {
 						cellView(member, cell: cell, hidden: layout.hiddenDescendants[id])
 							.opacity(path == nil || path!.contains(id) ? 1 : 0.5)
 							.position(x: cell.frame.midX, y: cell.frame.midY)
+					}
+				}
+				if path == nil {
+					ForEach(family.litters.filter { layout.litterOutlines[$0.id] != nil && canShrink($0) }, id: \.id) { litter in
+						siblingToggle(litter, outline: layout.litterOutlines[litter.id]!)
 					}
 				}
 			}
@@ -220,6 +224,40 @@ struct FamilyWindowView: View {
 		metrics.chipSize = max(24, (thumbnailSize - 2 * metrics.chipSpacing) / 3)
 		metrics.columnSpacing = max(32, thumbnailSize / 3)
 		return metrics
+	}
+
+	/// Whether a litter has siblings that shrink to chips: someone in it
+	/// has been bred from, and someone else hasn't (and isn't starred).
+	private func canShrink(_ litter: Family.Litter) -> Bool {
+		let members = family.members(ofLitter: litter.id)
+		let bred = members.filter { family.hasBeenBredFrom($0.id) }
+		return !bred.isEmpty && members.contains { !family.hasBeenBredFrom($0.id) && !$0.starred }
+	}
+
+	/// The expand/shrink button on a litter's outline, at its top right.
+	private func siblingToggle(_ litter: Family.Litter, outline: CGRect) -> some View {
+		Button {
+			toggleExpanded(litter)
+		} label: {
+			Image(systemName: litter.expanded ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right")
+				.font(.system(size: 10, weight: .semibold))
+				.frame(width: 20, height: 20)
+				.background(.regularMaterial, in: Circle())
+				.overlay(Circle().stroke(.secondary.opacity(0.6), lineWidth: 1))
+		}
+		.buttonStyle(.plain)
+		.help(litter.expanded ? "Shrink the unexplored siblings" : "Show every sibling full size")
+		.position(x: outline.maxX, y: outline.minY)
+	}
+
+	/// Expands or shrinks a litter's siblings, keeping its first member in
+	/// place on screen.
+	private func toggleExpanded(_ litter: Family.Litter) {
+		let before = currentLayout()
+		document.setExpanded(!litter.expanded, litter: litter.id, undoManager: undoManager)
+		if let anchor = family.members(ofLitter: litter.id).first?.id {
+			keepInPlace(anchor, before: before, revealing: nil)
+		}
 	}
 
 	/// The highlighted member and its ancestors, or nil when no path is
@@ -342,10 +380,8 @@ struct FamilyWindowView: View {
 				document.setCollapsed(!member.collapsed, for: member.id, undoManager: undoManager)
 			}
 		}
-		if expandedLitters.contains(member.litter) {
-			Button("Shrink Unexplored Siblings") { expandedLitters.remove(member.litter) }
-		} else if family.members(ofLitter: member.litter).contains(where: { family.hasBeenBredFrom($0.id) }) {
-			Button("Show Siblings Full Size") { expandedLitters.insert(member.litter) }
+		if let litter = family.litter(id: member.litter), canShrink(litter) {
+			Button(litter.expanded ? "Shrink Siblings" : "Show Siblings Full Size") { toggleExpanded(litter) }
 		}
 		Divider()
 		Button("Show Full Size") { showFullSize(member) }
@@ -529,7 +565,7 @@ struct FamilyWindowView: View {
 #endif
 
 	private func currentLayout() -> FamilyLayout {
-		FamilyLayout(family: family, metrics: metrics, expandedLitters: expandedLitters, focus: highlightedPath)
+		FamilyLayout(family: family, metrics: metrics, focus: highlightedPath)
 	}
 
 	/// Shows (or with nil, hides) the path to `memberID`. Everything off

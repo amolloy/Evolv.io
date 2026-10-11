@@ -66,8 +66,9 @@ public struct FamilyLayout: Equatable, Sendable {
 	public private(set) var size: CGSize = .zero
 
 	/// - Parameters:
-	///   - expandedLitters: litters to show every member of full size, even
-	///     though someone in them has been bred from.
+	///   - expandedLitters: more litters to show every member of full size,
+	///     even though someone in them has been bred from, besides those
+	///     marked `expanded` in the family.
 	///   - focus: when set (Show Path), only these members are full size;
 	///     everyone else is a chip, `expandedLitters` notwithstanding.
 	public init(family: Family, metrics: Metrics = Metrics(), expandedLitters: Set<String> = [], focus: Set<String>? = nil) {
@@ -122,7 +123,7 @@ public struct FamilyLayout: Equatable, Sendable {
 			let column = litter.parents.map { (generations[$0] ?? -1) + 1 }.max() ?? 0
 			let x = CGFloat(column) * (metrics.cellSize + metrics.columnSpacing)
 			let members = membersByLitter[litter.id] ?? []
-			let showAll = expandedLitters.contains(litter.id) || !members.contains { bredFrom.contains($0.id) }
+			let showAll = litter.expanded || expandedLitters.contains(litter.id) || !members.contains { bredFrom.contains($0.id) }
 
 			var y = top
 			var first = true
