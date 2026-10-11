@@ -83,6 +83,7 @@ public struct FamilyLayout: Equatable, Sendable {
 		/// Litters by their first parent, in the order they were made.
 		let littersByPrimaryParent: [String: [Family.Litter]]
 		let bredFrom: Set<String>
+		let membersByLitter: [String: [Family.Member]]
 
 		var cells: [String: Cell] = [:]
 		var litterFrames: [String: CGRect] = [:]
@@ -96,14 +97,15 @@ public struct FamilyLayout: Equatable, Sendable {
 			generations = family.generations()
 			littersByPrimaryParent = Dictionary(grouping: family.litters.filter { !$0.parents.isEmpty }, by: { $0.parents[0] })
 			bredFrom = Set(family.litters.flatMap(\.parents))
+			membersByLitter = Dictionary(grouping: family.members, by: \.litter).mapValues { $0.sorted { $0.index < $1.index } }
 		}
 
 		/// Lays out `litter` and everything bred from its members, starting
 		/// at `top`. Returns the bottom of the lowest thing placed.
 		mutating func place(_ litter: Family.Litter, top: CGFloat) -> CGFloat {
-			let column = family.generation(ofLitter: litter.id, generations: generations)
+			let column = litter.parents.map { (generations[$0] ?? -1) + 1 }.max() ?? 0
 			let x = CGFloat(column) * (metrics.cellSize + metrics.columnSpacing)
-			let members = family.members(ofLitter: litter.id)
+			let members = membersByLitter[litter.id] ?? []
 			let showAll = expandedLitters.contains(litter.id) || !members.contains { bredFrom.contains($0.id) }
 
 			var y = top

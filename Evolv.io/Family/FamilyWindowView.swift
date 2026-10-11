@@ -5,9 +5,9 @@
 //  A family document's window: the lineage view, generations left to
 //  right, laid out by FamilyLayout. Click selects (Command-click and
 //  Shift-click add), Return breeds a litter from each selected member,
-//  Delete rejects, double-click shows full size. A first cut: thumbnails
-//  are cached in memory only and everything visible or not is rendered.
-//  See Documentation/EvolutionUI.md.
+//  Delete rejects, double-click shows full size. Only cells near the
+//  visible area exist, so only they render (see FamilyThumbnails). See
+//  Documentation/EvolutionUI.md.
 //
 
 import SwiftUI
@@ -23,7 +23,20 @@ struct FamilyWindowView: View {
 	@State private var fullSize: RandomGenotype?
 	@State private var pendingReject: PendingReject?
 	@State private var errorMessage: String?
-	@State private var scrollTarget: String?
+	@State private var savingMember: Family.Member?
+	@State private var showingSettings = false
+	@State private var scrollPosition = ScrollPosition()
+	/// The visible part of the scroll view's content, padding included,
+	/// updated only every quarter screen of scrolling, since it decides
+	/// which cells exist.
+	@State private var visibleRect = CGRect.zero
+	/// The exact visible rect, which changes every frame of a scroll
+	/// without redrawing anything.
+	@State private var scrollTracker = ScrollTracker()
+
+	private final class ScrollTracker {
+		var visibleRect = CGRect.zero
+	}
 	@FocusState private var isFocused: Bool
 
 	private static let margin: CGFloat = 20
@@ -60,6 +73,9 @@ struct FamilyWindowView: View {
 					}
 			}
 		}
+		.sheet(item: $savingMember) { member in
+			SaveGenotypeSheet(expression: member.expression)
+		}
 		.confirmationDialog(rejectTitle, isPresented: Binding(get: { pendingReject != nil }, set: { if !$0 { pendingReject = nil } }),
 							presenting: pendingReject) { pending in
 			Button("Reject \(pending.members.count + pending.descendants)", role: .destructive) {
@@ -90,30 +106,35 @@ struct FamilyWindowView: View {
 	// MARK: - Lineage
 
 	private var lineage: some View {
-		let metrics = metrics
 		let layout = FamilyLayout(family: family, metrics: metrics, expandedLitters: expandedLitters)
 		let byID = Dictionary(uniqueKeysWithValues: family.members.map { ($0.id, $0) })
-		return ScrollViewReader { proxy in
-			ScrollView([.horizontal, .vertical]) {
-				ZStack(alignment: .topLeading) {
-					connectors(layout)
-					ForEach(Array(layout.cells.keys.sorted()), id: \.self) { id in
-						if let cell = layout.cells[id], let member = byID[id] {
-							cellView(member, cell: cell, hidden: layout.hiddenDescendants[id])
-								.position(x: cell.frame.midX, y: cell.frame.midY)
-								.id(id)
-						}
+		// Cells within a screen of the visible area, in content coordinates
+		// (the layout's, offset by the margin).
+		let margin = Self.margin
+		let nearby = visibleRect.isEmpty ? CGRect(origin: .zero, size: CGSize(width: 2000, height: 2000))
+			: visibleRect.insetBy(dx: -visibleRect.width / 2, dy: -visibleRect.height / 2)
+		let shown = layout.cells.filter { nearby.intersects($0.value.frame.offsetBy(dx: margin, dy: margin)) }
+		return ScrollView([.horizontal, .vertical]) {
+			ZStack(alignment: .topLeading) {
+				connectors(layout)
+				ForEach(Array(shown.keys.sorted()), id: \.self) { id in
+					if let cell = shown[id], let member = byID[id] {
+						cellView(member, cell: cell, hidden: layout.hiddenDescendants[id])
+							.position(x: cell.frame.midX, y: cell.frame.midY)
 					}
 				}
-				.frame(width: layout.size.width, height: layout.size.height, alignment: .topLeading)
-				.padding(Self.margin)
-				.contentShape(Rectangle())
-				.onTapGesture { selection = [] }
 			}
-			.onChange(of: scrollTarget) { _, target in
-				guard let target else { return }
-				withAnimation { proxy.scrollTo(target, anchor: .leading) }
-				scrollTarget = nil
+			.frame(width: layout.size.width, height: layout.size.height, alignment: .topLeading)
+			.padding(margin)
+			.contentShape(Rectangle())
+			.onTapGesture { selection = [] }
+		}
+		.scrollPosition($scrollPosition)
+		.onScrollGeometryChange(for: CGRect.self, of: \.visibleRect) { _, rect in
+			scrollTracker.visibleRect = rect
+			if abs(rect.minX - visibleRect.minX) > rect.width / 4 || abs(rect.minY - visibleRect.minY) > rect.height / 4
+				|| rect.size != visibleRect.size {
+				visibleRect = rect
 			}
 		}
 		.focusable()
@@ -216,6 +237,8 @@ struct FamilyWindowView: View {
 		Button("Save to Library…") {
 			if let genotype = randomGenotype(member) { GenotypeFilePanels.save(genotype) }
 		}
+#else
+		Button("Save to Library…") { savingMember = member }
 #endif
 		Divider()
 		Button(targets.count == 1 ? "Reject" : "Reject \(targets.count)", role: .destructive) { requestReject(targets) }
@@ -229,6 +252,13 @@ struct FamilyWindowView: View {
 			}
 			.frame(width: 120)
 			.help("Thumbnail size")
+		}
+		ToolbarItem {
+			Button("Family Settings", systemImage: "slider.horizontal.3") { showingSettings = true }
+				.help("Litter size, mutation rate and depth for new litters")
+				.popover(isPresented: $showingSettings) {
+					FamilySettingsView(document: document)
+				}
 		}
 		ToolbarItem {
 			Button("New Random Litter", systemImage: "dice") { addRandomLitter() }
@@ -261,23 +291,44 @@ struct FamilyWindowView: View {
 
 	private func addRandomLitter() {
 		let litter = document.addRandomLitter(undoManager: undoManager)
-		scrollTarget = family.members(ofLitter: litter.id).first?.id
+		// Root litters go at the bottom of the first column.
+		let layout = FamilyLayout(family: family, metrics: metrics, expandedLitters: expandedLitters)
+		if let frame = layout.litterFrames[litter.id] {
+			scrollPosition.scrollTo(point: CGPoint(x: 0, y: max(0, frame.minY)))
+		}
 	}
 
 	private func breedSelection() {
 		breed(selection)
 	}
 
+	/// Breeds, keeping the first parent where it was on screen (the first
+	/// breed from a litter shrinks its siblings, which moves the parent),
+	/// then scrolling right if the new litter is off screen.
 	private func breed(_ parents: Set<String>) {
 		guard !parents.isEmpty else { return }
+		let anchor = family.members.map(\.id).first(where: parents.contains)
+		let before = FamilyLayout(family: family, metrics: metrics, expandedLitters: expandedLitters)
+		let litters: [Family.Litter]
 		do {
-			let litters = try document.breed(parents, undoManager: undoManager)
-			if let first = litters.first {
-				scrollTarget = family.members(ofLitter: first.id).first?.id
-			}
+			litters = try document.breed(parents, undoManager: undoManager)
 		} catch {
 			errorMessage = error.localizedDescription
+			return
 		}
+		let after = FamilyLayout(family: family, metrics: metrics, expandedLitters: expandedLitters)
+		let visibleRect = scrollTracker.visibleRect
+		guard !visibleRect.isEmpty, let anchor, let old = before.cells[anchor]?.frame, let new = after.cells[anchor]?.frame else { return }
+		var offset = CGPoint(x: visibleRect.minX, y: visibleRect.minY + new.minY - old.minY)
+		if let first = litters.first, let litterFrame = after.litterFrames[first.id] {
+			let right = litterFrame.maxX + 2 * Self.margin
+			if right > offset.x + visibleRect.width {
+				offset.x = right - visibleRect.width
+			}
+		}
+		offset.x = max(0, offset.x)
+		offset.y = max(0, offset.y)
+		scrollPosition.scrollTo(point: offset)
 	}
 
 	private func rejectSelection() {
@@ -325,16 +376,13 @@ struct FamilyWindowView: View {
 	}
 }
 
-/// One member's render. Thumbnails are kept in memory by expression and
-/// size, so relayout and scrolling don't re-render.
+/// One member's render, from FamilyThumbnails.
 private struct FamilyThumbnail: View {
 	let expression: String
 	let size: CGFloat
 
 	@State private var image: CGImage?
 	@State private var failed = false
-
-	@MainActor private static var cache: [String: CGImage] = [:]
 
 	var body: some View {
 		ZStack {
@@ -349,7 +397,16 @@ private struct FamilyThumbnail: View {
 				ProgressView().controlSize(.small)
 			}
 		}
-		.task(id: key) { await render() }
+		.task(id: key) {
+			switch await FamilyThumbnails.shared.thumbnail(for: expression, size: renderSize) {
+				case .image(let rendered) where !Task.isCancelled:
+					image = rendered
+				case .unreadable where !Task.isCancelled:
+					failed = true
+				default:
+					break
+			}
+		}
 	}
 
 	/// Renders at the nearest of a few sizes, so dragging the size slider
@@ -359,20 +416,33 @@ private struct FamilyThumbnail: View {
 	}
 
 	private var key: String { "\(renderSize) \(expression)" }
+}
 
-	private func render() async {
-		if let cached = Self.cache[key] {
-			image = cached
-			return
+/// The family's defaults for new litters. Changes are undoable and don't
+/// touch litters already made.
+private struct FamilySettingsView: View {
+	@ObservedObject var document: FamilyDocument
+
+	@Environment(\.undoManager) private var undoManager
+
+	var body: some View {
+		Form {
+			Stepper("Litter size: \(document.family.settings.litterSize)",
+					value: binding(\.litterSize, "Change Litter Size"), in: 1...60)
+			Stepper("Mutations per child: \(document.family.settings.mutationsPerChild.formatted())",
+					value: binding(\.mutationsPerChild, "Change Mutation Rate"), in: 0.25...8, step: 0.25)
+			Stepper("Depth of new material: \(document.family.settings.maxDepth)",
+					value: binding(\.maxDepth, "Change Depth"), in: 1...20)
 		}
-		guard let node = try? ContentView.parser.parse(expression) else {
-			failed = true
-			return
+		.padding()
+		.frame(width: 300)
+	}
+
+	private func binding<Value>(_ keyPath: WritableKeyPath<Family.Settings, Value>, _ actionName: String) -> Binding<Value> {
+		Binding {
+			document.family.settings[keyPath: keyPath]
+		} set: { newValue in
+			document.change(actionName, undoManager: undoManager) { $0.settings[keyPath: keyPath] = newValue }
 		}
-		let renderer = NodeRenderer(node: node, evaluator: Evaluator(size: CGSize(width: renderSize, height: renderSize)))
-		await renderer.render()
-		guard !Task.isCancelled, let rendered = renderer.cgImage() else { return }
-		Self.cache[key] = rendered
-		image = rendered
 	}
 }

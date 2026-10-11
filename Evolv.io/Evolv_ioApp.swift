@@ -41,15 +41,12 @@ struct Evolv_ioApp: App {
         .defaultLaunchBehavior(.presented)
 #endif
 
-        // The 3x3 random grid, from File > New Window. It renders as soon as
-        // it opens, so it's kept from opening (or being restored) at launch.
-        WindowGroup("Random Grid", id: Self.randomGridWindowID) {
-            RandomGridView()
+        // A family (see Documentation/EvolutionUI.md), through the standard
+        // File > New, Open and Save. Before the genotype window, so File > New
+        // makes a family.
+        DocumentGroup(newDocument: { FamilyDocument() }) { file in
+            FamilyWindowView(document: file.document)
         }
-#if os(macOS)
-        .defaultLaunchBehavior(.suppressed)
-        .restorationBehavior(.disabled)
-#endif
         .commands {
 #if os(macOS)
             CommandGroup(after: .newItem) {
@@ -87,8 +84,7 @@ struct Evolv_ioApp: App {
         }
 
 #if os(macOS)
-        // A genotype opened with File > Open Genotype. It comes after the
-        // random grid so File > New Window still opens a grid.
+        // A genotype opened with File > Open Genotype.
         WindowGroup("Genotype", id: Self.genotypeWindowID, for: OpenedGenotype.self) { $opened in
             if let opened {
                 GenotypeWindowView(opened: opened)
@@ -97,16 +93,9 @@ struct Evolv_ioApp: App {
         .restorationBehavior(.disabled)
         .windowResizability(.contentSize)
 #endif
-
-        // A family (see Documentation/EvolutionUI.md), through the standard
-        // File > New, Open and Save.
-        DocumentGroup(newDocument: { FamilyDocument() }) { file in
-            FamilyWindowView(document: file.document)
-        }
     }
 
     static let genotypeLibraryWindowID = "genotype-library"
-    static let randomGridWindowID = "random-grid"
     static let genotypeWindowID = "genotype"
 }
 

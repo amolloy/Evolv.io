@@ -57,7 +57,11 @@ public final class NodeRegistry {
 		loadIssues = result.issues
 		Self.logIssues(loadIssues)
 		MetalRenderContext.shared.clearPipelineCache()
+		NotificationCenter.default.post(name: Self.didReloadNotification, object: self)
 	}
+
+	/// Posted after `reload()`, so anything caching renders can drop them.
+	public static let didReloadNotification = Notification.Name("NodeRegistryDidReload")
 
 	private static func buildRegistry() -> (registry: [String: NodeConstructor], signatures: [String: NodeSignature], issues: [DSLLoadIssue]) {
 		// Programmatically build the registry from the list of types.

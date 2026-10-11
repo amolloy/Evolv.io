@@ -4,7 +4,7 @@
 //
 //  The MCP `generate_genotypes` tool: random genotypes from
 //  RandomExpressionGenerator, the same way the main window's grid makes
-//  them (see RandomGridView.generate()). Returns expressions only; render
+//  them (see Family.addRandomLitter). Returns expressions only; render
 //  them with the `render` tool.
 //
 

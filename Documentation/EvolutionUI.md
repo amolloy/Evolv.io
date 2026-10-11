@@ -157,7 +157,8 @@ stepper and context menu move here).
   order.
 - **Members someone has bred from are shown full size; unexplored siblings
   in a litter that already has a bred-from member shrink to small chips**
-  in a wrapped mini-grid (about 40 pt), which expand on hover or click. A
+  in a wrapped mini-grid (a third of the thumbnail size). **Show Siblings
+  Full Size** on a litter's context menu expands them again. A
   litter nobody has bred from yet (the newest) shows everyone full size.
   This is what keeps the view usable: a 19-child litter you've moved past
   costs a few rows of chips, not 19 thumbnails. Chips stay in litter
@@ -250,7 +251,9 @@ version unless wanted.
   frames for each member and litter plus connectors.
 - `ExpressionTreeTests/FamilyTests.swift`.
 - `Evolv.io/Family/FamilyDocument.swift`: the document, with undo.
-- `Evolv.io/Family/FamilyWindowView.swift`: the lineage view.
+- `Evolv.io/Family/FamilyWindowView.swift`: the lineage view and the
+  settings popover.
+- `Evolv.io/Family/FamilyThumbnails.swift`: the thumbnail cache.
 
 ## Phases
 
@@ -264,9 +267,12 @@ version unless wanted.
    it (`Evolv.io/Family/FamilyWindowView.swift`): layout, connectors,
    selection, breed, reject, star, collapse and an in-memory thumbnail
    cache.
-3. **Lineage view**: layout, connectors, full-size vs chip cells,
+3. **Lineage view** (done): layout, connectors, full-size vs chip cells,
    breeding from the selection, the thumbnail cache, the existing context
-   menu. Remove the Random Grid window.
+   menu. Remove the Random Grid window (its view code is now
+   `GenotypeViews.swift`, and its depth stepper is the family settings
+   popover). Thumbnails live in `Evolv.io/Family/FamilyThumbnails.swift`;
+   only cells within half a screen of the visible area exist.
 4. **Polish**: collapse branches, Show Path, star/rename, Save to Library,
    Start Family From This.
 5. **Later**: MCP family tools, mating.

@@ -217,7 +217,7 @@ be deleted this way.
 ### `generate_genotypes(seed, count, max_depth, exclude)`
 
 Random genotypes from `RandomExpressionGenerator`, built exactly the way the
-main window's grid builds them (`RandomGridView.generate()`), returned as
+a family's random litters are built (`Family.addRandomLitter`), returned as
 pretty JSON: `seed` (as a string), `max_depth` and `expressions`, in order.
 It only generates; render the expressions with `render`. Source:
 `Evolv.io/MCP/MCPGenerateTool.swift`.
