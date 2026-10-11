@@ -100,9 +100,14 @@ final class FamilyDocument: ReferenceFileDocument {
 
 	/// A root litter of genotypes from elsewhere.
 	@discardableResult
-	func addSeedLitter(expressions: [String], source: String?, undoManager: UndoManager?) throws -> Family.Litter {
-		try change("Add Genotype", undoManager: undoManager) { family in
-			try family.addSeedLitter(expressions: expressions, source: source)
+	/// `names`, when given, name the members in the same order.
+	func addSeedLitter(expressions: [String], names: [String?] = [], source: String?, undoManager: UndoManager?) throws -> Family.Litter {
+		try change(expressions.count == 1 ? "Add Genotype" : "Add Genotypes", undoManager: undoManager) { family in
+			let litter = try family.addSeedLitter(expressions: expressions, source: source)
+			for (member, name) in zip(family.members(ofLitter: litter.id), names) {
+				family.update(member.id) { $0.name = name }
+			}
+			return litter
 		}
 	}
 

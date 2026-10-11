@@ -347,7 +347,10 @@ open in windows: `list_families`, `read_family`, `breed_family`,
 4. **Polish** (done): collapse branches, Show Path (Escape clears it),
    star/rename (names show on the thumbnail), Save to Library, Start
    Family From This (library sidebar context menu), and **Add Roots >
-   Paste Genotype** for a copied expression. Each litter is outlined
+   Paste Genotype** for a copied expression, and **Add Roots > Open
+   Genotype Files…** for `.evolvgenotype` files or images exported with
+   their genotype (several at once make one root litter, each member named
+   for its file). Each litter is outlined
    (`FamilyLayout.litterOutlines`).
 5. **MCP family tools** and **mating** (done).
 

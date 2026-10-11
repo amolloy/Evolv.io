@@ -142,10 +142,13 @@ struct FamilyWindowView: View {
 		VStack(spacing: 12) {
 			Text("This family is empty")
 				.font(.title2)
-			Text("Start it with a litter of \(family.settings.litterSize) random genotypes, or a genotype copied from somewhere else.")
+			Text("Start it with a litter of \(family.settings.litterSize) random genotypes, or with genotypes from files or the clipboard.")
 				.foregroundStyle(.secondary)
 			HStack {
 				Button("Paste Genotype") { pasteGenotype() }
+#if os(macOS)
+				Button("Open Genotype Files…") { openGenotypeFiles() }
+#endif
 				Button("New Random Litter") { addRandomLitter() }
 					.keyboardShortcut(.defaultAction)
 			}
@@ -415,10 +418,13 @@ struct FamilyWindowView: View {
 			Menu("Add Roots", systemImage: "plus") {
 				Button("New Random Litter") { addRandomLitter() }
 				Button("Paste Genotype") { pasteGenotype() }
+#if os(macOS)
+				Button("Open Genotype Files…") { openGenotypeFiles() }
+#endif
 			} primaryAction: {
 				addRandomLitter()
 			}
-			.help("Add a litter of random genotypes, or a copied genotype, in the first column")
+			.help("Add a litter of random genotypes, genotype files or a copied genotype in the first column")
 		}
 		ToolbarItem {
 			Button("Breed", systemImage: "arrow.triangle.branch") { breedSelection() }
@@ -537,6 +543,33 @@ struct FamilyWindowView: View {
 		}
 	}
 
+#if os(macOS)
+	/// Adds `.evolvgenotype` files, or images exported with their genotype,
+	/// as one root litter, each member named for its file.
+	private func openGenotypeFiles() {
+		GenotypeFilePanels.openSeveral(title: "Add Genotypes to Family") { opened, urls in
+			let source = urls.count == 1 ? "file:\(urls[0].lastPathComponent)" : "files"
+			addRoots(expressions: opened.map(\.expression), names: opened.map(\.name), source: source)
+		}
+	}
+#endif
+
+	/// A root litter of `expressions`, scrolled to and selected.
+	private func addRoots(expressions: [String], names: [String?] = [], source: String) {
+		do {
+			let litter = try document.addSeedLitter(expressions: expressions, names: names, source: source, undoManager: undoManager)
+			let layout = currentLayout()
+			if let frame = layout.litterFrames[litter.id] {
+				scrollPosition.scrollTo(point: CGPoint(x: 0, y: max(0, frame.minY)))
+			}
+			let ids = family.members(ofLitter: litter.id).map(\.id)
+			selection = Set(ids)
+			selectionOrder = ids
+		} catch {
+			errorMessage = error.localizedDescription
+		}
+	}
+
 	/// Adds the genotype on the clipboard as a root of its own.
 	private func pasteGenotype() {
 #if os(macOS)
@@ -555,16 +588,7 @@ struct FamilyWindowView: View {
 			errorMessage = "The clipboard doesn't hold a genotype the loaded nodes can read: \(error.localizedDescription)"
 			return
 		}
-		do {
-			let litter = try document.addSeedLitter(expressions: [expression], source: "pasted", undoManager: undoManager)
-			let layout = currentLayout()
-			if let frame = layout.litterFrames[litter.id] {
-				scrollPosition.scrollTo(point: CGPoint(x: 0, y: max(0, frame.minY)))
-			}
-			selection = Set(family.members(ofLitter: litter.id).map(\.id))
-		} catch {
-			errorMessage = error.localizedDescription
-		}
+		addRoots(expressions: [expression], source: "pasted")
 	}
 
 	private func breedSelection() {

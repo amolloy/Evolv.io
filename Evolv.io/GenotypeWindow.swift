@@ -102,6 +102,47 @@ enum GenotypeFilePanels {
 		}
 	}
 
+	/// Asks for one or more `.evolvgenotype` files or images exported with
+	/// their genotype, and passes on the ones that open. Files that don't
+	/// are listed in one alert.
+	@MainActor
+	static func openSeveral(title: String, _ completion: @escaping ([OpenedGenotype], [URL]) -> Void) {
+		let panel = NSOpenPanel()
+		panel.title = title
+		panel.allowedContentTypes = [genotypeContentType] + Array(ImageExporter.metadataFormats)
+		panel.allowsMultipleSelection = true
+		panel.canChooseDirectories = false
+		panel.directoryURL = GenotypeLibrary.containerGenotypesDirectory
+		let handler: (NSApplication.ModalResponse) -> Void = { response in
+			guard response == .OK else { return }
+			var opened: [OpenedGenotype] = []
+			var openedURLs: [URL] = []
+			var failures: [String] = []
+			for url in panel.urls {
+				do {
+					opened.append(try read(url))
+					openedURLs.append(url)
+				} catch {
+					failures.append("\(url.lastPathComponent): \((error as? GenotypeParseError)?.message ?? error.localizedDescription)")
+				}
+			}
+			if !failures.isEmpty {
+				let alert = NSAlert()
+				alert.messageText = "Couldn't open \(failures.count == 1 ? "a file" : "\(failures.count) files")"
+				alert.informativeText = failures.joined(separator: "\n")
+				alert.runModal()
+			}
+			if !opened.isEmpty {
+				completion(opened, openedURLs)
+			}
+		}
+		if let window = NSApp.keyWindow {
+			panel.beginSheetModal(for: window, completionHandler: handler)
+		} else {
+			panel.begin(completionHandler: handler)
+		}
+	}
+
 	private static func read(_ url: URL) throws -> OpenedGenotype {
 		if let type = UTType(filenameExtension: url.pathExtension), type.conforms(to: .image) {
 			guard let embedded = ImageExporter.embeddedGenotype(at: url) else {
