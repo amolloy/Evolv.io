@@ -203,6 +203,7 @@ struct ExportImageOptions: View {
 		(1024, "1024 × 1024"),
 		(1200, "1200 × 1200"),
 		(1600, "1600 × 1600 (2× full size)"),
+		(3200, "3200 × 3200 (4× full size)"),
 	]
 	private static let sizeRange = ExportImageSettings.sizeRange
 	/// Samples per side of each pixel; 0 follows the app's Supersampling setting.
