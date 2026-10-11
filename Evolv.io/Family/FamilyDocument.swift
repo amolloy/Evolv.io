@@ -32,6 +32,13 @@ final class FamilyDocument: ReferenceFileDocument {
 		family = Family(settings: settings)
 	}
 
+	/// A new family whose first litter is one genotype from elsewhere
+	/// (Start Family From This in the library).
+	convenience init(seedExpression: String, source: String?) {
+		self.init()
+		_ = try? family.addSeedLitter(expressions: [seedExpression], source: source)
+	}
+
 	init(configuration: ReadConfiguration) throws {
 		guard let data = configuration.file.fileWrappers?[Self.familyFileName]?.regularFileContents else {
 			throw CocoaError(.fileReadCorruptFile)

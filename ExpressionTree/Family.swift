@@ -281,6 +281,19 @@ public struct Family: Equatable, Sendable {
 		return found.subtracting(memberIDs)
 	}
 
+	/// Every member `memberID` is descended from, through all parents (both,
+	/// for a mating), not including it.
+	public func ancestors(of memberID: String) -> Set<String> {
+		var found = Set<String>()
+		var frontier = [memberID]
+		while let id = frontier.popLast() {
+			for parent in parents(of: id) where found.insert(parent).inserted {
+				frontier.append(parent)
+			}
+		}
+		return found
+	}
+
 	/// Each member's generation: 0 for roots, otherwise one more than its
 	/// highest-generation parent. The lineage view's columns.
 	public func generations() -> [String: Int] {

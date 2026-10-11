@@ -83,6 +83,9 @@ struct FamilyModelTests {
 		#expect(family.parents(of: "g8") == ["g5", "g3"])
 		#expect(family.descendants(of: ["g3"]) == ["g8"])
 		#expect(family.descendants(of: ["g2"]) == ["g5", "g6", "g8"])
+		#expect(family.ancestors(of: "g8") == ["g5", "g3", "g2"])
+		#expect(family.ancestors(of: "g6") == ["g2"])
+		#expect(family.ancestors(of: "g2").isEmpty)
 	}
 
 	@Test func rejectingAMemberWithChildrenNeedsTheWholeBranch() throws {

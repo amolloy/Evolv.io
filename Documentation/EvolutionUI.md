@@ -273,8 +273,11 @@ version unless wanted.
    `GenotypeViews.swift`, and its depth stepper is the family settings
    popover). Thumbnails live in `Evolv.io/Family/FamilyThumbnails.swift`;
    only cells within half a screen of the visible area exist.
-4. **Polish**: collapse branches, Show Path, star/rename, Save to Library,
-   Start Family From This.
+4. **Polish** (done): collapse branches, Show Path (Escape clears it),
+   star/rename (names show on the thumbnail), Save to Library, Start
+   Family From This (library sidebar context menu), and **Add Roots >
+   Paste Genotype** for a copied expression. Each litter is outlined
+   (`FamilyLayout.litterOutlines`).
 5. **Later**: MCP family tools, mating.
 
 ## Decisions

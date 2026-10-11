@@ -5,7 +5,8 @@
 //  A family document's window: the lineage view, generations left to
 //  right, laid out by FamilyLayout. Click selects (Command-click and
 //  Shift-click add), Return breeds a litter from each selected member,
-//  Delete rejects, double-click shows full size. Only cells near the
+//  Delete rejects, double-click shows full size, Show Path highlights a
+//  member's ancestors (Escape clears it). Only cells near the
 //  visible area exist, so only they render (see FamilyThumbnails). See
 //  Documentation/EvolutionUI.md.
 //
@@ -25,6 +26,10 @@ struct FamilyWindowView: View {
 	@State private var errorMessage: String?
 	@State private var savingMember: Family.Member?
 	@State private var showingSettings = false
+	/// The member whose line back to the roots is highlighted.
+	@State private var pathMember: String?
+	@State private var renaming: Family.Member?
+	@State private var renameText = ""
 	@State private var scrollPosition = ScrollPosition()
 	/// The visible part of the scroll view's content, padding included,
 	/// updated only every quarter screen of scrolling, since it decides
@@ -84,6 +89,16 @@ struct FamilyWindowView: View {
 		} message: { _ in
 			Text("Rejected genotypes are removed from the family. You can undo this until you close the window.")
 		}
+		.alert("Rename", isPresented: Binding(get: { renaming != nil }, set: { if !$0 { renaming = nil } }), presenting: renaming) { member in
+			TextField("Name", text: $renameText)
+			Button("Rename") {
+				document.rename(member.id, to: renameText, undoManager: undoManager)
+				renaming = nil
+			}
+			Button("Cancel", role: .cancel) { renaming = nil }
+		} message: { _ in
+			Text("Leave it empty to remove the name.")
+		}
 		.alert("Couldn't do that", isPresented: Binding(get: { errorMessage != nil }, set: { if !$0 { errorMessage = nil } })) {
 			Button("OK") { errorMessage = nil }
 		} message: {
@@ -95,10 +110,13 @@ struct FamilyWindowView: View {
 		VStack(spacing: 12) {
 			Text("This family is empty")
 				.font(.title2)
-			Text("Start it with a litter of \(family.settings.litterSize) random genotypes.")
+			Text("Start it with a litter of \(family.settings.litterSize) random genotypes, or a genotype copied from somewhere else.")
 				.foregroundStyle(.secondary)
-			Button("New Random Litter") { addRandomLitter() }
-				.keyboardShortcut(.defaultAction)
+			HStack {
+				Button("Paste Genotype") { pasteGenotype() }
+				Button("New Random Litter") { addRandomLitter() }
+					.keyboardShortcut(.defaultAction)
+			}
 		}
 		.padding()
 	}
@@ -114,12 +132,14 @@ struct FamilyWindowView: View {
 		let nearby = visibleRect.isEmpty ? CGRect(origin: .zero, size: CGSize(width: 2000, height: 2000))
 			: visibleRect.insetBy(dx: -visibleRect.width / 2, dy: -visibleRect.height / 2)
 		let shown = layout.cells.filter { nearby.intersects($0.value.frame.offsetBy(dx: margin, dy: margin)) }
+		let path = highlightedPath
 		return ScrollView([.horizontal, .vertical]) {
 			ZStack(alignment: .topLeading) {
-				connectors(layout)
+				connectors(layout, path: path)
 				ForEach(Array(shown.keys.sorted()), id: \.self) { id in
 					if let cell = shown[id], let member = byID[id] {
 						cellView(member, cell: cell, hidden: layout.hiddenDescendants[id])
+							.opacity(path == nil || path!.contains(id) ? 1 : 0.3)
 							.position(x: cell.frame.midX, y: cell.frame.midY)
 					}
 				}
@@ -145,6 +165,11 @@ struct FamilyWindowView: View {
 			breedSelection()
 			return .handled
 		}
+		.onKeyPress(.escape) {
+			guard pathMember != nil else { return .ignored }
+			pathMember = nil
+			return .handled
+		}
 #if os(macOS)
 		.onDeleteCommand { rejectSelection() }
 #endif
@@ -158,24 +183,36 @@ struct FamilyWindowView: View {
 		return metrics
 	}
 
+	/// The highlighted member and its ancestors, or nil when no path is
+	/// shown.
+	private var highlightedPath: Set<String>? {
+		guard let pathMember, family.member(id: pathMember) != nil else { return nil }
+		return family.ancestors(of: pathMember).union([pathMember])
+	}
+
 	/// Litter outlines and the lines from parents to litters, behind the
-	/// cells.
-	private func connectors(_ layout: FamilyLayout) -> some View {
-		Canvas { context, _ in
-			for outline in layout.litterOutlines.values {
+	/// cells. With a path shown, its litters and lines are drawn in the
+	/// accent colour and the rest fade.
+	private func connectors(_ layout: FamilyLayout, path: Set<String>?) -> some View {
+		let pathLitters = path.map { ids in Set(family.members.filter { ids.contains($0.id) }.map(\.litter)) }
+		return Canvas { context, _ in
+			for (litter, outline) in layout.litterOutlines {
 				let shape = Path(roundedRect: outline, cornerRadius: 10)
-				context.fill(shape, with: .color(.primary.opacity(0.05)))
-				context.stroke(shape, with: .color(.secondary.opacity(0.6)), lineWidth: 1)
+				let faded = pathLitters.map { !$0.contains(litter) } ?? false
+				context.fill(shape, with: .color(.primary.opacity(faded ? 0.02 : 0.05)))
+				context.stroke(shape, with: .color(.secondary.opacity(faded ? 0.25 : 0.6)), lineWidth: 1)
 			}
 			for connector in layout.connectors {
-				var path = Path()
-				path.move(to: connector.from)
+				var line = Path()
+				line.move(to: connector.from)
 				let midX = (connector.from.x + connector.to.x) / 2
-				path.addCurve(to: connector.to,
+				line.addCurve(to: connector.to,
 							  control1: CGPoint(x: midX, y: connector.from.y),
 							  control2: CGPoint(x: midX, y: connector.to.y))
-				context.stroke(path, with: .color(.secondary),
-							   style: StrokeStyle(lineWidth: 1.5, dash: connector.isPrimary ? [] : [5, 4]))
+				let onPath = path.map { $0.contains(connector.parent) && pathLitters!.contains(connector.litter) }
+				let color: Color = onPath == true ? .accentColor : .secondary.opacity(onPath == false ? 0.3 : 1)
+				context.stroke(line, with: .color(color),
+							   style: StrokeStyle(lineWidth: onPath == true ? 2.5 : 1.5, dash: connector.isPrimary ? [] : [5, 4]))
 			}
 		}
 		.frame(width: layout.size.width, height: layout.size.height)
@@ -198,6 +235,18 @@ struct FamilyWindowView: View {
 						.foregroundStyle(.yellow)
 						.shadow(radius: 2)
 						.padding(4)
+				}
+			}
+			.overlay(alignment: .bottom) {
+				if let name = member.name, !cell.isChip {
+					Text(name)
+						.font(.caption)
+						.lineLimit(1)
+						.padding(.horizontal, 6)
+						.padding(.vertical, 2)
+						.frame(maxWidth: .infinity)
+						.background(.thinMaterial)
+						.clipShape(UnevenRoundedRectangle(bottomLeadingRadius: radius, bottomTrailingRadius: radius))
 				}
 			}
 			.overlay(alignment: .trailing) {
@@ -223,6 +272,15 @@ struct FamilyWindowView: View {
 		Button(targets.count == 1 ? "Breed" : "Breed \(targets.count)") { breed(targets) }
 		Button(member.starred ? "Unstar" : "Star") {
 			document.setStarred(!member.starred, for: targets, undoManager: undoManager)
+		}
+		Button("Rename…") {
+			renameText = member.name ?? ""
+			renaming = member
+		}
+		if pathMember == member.id {
+			Button("Hide Path") { pathMember = nil }
+		} else {
+			Button("Show Path") { pathMember = member.id }
 		}
 		if family.hasBeenBredFrom(member.id) {
 			Button(member.collapsed ? "Expand Branch" : "Collapse Branch") {
@@ -268,8 +326,13 @@ struct FamilyWindowView: View {
 				}
 		}
 		ToolbarItem {
-			Button("New Random Litter", systemImage: "dice") { addRandomLitter() }
-				.help("Add a litter of random genotypes in the first column")
+			Menu("Add Roots", systemImage: "plus") {
+				Button("New Random Litter") { addRandomLitter() }
+				Button("Paste Genotype") { pasteGenotype() }
+			} primaryAction: {
+				addRandomLitter()
+			}
+			.help("Add a litter of random genotypes, or a copied genotype, in the first column")
 		}
 		ToolbarItem {
 			Button("Breed", systemImage: "arrow.triangle.branch") { breedSelection() }
@@ -302,6 +365,36 @@ struct FamilyWindowView: View {
 		let layout = FamilyLayout(family: family, metrics: metrics, expandedLitters: expandedLitters)
 		if let frame = layout.litterFrames[litter.id] {
 			scrollPosition.scrollTo(point: CGPoint(x: 0, y: max(0, frame.minY)))
+		}
+	}
+
+	/// Adds the genotype on the clipboard as a root of its own.
+	private func pasteGenotype() {
+#if os(macOS)
+		let text = NSPasteboard.general.string(forType: .string)
+#else
+		let text = UIPasteboard.general.string
+#endif
+		let expression = text?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+		guard !expression.isEmpty else {
+			errorMessage = "There's no text on the clipboard."
+			return
+		}
+		do {
+			_ = try ContentView.parser.parse(expression)
+		} catch {
+			errorMessage = "The clipboard doesn't hold a genotype the loaded nodes can read: \(error.localizedDescription)"
+			return
+		}
+		do {
+			let litter = try document.addSeedLitter(expressions: [expression], source: "pasted", undoManager: undoManager)
+			let layout = FamilyLayout(family: family, metrics: metrics, expandedLitters: expandedLitters)
+			if let frame = layout.litterFrames[litter.id] {
+				scrollPosition.scrollTo(point: CGPoint(x: 0, y: max(0, frame.minY)))
+			}
+			selection = Set(family.members(ofLitter: litter.id).map(\.id))
+		} catch {
+			errorMessage = error.localizedDescription
 		}
 	}
 

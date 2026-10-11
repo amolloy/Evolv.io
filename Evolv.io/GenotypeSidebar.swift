@@ -116,11 +116,19 @@ private struct GenotypeRow: View {
 	let genotype: Genotype
 	let model: GenotypeSidebarModel
 
+	@Environment(\.newDocument) private var newDocument
+
 	var body: some View {
 		Text(genotype.displayName)
 			.tag(genotype.id)
 			.draggable(genotype.fileURL)
 			.contextMenu {
+				Button("Start Family From This") {
+					let expression = genotype.expression
+					let source = "library:\(genotype.id)"
+					newDocument { FamilyDocument(seedExpression: expression, source: source) }
+				}
+				Divider()
 				if genotype.source == .user {
 					MoveToMenu(current: genotype.folder) { destination in
 						model.perform { try GenotypeStore.shared.move(genotype, to: destination) }
