@@ -31,6 +31,13 @@ struct FamilyWindowView: View {
 	@State private var pendingReject: PendingReject?
 	@State private var errorMessage: String?
 	@State private var savingMember: Family.Member?
+	@State private var exportingImage: RandomGenotype?
+	/// The member whose path the Export Path dialog is for.
+	@State private var exportingPath: Family.Member?
+#if os(macOS)
+	@State private var pathExport = PathExport()
+	@State private var showingExportProgress = false
+#endif
 	@State private var showingSettings = false
 	/// The member whose line back to the roots is highlighted.
 	@State private var pathMember: String?
@@ -90,6 +97,22 @@ struct FamilyWindowView: View {
 		.sheet(item: $savingMember) { member in
 			SaveGenotypeSheet(expression: member.expression)
 		}
+		.sheet(item: $exportingImage) { genotype in
+			ExportImageSheet(genotype: genotype)
+		}
+#if os(macOS)
+		.sheet(item: $exportingPath) { member in
+			ExportPathSheet(items: pathItems(to: member.id),
+							defaultBaseName: member.name ?? fileURL?.deletingPathExtension().lastPathComponent ?? "Path",
+							export: pathExport)
+		}
+		.onChange(of: pathExport.errorMessage) { _, message in
+			if let message {
+				errorMessage = message
+				pathExport.errorMessage = nil
+			}
+		}
+#endif
 		.confirmationDialog(rejectTitle, isPresented: Binding(get: { pendingReject != nil }, set: { if !$0 { pendingReject = nil } }),
 							presenting: pendingReject) { pending in
 			Button("Reject \(pending.members.count + pending.descendants)", role: .destructive) {
@@ -331,6 +354,11 @@ struct FamilyWindowView: View {
 		Button("Save to Library…") {
 			if let genotype = randomGenotype(member) { GenotypeFilePanels.save(genotype) }
 		}
+		Button("Export Image…") {
+			if let genotype = randomGenotype(member) { exportingImage = genotype }
+		}
+		Button("Export Path…") { exportingPath = member }
+			.disabled(pathExport.isRunning)
 #else
 		Button("Save to Library…") { savingMember = member }
 #endif
@@ -340,6 +368,35 @@ struct FamilyWindowView: View {
 
 	@ToolbarContentBuilder
 	private var toolbar: some ToolbarContent {
+#if os(macOS)
+		if pathExport.isRunning {
+			ToolbarItem {
+				Button {
+					showingExportProgress = true
+				} label: {
+					ProgressView(value: pathExport.fraction)
+						.progressViewStyle(.circular)
+						.controlSize(.small)
+				}
+				.help("Exporting path: \(pathExport.done) of \(pathExport.total)")
+				.popover(isPresented: $showingExportProgress) {
+					VStack(alignment: .leading, spacing: 8) {
+						Text("Exporting path to \(pathExport.folderName)")
+							.font(.headline)
+						ProgressView(value: pathExport.fraction) {
+							Text("\(pathExport.done) of \(pathExport.total) images")
+						}
+						HStack {
+							Spacer()
+							Button("Stop") { pathExport.stop() }
+						}
+					}
+					.padding()
+					.frame(width: 280)
+				}
+			}
+		}
+#endif
 		ToolbarItem {
 			Slider(value: $thumbnailSize, in: 64...256) {
 				Text("Size")
@@ -449,6 +506,21 @@ struct FamilyWindowView: View {
 			scrollPosition.scrollTo(point: CGPoint(x: 0, y: max(0, frame.minY)))
 		}
 	}
+
+#if os(macOS)
+	/// `memberID` and its ancestors, oldest generation first, then in
+	/// family order.
+	private func pathItems(to memberID: String) -> [ExportPathSheet.Item] {
+		let ids = family.ancestors(of: memberID).union([memberID])
+		let generations = family.generations()
+		return family.members
+			.filter { ids.contains($0.id) }
+			.map { ExportPathSheet.Item(member: $0, generation: generations[$0.id] ?? 0) }
+			.enumerated()
+			.sorted { ($0.element.generation, $0.offset) < ($1.element.generation, $1.offset) }
+			.map(\.element)
+	}
+#endif
 
 	private func currentLayout() -> FamilyLayout {
 		FamilyLayout(family: family, metrics: metrics, expandedLitters: expandedLitters, focus: highlightedPath)

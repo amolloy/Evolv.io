@@ -188,6 +188,22 @@ stepper and context menu move here).
   shrinks everything else to chips (`FamilyLayout`'s `focus`), for
   following one line in a big family. The member keeps its place on
   screen when it's turned on or off.
+- **Export Path…** (macOS) exports a member and all its ancestors with
+  the Export Image options (size, format, supersampling, metadata) into a
+  folder, one file each, named `Base-gen03.png` with generations
+  zero-padded; a generation with two genotypes on the path (a mated
+  child's two lines) adds the member id, `Base-gen03-g45.png`. The stored
+  name is the member's name, or "Base generation 3". Once the folder is
+  chosen the dialog closes and the renders run in the background, shown
+  as a circular progress in the toolbar whose popover can stop them.
+  `ExportPathSheet.swift`.
+- **Captions** (Export Image and Export Path, off by default): the
+  expression in white monospaced text on a dark band, either over the
+  bottom of the image (at most 40% of it) or in a band added below. The
+  text is about 1.8% of the image width (at least 11 pixels) and wraps; a
+  caption too long for its band ends in "…". Export Path sizes the band
+  below for its longest expression, so every image comes out the same
+  size. Images under 256 pixels aren't captioned. `ExportCaption.swift`.
 - Starting a family: **New Family** asks how to start: a random litter
   (litter size, depth, optional seed), or a genotype from the library
   (also a **Start Family From This** item on the sidebar's context menu),

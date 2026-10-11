@@ -2,12 +2,12 @@
 //  ImageExport.swift
 //  Evolv.io
 //
-//  Export Image…, from the context menu on grid thumbnails and full size
+//  Export Image…, from the context menu on family members and full size
 //  views: a dialog for the size, file format, supersampling and a few other
 //  options, which renders the genotype again at that size and writes it out.
 //  The dialog's settings are kept across launches, and its supersampling
 //  setting only applies to exports, never to the app's own Supersampling
-//  setting.
+//  setting. Export Path (ExportPathSheet) shares the same options.
 //
 
 import SwiftUI
@@ -131,11 +131,70 @@ enum ImageExporter {
 	}
 }
 
-/// The Export Image dialog. Every setting is stored in user defaults, so
-/// it opens the way it was last left.
-struct ExportImageSheet: View {
-	let genotype: RandomGenotype
+/// The export options, as stored by ExportImageOptions, for whoever
+/// renders: Export Image and Export Path.
+struct ExportImageSettings {
+	static let sizeRange = 16...4096
 
+	let size: Int
+	let format: UTType
+	let quality: Double
+	/// Samples per side of each pixel, with "same as app" resolved.
+	let supersample: Int
+	let embedGenotype: Bool
+	/// `.off` below ExportCaption.minimumSize, whatever the setting.
+	let caption: ExportCaption
+
+	static var current: ExportImageSettings {
+		let defaults = UserDefaults.standard
+		let storedSize = defaults.object(forKey: "exportImageSize") as? Int ?? 1600
+		let format = (defaults.string(forKey: "exportImageFormat")).flatMap(UTType.init)
+			.flatMap { ImageExporter.formats.contains($0) ? $0 : nil } ?? .png
+		let storedSupersample = defaults.object(forKey: "exportImageSupersample") as? Int ?? 0
+		let size = min(max(storedSize, sizeRange.lowerBound), sizeRange.upperBound)
+		let caption = defaults.string(forKey: "exportImageCaption").flatMap(ExportCaption.init) ?? .off
+		return ExportImageSettings(
+			size: size,
+			format: format,
+			quality: defaults.object(forKey: "exportImageQuality") as? Double ?? 0.9,
+			supersample: storedSupersample == 0 ? (defaults.isSupersamplingEnabled ? 4 : 1) : storedSupersample,
+			embedGenotype: defaults.object(forKey: "exportImageEmbedGenotype") as? Bool ?? true,
+			caption: size < ExportCaption.minimumSize ? .off : caption)
+	}
+
+	var summary: String {
+		let samples = supersample * supersample
+		let taller = caption == .below ? ", plus the caption below" : ""
+		return "\(size) × \(size) pixels\(taller), \(samples) sample\(samples == 1 ? "" : "s") per pixel."
+	}
+
+	/// The caption band for several genotypes exported together: the
+	/// tallest any of them needs, so a caption below keeps every image the
+	/// same size.
+	func captionBand(for genotypes: [RandomGenotype]) -> Int? {
+		guard caption != .off else { return nil }
+		return genotypes.map { ExportCaption.bandHeight(for: $0.text, width: size) }.max()
+	}
+
+	/// Renders and encodes `genotype` with these settings. `captionBand`
+	/// overrides the caption's own band height (see `captionBand(for:)`).
+	func data(for genotype: RandomGenotype, captionBand: Int? = nil) async throws -> Data {
+		var image = try await ImageExporter.render(node: genotype.node, size: size, supersample: supersample)
+		if caption != .off {
+			let band = captionBand ?? ExportCaption.bandHeight(for: genotype.text, width: size)
+			guard let captioned = caption.apply(to: image, text: genotype.text, bandHeight: band) else {
+				throw ImageExporter.ExportError(message: "Couldn't draw the caption.")
+			}
+			image = captioned
+		}
+		return try ImageExporter.encode(image, as: format, quality: quality, genotype: embedGenotype ? genotype : nil)
+	}
+}
+
+/// The size, format, quality, supersampling and metadata controls shared
+/// by Export Image and Export Path. Every setting is stored in user
+/// defaults, so they open the way they were last left.
+struct ExportImageOptions: View {
 	/// Suggested sizes: from the grid's thumbnails up to twice the full size view.
 	private static let sizePresets: [(size: Int, label: String)] = [
 		(256, "256 × 256 (thumbnail)"),
@@ -145,7 +204,7 @@ struct ExportImageSheet: View {
 		(1200, "1200 × 1200"),
 		(1600, "1600 × 1600 (2× full size)"),
 	]
-	private static let sizeRange = 16...4096
+	private static let sizeRange = ExportImageSettings.sizeRange
 	/// Samples per side of each pixel; 0 follows the app's Supersampling setting.
 	private static let supersampleOptions = [1, 2, 3, 4, 6, 8]
 	private static let customSizeTag = -1
@@ -156,13 +215,7 @@ struct ExportImageSheet: View {
 	@AppStorage("exportImageQuality") private var quality = 0.9
 	@AppStorage("exportImageSupersample") private var supersample = 0
 	@AppStorage("exportImageEmbedGenotype") private var embedGenotype = true
-
-	@Environment(\.dismiss) private var dismiss
-	@State private var isExporting = false
-	@State private var errorMessage: String?
-#if !os(macOS)
-	@State private var exportedFile: ExportedImageFile?
-#endif
+	@AppStorage("exportImageCaption") private var caption = ExportCaption.off
 
 	private var format: UTType {
 		UTType(formatIdentifier).flatMap { ImageExporter.formats.contains($0) ? $0 : nil } ?? .png
@@ -170,11 +223,6 @@ struct ExportImageSheet: View {
 
 	private var clampedSize: Int {
 		min(max(size, Self.sizeRange.lowerBound), Self.sizeRange.upperBound)
-	}
-
-	/// The supersampling the export will use, with 0 resolved to the app's setting.
-	private var effectiveSupersample: Int {
-		supersample == 0 ? (UserDefaults.standard.isSupersamplingEnabled ? 4 : 1) : supersample
 	}
 
 	private var sizeSelection: Binding<Int> {
@@ -192,8 +240,6 @@ struct ExportImageSheet: View {
 
 	var body: some View {
 		VStack(alignment: .leading, spacing: 12) {
-			Text("Export Image")
-				.font(.headline)
 			Form {
 				Picker("Size", selection: sizeSelection) {
 					ForEach(Self.sizePresets, id: \.size) { preset in
@@ -238,6 +284,16 @@ struct ExportImageSheet: View {
 					}
 				}
 
+				Picker("Caption", selection: $caption) {
+					ForEach(ExportCaption.allCases) { style in
+						Text(style.label).tag(style)
+					}
+				}
+				.disabled(clampedSize < ExportCaption.minimumSize)
+				.help(clampedSize < ExportCaption.minimumSize
+					  ? "Images under \(ExportCaption.minimumSize) × \(ExportCaption.minimumSize) aren't captioned"
+					  : "Writes the expression on the image, over its bottom or in a band below it")
+
 				Toggle("Store genotype in image metadata", isOn: $embedGenotype)
 					.disabled(!ImageExporter.metadataFormats.contains(format))
 					.help(ImageExporter.metadataFormats.contains(format)
@@ -248,9 +304,32 @@ struct ExportImageSheet: View {
 			.formStyle(.columns)
 #endif
 
-			Text(summary)
+			Text(ExportImageSettings.current.summary)
 				.font(.caption)
 				.foregroundStyle(.secondary)
+		}
+		// Keeps a typed custom size in range for the next export.
+		.onDisappear { size = clampedSize }
+	}
+}
+
+/// The Export Image dialog.
+struct ExportImageSheet: View {
+	let genotype: RandomGenotype
+
+	@Environment(\.dismiss) private var dismiss
+	@State private var isExporting = false
+	@State private var errorMessage: String?
+#if !os(macOS)
+	@State private var exportedFile: ExportedImageFile?
+#endif
+
+	var body: some View {
+		VStack(alignment: .leading, spacing: 12) {
+			Text("Export Image")
+				.font(.headline)
+			ExportImageOptions()
+				.disabled(isExporting)
 			if let errorMessage {
 				Text(errorMessage)
 					.foregroundStyle(.red)
@@ -276,7 +355,7 @@ struct ExportImageSheet: View {
 #else
 		.fileExporter(isPresented: Binding { exportedFile != nil } set: { if !$0 { exportedFile = nil } },
 					  document: exportedFile,
-					  contentType: format,
+					  contentType: ExportImageSettings.current.format,
 					  defaultFilename: defaultFilename) { result in
 			if case .failure(let error) = result {
 				errorMessage = error.localizedDescription
@@ -287,32 +366,24 @@ struct ExportImageSheet: View {
 #endif
 	}
 
-	private var summary: String {
-		let samples = effectiveSupersample * effectiveSupersample
-		return "\(clampedSize) × \(clampedSize) pixels, \(samples) sample\(samples == 1 ? "" : "s") per pixel."
-	}
-
 	private var defaultFilename: String {
 		genotype.name ?? "Untitled"
 	}
 
 	/// Renders and encodes with the dialog's current settings.
 	private func renderData() async throws -> Data {
-		let rendered = try await ImageExporter.render(node: genotype.node, size: clampedSize, supersample: effectiveSupersample)
-		return try ImageExporter.encode(rendered, as: format, quality: quality,
-										genotype: embedGenotype ? genotype : nil)
+		try await ExportImageSettings.current.data(for: genotype)
 	}
 
 #if os(macOS)
 	/// Asks where to save first, then renders, so a cancelled save panel
 	/// doesn't cost a render.
 	private func export() {
-		size = clampedSize
 		errorMessage = nil
 		let panel = NSSavePanel()
 		panel.title = "Export Image"
 		panel.nameFieldStringValue = defaultFilename
-		panel.allowedContentTypes = [format]
+		panel.allowedContentTypes = [ExportImageSettings.current.format]
 		panel.canCreateDirectories = true
 		panel.isExtensionHidden = false
 		let completion: (NSApplication.ModalResponse) -> Void = { response in
@@ -337,7 +408,6 @@ struct ExportImageSheet: View {
 #else
 	/// Renders, then asks where to save.
 	private func export() {
-		size = clampedSize
 		errorMessage = nil
 		isExporting = true
 		Task {
