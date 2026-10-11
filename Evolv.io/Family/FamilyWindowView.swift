@@ -5,6 +5,7 @@
 //  A family document's window: the lineage view, generations left to
 //  right, laid out by FamilyLayout. Click selects (Command-click and
 //  Shift-click add), Return breeds a litter from each selected member,
+//  Shift-Return mates two (graft; crossover is on the menus),
 //  Delete rejects, double-click shows full size, Show Path highlights a
 //  member's ancestors (Escape clears it). Only cells near the
 //  visible area exist, so only they render (see FamilyThumbnails). See
@@ -22,6 +23,9 @@ struct FamilyWindowView: View {
 	@Environment(\.undoManager) private var undoManager
 	@AppStorage("familyThumbnailSize") private var thumbnailSize: Double = 128
 	@State private var selection: Set<String> = []
+	/// The order members were added to the selection, so the first of two
+	/// picked for mating is the primary parent.
+	@State private var selectionOrder: [String] = []
 	@State private var expandedLitters: Set<String> = []
 	@State private var fullSize: RandomGenotype?
 	@State private var pendingReject: PendingReject?
@@ -166,8 +170,12 @@ struct FamilyWindowView: View {
 		.focused($isFocused)
 		.focusEffectDisabled()
 		.onAppear { isFocused = true }
-		.onKeyPress(.return) {
-			breedSelection()
+		.onKeyPress(.return, phases: .down) { press in
+			if press.modifiers.contains(.shift) {
+				mateSelection(.graft)
+			} else {
+				breedSelection()
+			}
 			return .handled
 		}
 		.onKeyPress(.escape) {
@@ -215,7 +223,9 @@ struct FamilyWindowView: View {
 							  control1: CGPoint(x: midX, y: connector.from.y),
 							  control2: CGPoint(x: midX, y: connector.to.y))
 				let onPath = path.map { $0.contains(connector.parent) && pathLitters!.contains(connector.litter) }
-				let color: Color = onPath == true ? .accentColor : .secondary.opacity(onPath == false ? 0.3 : 1)
+				let isMating = family.litter(id: connector.litter)?.parents.count == 2
+				let lineColor: Color = isMating ? Self.parentColor(connector.isPrimary ? 0 : 1) : .secondary
+				let color: Color = onPath == true ? (isMating ? lineColor : .accentColor) : lineColor.opacity(onPath == false ? 0.3 : 1)
 				context.stroke(line, with: .color(color),
 							   style: StrokeStyle(lineWidth: onPath == true ? 2.5 : 1.5, dash: connector.isPrimary ? [] : [5, 4]))
 			}
@@ -233,6 +243,16 @@ struct FamilyWindowView: View {
 			.overlay {
 				RoundedRectangle(cornerRadius: radius)
 					.stroke(isSelected ? Color.accentColor : .clear, lineWidth: 3)
+			}
+			.overlay(alignment: .topLeading) {
+				if let base = baseParentPosition(member) {
+					Circle()
+						.fill(Self.parentColor(base))
+						.overlay(Circle().stroke(.white.opacity(0.8), lineWidth: 1))
+						.frame(width: cell.isChip ? 7 : 11, height: cell.isChip ? 7 : 11)
+						.padding(cell.isChip ? 2 : 5)
+						.help(base == 0 ? "Built on the first parent" : "Built on the second parent")
+				}
 			}
 			.overlay(alignment: .topTrailing) {
 				if member.starred && !cell.isChip {
@@ -275,6 +295,10 @@ struct FamilyWindowView: View {
 	private func contextMenu(for member: Family.Member) -> some View {
 		let targets = selection.contains(member.id) ? selection : [member.id]
 		Button(targets.count == 1 ? "Breed" : "Breed \(targets.count)") { breed(targets) }
+		if targets.count == 2 {
+			Button("Mate (Graft)") { mateSelection(.graft) }
+			Button("Mate (Crossover)") { mateSelection(.crossover) }
+		}
 		Button(member.starred ? "Unstar" : "Star") {
 			document.setStarred(!member.starred, for: targets, undoManager: undoManager)
 		}
@@ -345,6 +369,16 @@ struct FamilyWindowView: View {
 				.help("Breed a litter from each selected genotype (Return)")
 		}
 		ToolbarItem {
+			Menu("Mate", systemImage: "arrow.triangle.merge") {
+				Button("Graft") { mateSelection(.graft) }
+				Button("Crossover") { mateSelection(.crossover) }
+			} primaryAction: {
+				mateSelection(.graft)
+			}
+			.disabled(selection.count != 2)
+			.help("Mate the two selected genotypes (Shift-Return grafts; crossover is in the menu)")
+		}
+		ToolbarItem {
 			Button("Reject", systemImage: "trash") { rejectSelection() }
 				.disabled(selection.isEmpty)
 				.help("Remove the selected genotypes from the family (Delete)")
@@ -357,11 +391,54 @@ struct FamilyWindowView: View {
 #if os(macOS)
 		let modifiers = NSEvent.modifierFlags
 		if modifiers.contains(.command) || modifiers.contains(.shift) {
-			if selection.contains(id) { selection.remove(id) } else { selection.insert(id) }
+			if selection.contains(id) {
+				selection.remove(id)
+			} else {
+				selection.insert(id)
+				selectionOrder.removeAll { $0 == id }
+				selectionOrder.append(id)
+			}
 			return
 		}
 #endif
 		selection = [id]
+		selectionOrder = [id]
+	}
+
+	/// The selection in the order it was made.
+	private var orderedSelection: [String] {
+		selectionOrder.filter(selection.contains) + selection.subtracting(selectionOrder).sorted()
+	}
+
+	/// The two parents' colours in a mating litter: lines from the first
+	/// and second parent, and the dot on each child showing which one it's
+	/// built on.
+	static func parentColor(_ position: Int) -> Color {
+		position == 0 ? .blue : .orange
+	}
+
+	/// 0 or 1 for a mating child built on its litter's first or second
+	/// parent, nil for anyone else.
+	private func baseParentPosition(_ member: Family.Member) -> Int? {
+		guard let base = member.base, let litter = family.litter(id: member.litter), litter.parents.count == 2 else { return nil }
+		return litter.parents.firstIndex(of: base)
+	}
+
+	/// Mates the two selected members, the first selected as the primary
+	/// parent, keeping it in place on screen like breeding does.
+	private func mateSelection(_ method: MatingMethod) {
+		let parents = orderedSelection
+		guard parents.count == 2 else {
+			errorMessage = "Select exactly two genotypes to mate."
+			return
+		}
+		let before = currentLayout()
+		do {
+			let litter = try document.mate(parents[0], parents[1], method: method, undoManager: undoManager)
+			keepInPlace(parents[0], before: before, revealing: litter.id)
+		} catch {
+			errorMessage = error.localizedDescription
+		}
 	}
 
 	private func addRandomLitter() {
@@ -383,11 +460,9 @@ struct FamilyWindowView: View {
 		let anchor = memberID ?? pathMember
 		let before = currentLayout()
 		pathMember = memberID
-		let after = currentLayout()
-		let visibleRect = scrollTracker.visibleRect
-		guard !visibleRect.isEmpty, let anchor, let old = before.cells[anchor]?.frame, let new = after.cells[anchor]?.frame else { return }
-		scrollPosition.scrollTo(point: CGPoint(x: max(0, visibleRect.minX + new.minX - old.minX),
-											   y: max(0, visibleRect.minY + new.minY - old.minY)))
+		if let anchor {
+			keepInPlace(anchor, before: before, revealing: nil)
+		}
 	}
 
 	/// Adds the genotype on the clipboard as a root of its own.
@@ -438,11 +513,19 @@ struct FamilyWindowView: View {
 			errorMessage = error.localizedDescription
 			return
 		}
+		if let anchor {
+			keepInPlace(anchor, before: before, revealing: litters.first?.id)
+		}
+	}
+
+	/// Scrolls so `anchor` is where it was in `before`, then right if the
+	/// litter `revealing` is off screen.
+	private func keepInPlace(_ anchor: String, before: FamilyLayout, revealing litterID: String?) {
 		let after = currentLayout()
 		let visibleRect = scrollTracker.visibleRect
-		guard !visibleRect.isEmpty, let anchor, let old = before.cells[anchor]?.frame, let new = after.cells[anchor]?.frame else { return }
+		guard !visibleRect.isEmpty, let old = before.cells[anchor]?.frame, let new = after.cells[anchor]?.frame else { return }
 		var offset = CGPoint(x: visibleRect.minX, y: visibleRect.minY + new.minY - old.minY)
-		if let first = litters.first, let litterFrame = after.litterFrames[first.id] {
+		if let litterID, let litterFrame = after.litterFrames[litterID] {
 			let right = litterFrame.maxX + 2 * Self.margin
 			if right > offset.x + visibleRect.width {
 				offset.x = right - visibleRect.width

@@ -86,6 +86,7 @@ struct ExpressionMutatorTests {
 				case .wrap: weights.wrap = 1
 				case .hoist: weights.hoist = 1
 				case .copy: weights.copy = 1
+				case .graft, .crossover: break
 			}
 			configuration.callWeights = weights
 			configuration.variableWeights = weights

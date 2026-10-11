@@ -3,8 +3,9 @@
 //  Evolv.io
 //
 //  MCP tools on the family documents open in windows (see OpenFamilies and
-//  Documentation/EvolutionUI.md): list them, read one, breed, reject, and
-//  name or star members. Changes go through FamilyDocument like the
+//  Documentation/EvolutionUI.md): list them, read one, breed, mate,
+//  reject, and name or star members. `mate_genotypes` mates two
+//  expressions without a family, like `mutate_genotype`. Changes go through FamilyDocument like the
 //  window's own, so they show up at once, mark the document edited and can
 //  be undone in its window.
 //
@@ -81,6 +82,55 @@ enum MCPFamilyTools {
 			])
 		),
 		Tool(
+			name: "mate_family",
+			description: """
+			Mates two members of an open family, as Mate does in the window: graft (a random node \
+			of one parent replaced by a random node of the other, the receiving parent a coin \
+			flip per child) or crossover (both trees walked together, either parent's version \
+			taken at each difference; needs the same root). Up to the litter size of different \
+			children, none equal to a parent, so crossover litters are often smaller. Returns the \
+			litter and each child's base parent and grafts. Undoable in the window.
+			""",
+			inputSchema: .object([
+				"type": .string("object"),
+				"properties": .object([
+					"family": familySchema,
+					"parents": memberList("Two member ids; the first is the primary parent, whose branch the litter is drawn in."),
+					"method": .object(["type": .string("string"), "enum": .array([.string("graft"), .string("crossover")]),
+									   "description": .string("Default graft.")]),
+					"seed": .object([
+						"type": .array([.string("integer"), .string("string")]),
+						"description": .string("UInt64 seed, as an integer or a decimal string. Default: random."),
+					]),
+				]),
+				"required": .array([.string("parents")]),
+			])
+		),
+		Tool(
+			name: "mate_genotypes",
+			description: """
+			Mates two expressions without a family: up to `count` different children by graft or \
+			crossover (see mate_family), none equal to a parent. Returns JSON: seed, and each \
+			child's expression, base (0 or 1, the parent it's built on) and grafts (kind, path in \
+			the base, before, after). Same seed, same children.
+			""",
+			inputSchema: .object([
+				"type": .string("object"),
+				"properties": .object([
+					"parents": .object(["type": .string("array"), "items": .object(["type": .string("string")]),
+										"description": .string("Two s-expressions.")]),
+					"method": .object(["type": .string("string"), "enum": .array([.string("graft"), .string("crossover")]),
+									   "description": .string("Default graft.")]),
+					"count": .object(["type": .string("integer"), "description": .string("Most children, 1-100. Default 19.")]),
+					"seed": .object([
+						"type": .array([.string("integer"), .string("string")]),
+						"description": .string("UInt64 seed, as an integer or a decimal string. Default: random."),
+					]),
+				]),
+				"required": .array([.string("parents")]),
+			])
+		),
+		Tool(
 			name: "reject_family_members",
 			description: """
 			Removes members from an open family. A member with descendants can only go with \
@@ -130,6 +180,8 @@ enum MCPFamilyTools {
 					case "list_families": json = list()
 					case "read_family": json = try read(args)
 					case "breed_family": json = try breed(args)
+					case "mate_family": json = try mate(args)
+					case "mate_genotypes": json = try mateGenotypes(args)
 					case "reject_family_members": json = try reject(args)
 					default: json = try update(args)
 				}
@@ -180,6 +232,7 @@ enum MCPFamilyTools {
 				"expression": member.expression,
 			]
 			if bredFrom.contains(member.id) { json["bred_from"] = true }
+			if let base = member.base { json["base"] = base }
 			if let name = member.name { json["name"] = name }
 			if member.starred { json["starred"] = true }
 			if includeMutations, !member.mutations.isEmpty {
@@ -198,6 +251,7 @@ enum MCPFamilyTools {
 			]
 			json["seed"] = litter.seed.map(String.init)
 			json["source"] = litter.source
+			json["method"] = litter.method
 			return json
 		}
 		let settings = family.settings
@@ -229,6 +283,74 @@ enum MCPFamilyTools {
 					"parents": litter.parents,
 					"seed": litter.seed.map(String.init) ?? "",
 					"children": family.members(ofLitter: litter.id).map { ["id": $0.id, "expression": $0.expression] },
+				] as [String: Any]
+			},
+		]
+	}
+
+	@MainActor
+	private static func mate(_ args: [String: MCP.Value]) throws -> [String: Any] {
+		let entry = try family(args)
+		let parents = try strings(args["parents"], "parents")
+		guard parents.count == 2 else { throw Failure(message: "parents must be two member ids.") }
+		try checkMembers(parents, in: entry)
+		let litter = try entry.document.mate(parents[0], parents[1], method: try method(args), seed: try seed(args["seed"]),
+											 undoManager: entry.undoManager)
+		return [
+			"id": litter.id,
+			"method": litter.method ?? "",
+			"parents": litter.parents,
+			"seed": litter.seed.map(String.init) ?? "",
+			"children": entry.document.family.members(ofLitter: litter.id).map { member in
+				[
+					"id": member.id,
+					"expression": member.expression,
+					"base": member.base ?? "",
+					"grafts": member.mutations.map { ["kind": $0.kind, "path": $0.path, "before": $0.before, "after": $0.after] as [String: Any] },
+				] as [String: Any]
+			},
+		]
+	}
+
+	@MainActor
+	private static func mateGenotypes(_ args: [String: MCP.Value]) throws -> [String: Any] {
+		let texts = try strings(args["parents"], "parents")
+		guard texts.count == 2 else { throw Failure(message: "parents must be two expressions.") }
+		let parents = try texts.map { text in
+			do {
+				return try GeneratedExpression(parsing: text)
+			} catch {
+				throw Failure(message: "Couldn't read \(text): \(error)")
+			}
+		}
+		let method = try method(args)
+		let count = try integer(args["count"], "count") ?? 19
+		guard (1...100).contains(count) else { throw Failure(message: "count must be 1-100.") }
+		let seed = try seed(args["seed"]) ?? UInt64.random(in: 0...UInt64.max)
+		var configuration = RandomExpressionGenerator.Configuration()
+		configuration.excludedRootFunctions = UserDefaults.standard.randomExcludedRootNodes
+		configuration.excludedVariables = UserDefaults.standard.randomExcludedVariables
+		let mutator = ExpressionMutator(generator: RandomExpressionGenerator(signatures: NodeRegistry.shared.signatures,
+																			 configuration: configuration))
+		let unknown = mutator.unknownNodes(in: parents[0]).union(mutator.unknownNodes(in: parents[1]))
+		guard unknown.isEmpty else {
+			throw Failure(message: "The parents use nodes that aren't loaded: \(unknown.sorted().joined(separator: ", ")).")
+		}
+		if method == .crossover && !mutator.canCrossOver(parents[0], parents[1]) {
+			throw Failure(message: "Crossover needs parents with the same root function; try graft.")
+		}
+		var rng = SeededRandomNumberGenerator(seed: seed)
+		let children = mutator.mate((parents[0], parents[1]), method: method, count: count, using: &rng)
+		return [
+			"seed": String(seed),
+			"method": method.rawValue,
+			"parents": parents.map(\.description),
+			"children": children.map { child in
+				[
+					"expression": child.expression.description,
+					"node_count": child.expression.nodeCount,
+					"base": child.base,
+					"grafts": child.grafts.map { ["kind": $0.kind.rawValue, "path": $0.path, "before": $0.before.description, "after": $0.after.description] as [String: Any] },
 				] as [String: Any]
 			},
 		]
@@ -300,6 +422,16 @@ enum MCPFamilyTools {
 			throw Failure(message: "\(name) must be a non-empty array of member ids.")
 		}
 		return ids
+	}
+
+	private static func method(_ args: [String: MCP.Value]) throws -> MatingMethod {
+		switch args["method"] {
+			case nil, .null?: return .graft
+			case .string(let text)?:
+				guard let method = MatingMethod(rawValue: text) else { throw Failure(message: "method must be graft or crossover.") }
+				return method
+			default: throw Failure(message: "method must be graft or crossover.")
+		}
 	}
 
 	private static func integer(_ value: MCP.Value?, _ name: String) throws -> Int? {

@@ -127,6 +127,12 @@ public struct ExpressionMutator {
 		case hoist
 		/// 7: a copy of another node of the parent.
 		case copy
+		/// Mating, not mutation (see ExpressionMating.swift): a node of
+		/// the other parent grafted in.
+		case graft
+		/// Mating: the other parent's version, where crossover found a
+		/// difference.
+		case crossover
 	}
 
 	/// Relative chance of each kind, among those that apply to the node.
@@ -268,14 +274,14 @@ public struct ExpressionMutator {
 		}
 	}
 
-	private static func fits(_ type: NodeValueType?, _ slot: NodeValueType?) -> Bool {
+	static func fits(_ type: NodeValueType?, _ slot: NodeValueType?) -> Bool {
 		slot == nil || type == nil || type == slot
 	}
 
 	/// Whether `expression` could be a whole genotype: a call with
 	/// arguments that isn't one of the excluded roots, as the generator
 	/// requires.
-	private func canBeRoot(_ expression: GeneratedExpression) -> Bool {
+	func canBeRoot(_ expression: GeneratedExpression) -> Bool {
 		guard case .call(let name, let arguments) = expression, !arguments.isEmpty else { return false }
 		return !generator.configuration.excludedRootFunctions.contains(name)
 	}
@@ -347,6 +353,7 @@ public struct ExpressionMutator {
 				case .wrap: result = wrap(expression, slot: slot, isRoot: isRoot, using: &rng)
 				case .hoist: result = hoist(expression, slot: slot, isRoot: isRoot, using: &rng)
 				case .copy: result = copy(expression, slot: slot, isRoot: isRoot, parentSubtrees: parentSubtrees, using: &rng)
+				case .graft, .crossover: result = nil
 			}
 			// The root stays a call with arguments, as the generator makes
 			// it, even for a parent like `x` (which can only wrap or be

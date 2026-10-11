@@ -119,6 +119,16 @@ final class FamilyDocument: ReferenceFileDocument {
 		}
 	}
 
+	/// A mating litter from two members; `firstID` is the primary parent.
+	@discardableResult
+	func mate(_ firstID: String, _ secondID: String, method: MatingMethod, seed: UInt64? = nil,
+			  undoManager: UndoManager?) throws -> Family.Litter {
+		try change(method == .graft ? "Mate" : "Cross Over", undoManager: undoManager) { family in
+			try family.mate(firstID, secondID, method: method, signatures: NodeRegistry.shared.signatures,
+							seed: seed ?? UInt64.random(in: 0...UInt64.max))
+		}
+	}
+
 	@discardableResult
 	func reject(_ memberIDs: Set<String>, includingDescendants: Bool, undoManager: UndoManager?) throws -> Set<String> {
 		try change("Reject", undoManager: undoManager) { family in

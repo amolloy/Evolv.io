@@ -276,3 +276,71 @@ struct FamilyLayoutTests {
 		#expect(layout.cells["g3"]!.frame.minY > layout.litterFrames["L7"]!.maxY)
 	}
 }
+
+struct MatingTests {
+	private let mutator = ExpressionMutator(generator: RandomExpressionGenerator(signatures: signatures))
+
+	/// Sims' 1991 §4.3 example: crossover can only make two new children.
+	@Test func crossoverMakesSimsTwoNewChildren() throws {
+		let a = try GeneratedExpression(parsing: "(* (abs x) (mod x y))")
+		let b = try GeneratedExpression(parsing: "(* (/ y x) (* x -0.7))")
+		var rng = SeededRandomNumberGenerator(seed: 1)
+		let children = mutator.mate((a, b), method: .crossover, count: 19, using: &rng)
+		#expect(Set(children.map(\.expression.description)) == ["(* (abs x) (* x -0.7))", "(* (/ y x) (mod x y))"])
+		#expect(children.allSatisfy { $0.base == 0 && $0.grafts.allSatisfy { $0.kind == .crossover } })
+	}
+
+	@Test func crossoverNeedsTheSameRoot() throws {
+		let a = try GeneratedExpression(parsing: "(abs x)")
+		let b = try GeneratedExpression(parsing: "(cos x)")
+		#expect(!mutator.canCrossOver(a, b))
+		var rng = SeededRandomNumberGenerator(seed: 1)
+		#expect(mutator.mate((a, b), method: .crossover, count: 19, using: &rng).isEmpty)
+	}
+
+	@Test func aGraftIsOneParentWithOneNodeOfTheOther() throws {
+		let parents = try (GeneratedExpression(parsing: "(warped-color-noise x (abs y) 0.12 3)"),
+						   GeneratedExpression(parsing: "(color-grad (bw-noise 0.2 2) 3.1 1.86 #(0.95 0.7 0.59) 1.35)"))
+		var rng = SeededRandomNumberGenerator(seed: 7)
+		let children = mutator.mate(parents, method: .graft, count: 19, using: &rng)
+		#expect(children.count == 19)
+		#expect(Set(children.map(\.expression)).count == 19)
+		#expect(Set(children.map(\.base)) == [0, 1])
+		for child in children {
+			let (base, donor) = child.base == 0 ? parents : (parents.1, parents.0)
+			let graft = try #require(child.grafts.first)
+			#expect(child.grafts.count == 1 && graft.kind == .graft)
+			#expect(child.expression != parents.0 && child.expression != parents.1)
+			#expect(child.expression.replacing(at: graft.path, with: graft.before) == base)
+			#expect(donor.subtrees().contains { $0.expression == graft.after })
+			#expect(child.expression.isCallWithArguments)
+		}
+	}
+
+	@Test func aMatingLitterRecordsBothParentsAndEachChildsBase() throws {
+		var family = Family(created: created)
+		try family.addSeedLitter(expressions: ["(warped-color-noise x (abs y) 0.12 3)", "(warped-color-noise (cos x) y 0.3 2)"],
+								 source: nil, created: created)
+		let (a, b) = (family.members[0].id, family.members[1].id)
+		let litter = try family.mate(b, a, method: .graft, signatures: signatures, seed: 5, created: created)
+		#expect(litter.kind == .mating && litter.method == "graft" && litter.parents == [b, a])
+		let children = family.members(ofLitter: litter.id)
+		#expect(!children.isEmpty && children.allSatisfy { $0.base == a || $0.base == b })
+		#expect(family.generations()[children[0].id] == 1)
+		#expect(try Family(json: family.json()) == family)
+
+		var again = Family(created: created)
+		try again.addSeedLitter(expressions: family.members(ofLitter: family.litters[0].id).map(\.expression), source: nil)
+		let sameSeed = try again.mate(again.members[1].id, again.members[0].id, method: .graft, signatures: signatures, seed: 5)
+		#expect(again.members(ofLitter: sameSeed.id).map(\.expression) == children.map(\.expression))
+
+		let crossed = try family.mate(a, b, method: .crossover, signatures: signatures, seed: 1)
+		// Four differences: 2^4 combinations, minus the two parents.
+		#expect(family.members(ofLitter: crossed.id).count == 14)
+		let other = try family.addSeedLitter(expressions: ["(abs x)"], source: nil)
+		let differentRoot = family.members(ofLitter: other.id)[0].id
+		#expect(throws: Family.FamilyError.self) {
+			try family.mate(a, differentRoot, method: .crossover, signatures: signatures, seed: 1)
+		}
+	}
+}

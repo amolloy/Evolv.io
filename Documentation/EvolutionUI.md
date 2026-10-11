@@ -259,25 +259,37 @@ itself (crossover, graft) is a separate piece of work after this.
   mutating mated children (1993's dynamical systems say "mutation and/or
   mating", nothing more).
 
-### Proposal
+### What's built
 
-- **Select two members and Mate** (Shift-Return, toolbar, context menu).
-  The first one selected is the primary parent, so the selection keeps
-  its order. The litter is a `mating` litter with both as `parents`, and
-  a `method`: `graft` or `crossover`.
-- **Graft is the default** (Sims kept only it), into the primary parent:
-  each child is the primary parent with one random node replaced by a
-  random node of the second parent. It reuses the mutator's typing, so a
-  vector slot gets a vector-fitting node and the root stays a call, and
-  the same size cap; a child equal to either parent is redrawn.
-- **Crossover** is the other method, from the Mate menu. Children are
-  drawn with Sims' coin flips, duplicates and copies of either parent
-  are dropped, so its litter is often smaller than 19, and parents with
-  different roots say so instead of making an empty litter.
-- **No mutation on top** of mating, so a mated child shows only what the
-  parents had. Breeding it afterwards mutates it as usual.
-- Same seed, same children, as for breeding, with a `mate_genotypes` MCP
-  tool and `mate_family` for open families.
+Andy chose (2026-10-11): both methods with graft the default; the graft's
+receiving parent a coin flip per child, with the UI showing which parent
+each child is built on; duplicates dropped, so a litter can be smaller;
+no mutation on top of mating for now (to be revisited).
+
+- **Select two members and Mate** (Shift-Return or the toolbar's Mate
+  button grafts; crossover is in the Mate menu and the context menu). The
+  first one selected is the primary parent: the litter is drawn in its
+  branch. The litter is a `mating` litter with both as `parents` and a
+  `method` (`graft` or `crossover`).
+- **Colours**: in a mating litter the line from the first parent is blue
+  and from the second orange, and each child has a dot in the same colour
+  for the parent it's built on (its `base`).
+- **Graft**: each child is one parent (a coin flip) with one random node
+  replaced by a random node of the other. It uses the mutator's typing (a
+  vector slot gets a node that fits, the root stays a call) and size cap
+  (the larger parent's). The child's `mutations` log the graft (kind
+  `graft`, path in the base, before, after).
+- **Crossover**: Sims' coin flips at each difference, built on the first
+  parent; the log lists what came from the second (kind `crossover`).
+  Parents with different roots are refused with a message. Two parents
+  with *n* differences make at most 2^*n* - 2 children.
+- Children equal to a parent or to a sibling are dropped; drawing stops
+  at the litter size or after about 50 fruitless draws per child.
+- Mated children aren't mutated (yet). Breeding one afterwards mutates it
+  as usual.
+- Same seed, same children: `ExpressionMutator.mate` in
+  `ExpressionTree/ExpressionMating.swift`, `Family.mate`, and the MCP
+  tools `mate_genotypes` and `mate_family`.
 
 ## 4. MCP
 
@@ -321,7 +333,7 @@ open in windows: `list_families`, `read_family`, `breed_family`,
    Family From This (library sidebar context menu), and **Add Roots >
    Paste Genotype** for a copied expression. Each litter is outlined
    (`FamilyLayout.litterOutlines`).
-5. **MCP family tools** (done), then **mating**.
+5. **MCP family tools** and **mating** (done).
 
 ## Decisions
 

@@ -292,6 +292,11 @@ when only one is open. Source: `Evolv.io/MCP/MCPFamilyTools.swift`.
   Return does in the window. With `seed`, the first litter uses it and the
   next `seed + 1`; the same parent and seed give the same children as
   `mutate_genotype` with the family's settings.
+- `mate_family(family, parents, method, seed)`: two members, the first the
+  primary parent; `method` is `graft` (default) or `crossover`. Returns
+  each child's `base` parent and `grafts`.
+- `mate_genotypes(parents, method, count, seed)`: the same for two
+  expressions, without a family, like `mutate_genotype`.
 - `reject_family_members(family, members, include_descendants)`: fails on
   a member with descendants unless `include_descendants` is true.
 - `update_family_member(family, member, name, starred)`: `""` removes the

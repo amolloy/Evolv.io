@@ -81,8 +81,7 @@ public struct Family: Equatable, Sendable {
 			public static let seed = Kind(rawValue: "seed")
 			/// One parent: ExpressionMutator children.
 			public static let mutation = Kind(rawValue: "mutation")
-			/// Two parents. Not implemented yet; reserved so the format
-			/// doesn't change when it is.
+			/// Two parents, by the litter's `method` (graft or crossover).
 			public static let mating = Kind(rawValue: "mating")
 
 			public init(from decoder: Decoder) throws {
@@ -106,21 +105,25 @@ public struct Family: Equatable, Sendable {
 		public let seed: UInt64?
 		/// Where a `seed` litter came from, e.g. `library:11-figure-9`.
 		public let source: String?
+		/// How a `mating` litter was made: a MatingMethod raw value.
+		public let method: String?
 		/// The settings the litter was made with, for `random` and
 		/// `mutation`.
 		public let settings: Settings?
 		public let created: Date
 
 		enum CodingKeys: String, CodingKey {
-			case id, kind, parents, seed, source, settings, created
+			case id, kind, parents, seed, source, method, settings, created
 		}
 
-		public init(id: String, kind: Kind, parents: [String], seed: UInt64?, source: String?, settings: Settings?, created: Date) {
+		public init(id: String, kind: Kind, parents: [String], seed: UInt64?, source: String?, method: String? = nil,
+					settings: Settings?, created: Date) {
 			self.id = id
 			self.kind = kind
 			self.parents = parents
 			self.seed = seed
 			self.source = source
+			self.method = method
 			self.settings = settings
 			self.created = created
 		}
@@ -139,6 +142,7 @@ public struct Family: Equatable, Sendable {
 				seed = nil
 			}
 			source = try container.decodeIfPresent(String.self, forKey: .source)
+			method = try container.decodeIfPresent(String.self, forKey: .method)
 			settings = try container.decodeIfPresent(Settings.self, forKey: .settings)
 			created = try container.decode(Date.self, forKey: .created)
 		}
@@ -150,6 +154,7 @@ public struct Family: Equatable, Sendable {
 			try container.encode(parents, forKey: .parents)
 			try container.encodeIfPresent(seed.map(String.init), forKey: .seed)
 			try container.encodeIfPresent(source, forKey: .source)
+			try container.encodeIfPresent(method, forKey: .method)
 			try container.encodeIfPresent(settings, forKey: .settings)
 			try container.encode(created, forKey: .created)
 		}
@@ -164,24 +169,29 @@ public struct Family: Equatable, Sendable {
 		/// Genotype text. Not parsed when the family loads, so a member
 		/// using a node that isn't loaded any more still opens.
 		public let expression: String
-		/// What changed from the parent, for a `mutation` child.
+		/// What changed from the parent, for a `mutation` child; for a
+		/// `mating` child, what came from the other parent.
 		public let mutations: [MutationRecord]
+		/// For a `mating` child, the parent it's built on (the one that
+		/// received the graft).
+		public let base: String?
 		public var name: String?
 		public var starred: Bool
 		/// View state: the lineage view hides this member's descendants.
 		public var collapsed: Bool
 
 		enum CodingKeys: String, CodingKey {
-			case id, litter, index, expression, mutations, name, starred, collapsed
+			case id, litter, index, expression, mutations, base, name, starred, collapsed
 		}
 
 		public init(id: String, litter: String, index: Int, expression: String, mutations: [MutationRecord] = [],
-					name: String? = nil, starred: Bool = false, collapsed: Bool = false) {
+					base: String? = nil, name: String? = nil, starred: Bool = false, collapsed: Bool = false) {
 			self.id = id
 			self.litter = litter
 			self.index = index
 			self.expression = expression
 			self.mutations = mutations
+			self.base = base
 			self.name = name
 			self.starred = starred
 			self.collapsed = collapsed
@@ -194,6 +204,7 @@ public struct Family: Equatable, Sendable {
 			index = try container.decode(Int.self, forKey: .index)
 			expression = try container.decode(String.self, forKey: .expression)
 			mutations = try container.decodeIfPresent([MutationRecord].self, forKey: .mutations) ?? []
+			base = try container.decodeIfPresent(String.self, forKey: .base)
 			name = try container.decodeIfPresent(String.self, forKey: .name)
 			starred = try container.decodeIfPresent(Bool.self, forKey: .starred) ?? false
 			collapsed = try container.decodeIfPresent(Bool.self, forKey: .collapsed) ?? false
@@ -207,6 +218,7 @@ public struct Family: Equatable, Sendable {
 			try container.encode(index, forKey: .index)
 			try container.encode(expression, forKey: .expression)
 			if !mutations.isEmpty { try container.encode(mutations, forKey: .mutations) }
+			try container.encodeIfPresent(base, forKey: .base)
 			try container.encodeIfPresent(name, forKey: .name)
 			if starred { try container.encode(starred, forKey: .starred) }
 			if collapsed { try container.encode(collapsed, forKey: .collapsed) }
@@ -326,7 +338,7 @@ public struct Family: Equatable, Sendable {
 		var rng = SeededRandomNumberGenerator(seed: seed)
 		let expressions = (0..<settings.litterSize).map { _ in generator.generate(using: &rng).description }
 		return addLitter(kind: .random, parents: [], seed: seed, source: nil, settings: settings, created: created,
-						 children: expressions.map { ($0, []) })
+						 children: expressions.map { ($0, [], nil) })
 	}
 
 	/// Adds a root litter of genotypes from elsewhere (the library, a file,
@@ -335,7 +347,7 @@ public struct Family: Equatable, Sendable {
 	public mutating func addSeedLitter(expressions: [String], source: String?, created: Date = Date()) throws -> Litter {
 		guard !expressions.isEmpty else { throw FamilyError("A seed litter needs at least one genotype.") }
 		return addLitter(kind: .seed, parents: [], seed: nil, source: source, settings: nil, created: created,
-						 children: expressions.map { ($0, []) })
+						 children: expressions.map { ($0, [], nil) })
 	}
 
 	/// Breeds a litter of `settings.litterSize` mutated children from
@@ -359,25 +371,63 @@ public struct Family: Equatable, Sendable {
 			throw FamilyError("\(parentID) uses nodes that aren't loaded: \(unknown.sorted().joined(separator: ", ")).")
 		}
 		var rng = SeededRandomNumberGenerator(seed: seed)
-		var children: [(String, [MutationRecord])] = []
+		var children: [(String, [MutationRecord], String?)] = []
 		for _ in 0..<settings.litterSize {
 			guard let child = mutator.mutate(parent, using: &rng) else {
 				throw FamilyError("No mutation of \(parentID) changed it within the size limit of \(mutator.maxNodes(forParent: parent)) nodes.")
 			}
-			children.append((child.expression.description, child.mutations.map(MutationRecord.init)))
+			children.append((child.expression.description, child.mutations.map(MutationRecord.init), nil))
 		}
 		return addLitter(kind: .mutation, parents: [parentID], seed: seed, source: nil, settings: settings, created: created,
 						 children: children)
 	}
 
-	private mutating func addLitter(kind: Litter.Kind, parents: [String], seed: UInt64?, source: String?, settings: Settings?,
-									created: Date, children: [(expression: String, mutations: [MutationRecord])]) -> Litter {
-		let litter = Litter(id: takeID(prefix: "L"), kind: kind, parents: parents, seed: seed, source: source,
+	/// Mates `firstID` with `secondID`: up to `settings.litterSize`
+	/// different children, none equal to a parent, drawn from `seed`.
+	/// Crossover often makes fewer; it throws when it can make none (the
+	/// parents' roots differ, or they're equal).
+	@discardableResult
+	public mutating func mate(_ firstID: String, _ secondID: String, method: MatingMethod, signatures: [String: NodeSignature],
+							  seed: UInt64, created: Date = Date()) throws -> Litter {
+		guard firstID != secondID else { throw FamilyError("A member can't mate with itself.") }
+		let parents = try [firstID, secondID].map { id -> GeneratedExpression in
+			guard let member = member(id: id) else { throw FamilyError("There's no member \(id) in this family.") }
+			do {
+				return try GeneratedExpression(parsing: member.expression)
+			} catch {
+				throw FamilyError("Couldn't read \(id): \(error)")
+			}
+		}
+		let generator = RandomExpressionGenerator(signatures: signatures, configuration: settings.generatorConfiguration)
+		let mutator = ExpressionMutator(generator: generator, configuration: settings.mutatorConfiguration)
+		let unknown = mutator.unknownNodes(in: parents[0]).union(mutator.unknownNodes(in: parents[1]))
+		guard unknown.isEmpty else {
+			throw FamilyError("The parents use nodes that aren't loaded: \(unknown.sorted().joined(separator: ", ")).")
+		}
+		if method == .crossover && !mutator.canCrossOver(parents[0], parents[1]) {
+			throw FamilyError("Crossover needs parents with the same root function (\(firstID) and \(secondID) differ there); try graft.")
+		}
+		var rng = SeededRandomNumberGenerator(seed: seed)
+		let children = mutator.mate((parents[0], parents[1]), method: method, count: settings.litterSize, using: &rng)
+		guard !children.isEmpty else {
+			throw FamilyError("Mating \(firstID) and \(secondID) didn't make anything new.")
+		}
+		let ids = [firstID, secondID]
+		return addLitter(kind: .mating, parents: ids, seed: seed, source: nil, method: method.rawValue, settings: settings,
+						 created: created, children: children.map { child in
+							 (child.expression.description, child.grafts.map(MutationRecord.init), ids[child.base])
+						 })
+	}
+
+	private mutating func addLitter(kind: Litter.Kind, parents: [String], seed: UInt64?, source: String?, method: String? = nil,
+									settings: Settings?, created: Date,
+									children: [(expression: String, mutations: [MutationRecord], base: String?)]) -> Litter {
+		let litter = Litter(id: takeID(prefix: "L"), kind: kind, parents: parents, seed: seed, source: source, method: method,
 							settings: settings, created: created)
 		litters.append(litter)
 		for (index, child) in children.enumerated() {
 			members.append(Member(id: takeID(prefix: "g"), litter: litter.id, index: index,
-								  expression: child.expression, mutations: child.mutations))
+								  expression: child.expression, mutations: child.mutations, base: child.base))
 		}
 		return litter
 	}
