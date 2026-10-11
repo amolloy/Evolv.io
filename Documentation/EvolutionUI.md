@@ -204,6 +204,10 @@ stepper and context menu move here).
   name is the member's name, or "Base generation 3". Once the folder is
   chosen the dialog closes and the renders run in the background, shown
   as a circular progress in the toolbar whose popover can stop them.
+  Export Image does the same once its save panel closes. The progress
+  (`BackgroundExports.swift`) is shared: it shows every running export in
+  the toolbar of the genotype library, genotype windows and family
+  windows, whichever window started it.
   `ExportPathSheet.swift`.
 - **Captions** (Export Image and Export Path, off by default): the
   expression in white monospaced text on a dark band, either over the

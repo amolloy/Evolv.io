@@ -7,8 +7,8 @@
 //  mated child) rendered with the Export Image options into a folder, one
 //  file per genotype, named for its generation. The dialog closes once the
 //  folder is chosen and the renders run in the background, with a circular
-//  progress in the family window's toolbar (PathExport). macOS only for
-//  now, since it writes several files into a folder the user picks.
+//  progress in the toolbar (BackgroundExports). macOS only for now, since
+//  it writes several files into a folder the user picks.
 //
 
 #if os(macOS)
@@ -26,8 +26,6 @@ struct ExportPathSheet: View {
 	/// Oldest first.
 	let items: [Item]
 	let defaultBaseName: String
-	/// Runs the export once the folder is chosen.
-	let export: PathExport
 
 	@Environment(\.dismiss) private var dismiss
 	@State private var baseName = ""
@@ -117,7 +115,7 @@ struct ExportPathSheet: View {
 	}
 
 	/// Checks for files it would replace and that every genotype parses,
-	/// then hands the renders to `export` and closes.
+	/// then hands the renders to BackgroundExports and closes.
 	private func start(into folder: URL) {
 		let settings = ExportImageSettings.current
 		let urls = fileNames(extension: settings.format.preferredFilenameExtension ?? "png")
@@ -149,59 +147,20 @@ struct ExportPathSheet: View {
 			return
 		}
 
-		export.start(genotypes: genotypes, urls: urls, folderName: folder.lastPathComponent, settings: settings)
-		dismiss()
-	}
-}
-
-/// A running Export Path, shown as a circular progress in the family
-/// window's toolbar. One at a time per window.
-@MainActor
-@Observable
-final class PathExport {
-	private(set) var done = 0
-	private(set) var total = 0
-	private(set) var folderName = ""
-	private(set) var isRunning = false
-	/// Set when an export fails or is stopped, for the window to show.
-	var errorMessage: String?
-
-	private var task: Task<Void, Never>?
-
-	var fraction: Double {
-		total == 0 ? 0 : Double(done) / Double(total)
-	}
-
-	func start(genotypes: [RandomGenotype], urls: [URL], folderName: String, settings: ExportImageSettings) {
-		guard !isRunning else { return }
-		// One band for every image, so a caption below keeps them one size.
-		let captionBand = settings.captionBand(for: genotypes)
-		done = 0
-		total = genotypes.count
-		self.folderName = folderName
-		isRunning = true
-		task = Task {
+		BackgroundExports.shared.run(title: "\(genotypes.count) images to \(folder.lastPathComponent)",
+									 total: genotypes.count, revealWhenDone: true) { stepDone in
+			// One band for every image, so a caption below keeps them one size.
+			let captionBand = settings.captionBand(for: genotypes)
 			var written: [URL] = []
-			do {
-				for (index, genotype) in genotypes.enumerated() {
-					try Task.checkCancellation()
-					try await settings.data(for: genotype, captionBand: captionBand).write(to: urls[index], options: .atomic)
-					written.append(urls[index])
-					done = index + 1
-				}
-				NSWorkspace.shared.activateFileViewerSelecting(written)
-			} catch is CancellationError {
-				errorMessage = "Export Path stopped after \(written.count) of \(genotypes.count) images."
-			} catch {
-				errorMessage = "Export Path stopped after \(written.count) of \(genotypes.count) images: \(error.localizedDescription)"
+			for (index, genotype) in genotypes.enumerated() {
+				try Task.checkCancellation()
+				try await settings.data(for: genotype, captionBand: captionBand).write(to: urls[index], options: .atomic)
+				written.append(urls[index])
+				stepDone()
 			}
-			isRunning = false
-			task = nil
+			return written
 		}
-	}
-
-	func stop() {
-		task?.cancel()
+		dismiss()
 	}
 }
 #endif

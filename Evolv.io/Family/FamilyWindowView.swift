@@ -35,10 +35,6 @@ struct FamilyWindowView: View {
 	@State private var exportingImage: RandomGenotype?
 	/// The member whose path the Export Path dialog is for.
 	@State private var exportingPath: Family.Member?
-#if os(macOS)
-	@State private var pathExport = PathExport()
-	@State private var showingExportProgress = false
-#endif
 	@State private var showingSettings = false
 	/// The member whose line back to the roots is highlighted.
 	@State private var pathMember: String?
@@ -104,14 +100,7 @@ struct FamilyWindowView: View {
 #if os(macOS)
 		.sheet(item: $exportingPath) { member in
 			ExportPathSheet(items: pathItems(to: member.id),
-							defaultBaseName: member.name ?? fileURL?.deletingPathExtension().lastPathComponent ?? "Path",
-							export: pathExport)
-		}
-		.onChange(of: pathExport.errorMessage) { _, message in
-			if let message {
-				errorMessage = message
-				pathExport.errorMessage = nil
-			}
+							defaultBaseName: member.name ?? fileURL?.deletingPathExtension().lastPathComponent ?? "Path")
 		}
 #endif
 		.confirmationDialog(rejectTitle, isPresented: Binding(get: { pendingReject != nil }, set: { if !$0 { pendingReject = nil } }),
@@ -420,7 +409,6 @@ struct FamilyWindowView: View {
 			if let genotype = randomGenotype(member) { exportingImage = genotype }
 		}
 		Button("Export Path…") { exportingPath = member }
-			.disabled(pathExport.isRunning)
 #else
 		Button("Save to Library…") { savingMember = member }
 #endif
@@ -431,33 +419,7 @@ struct FamilyWindowView: View {
 	@ToolbarContentBuilder
 	private var toolbar: some ToolbarContent {
 #if os(macOS)
-		if pathExport.isRunning {
-			ToolbarItem {
-				Button {
-					showingExportProgress = true
-				} label: {
-					ProgressView(value: pathExport.fraction)
-						.progressViewStyle(.circular)
-						.controlSize(.small)
-				}
-				.help("Exporting path: \(pathExport.done) of \(pathExport.total)")
-				.popover(isPresented: $showingExportProgress) {
-					VStack(alignment: .leading, spacing: 8) {
-						Text("Exporting path to \(pathExport.folderName)")
-							.font(.headline)
-						ProgressView(value: pathExport.fraction) {
-							Text("\(pathExport.done) of \(pathExport.total) images")
-						}
-						HStack {
-							Spacer()
-							Button("Stop") { pathExport.stop() }
-						}
-					}
-					.padding()
-					.frame(width: 280)
-				}
-			}
-		}
+		BackgroundExportsToolbarItem()
 #endif
 		ToolbarItem {
 			Slider(value: $thumbnailSize, in: 64...256) {

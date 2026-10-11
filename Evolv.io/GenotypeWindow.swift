@@ -40,6 +40,7 @@ struct GenotypeWindowView: View {
 			}
 		}
 		.navigationTitle(opened.name ?? "Genotype")
+		.toolbar { BackgroundExportsToolbarItem() }
 		.task(id: opened) {
 			do {
 				let node = try ContentView.parser.parse(opened.expression)

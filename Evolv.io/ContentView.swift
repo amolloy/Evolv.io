@@ -91,6 +91,9 @@ struct ContentView: View {
 				Text("Select a genotype")
 			}
 		}
+#if os(macOS)
+		.toolbar { BackgroundExportsToolbarItem() }
+#endif
 	}
 
 	func node(for expression: String) -> any Node {

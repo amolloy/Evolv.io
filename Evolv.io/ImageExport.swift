@@ -377,8 +377,8 @@ struct ExportImageSheet: View {
 	}
 
 #if os(macOS)
-	/// Asks where to save first, then renders, so a cancelled save panel
-	/// doesn't cost a render.
+	/// Asks where to save, then closes and renders in the background, so a
+	/// cancelled save panel doesn't cost a render.
 	private func export() {
 		errorMessage = nil
 		let panel = NSSavePanel()
@@ -389,16 +389,16 @@ struct ExportImageSheet: View {
 		panel.isExtensionHidden = false
 		let completion: (NSApplication.ModalResponse) -> Void = { response in
 			guard response == .OK, let url = panel.url else { return }
-			isExporting = true
-			Task {
-				defer { isExporting = false }
-				do {
-					try await renderData().write(to: url, options: .atomic)
-					dismiss()
-				} catch {
-					errorMessage = error.localizedDescription
-				}
+			// Closes now and renders in the background, with the progress in
+			// the toolbar (BackgroundExports).
+			let settings = ExportImageSettings.current
+			let genotype = genotype
+			BackgroundExports.shared.run(title: url.lastPathComponent, total: 1, revealWhenDone: false) { stepDone in
+				try await settings.data(for: genotype).write(to: url, options: .atomic)
+				stepDone()
+				return [url]
 			}
+			dismiss()
 		}
 		if let window = NSApp.keyWindow {
 			panel.beginSheetModal(for: window, completionHandler: completion)
