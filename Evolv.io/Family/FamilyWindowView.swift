@@ -124,7 +124,8 @@ struct FamilyWindowView: View {
 	// MARK: - Lineage
 
 	private var lineage: some View {
-		let layout = FamilyLayout(family: family, metrics: metrics, expandedLitters: expandedLitters)
+		let path = highlightedPath
+		let layout = FamilyLayout(family: family, metrics: metrics, expandedLitters: expandedLitters, focus: path)
 		let byID = Dictionary(uniqueKeysWithValues: family.members.map { ($0.id, $0) })
 		// Cells within a screen of the visible area, in content coordinates
 		// (the layout's, offset by the margin).
@@ -132,14 +133,13 @@ struct FamilyWindowView: View {
 		let nearby = visibleRect.isEmpty ? CGRect(origin: .zero, size: CGSize(width: 2000, height: 2000))
 			: visibleRect.insetBy(dx: -visibleRect.width / 2, dy: -visibleRect.height / 2)
 		let shown = layout.cells.filter { nearby.intersects($0.value.frame.offsetBy(dx: margin, dy: margin)) }
-		let path = highlightedPath
 		return ScrollView([.horizontal, .vertical]) {
 			ZStack(alignment: .topLeading) {
 				connectors(layout, path: path)
 				ForEach(Array(shown.keys.sorted()), id: \.self) { id in
 					if let cell = shown[id], let member = byID[id] {
 						cellView(member, cell: cell, hidden: layout.hiddenDescendants[id])
-							.opacity(path == nil || path!.contains(id) ? 1 : 0.3)
+							.opacity(path == nil || path!.contains(id) ? 1 : 0.5)
 							.position(x: cell.frame.midX, y: cell.frame.midY)
 					}
 				}
@@ -167,7 +167,7 @@ struct FamilyWindowView: View {
 		}
 		.onKeyPress(.escape) {
 			guard pathMember != nil else { return .ignored }
-			pathMember = nil
+			setPath(nil)
 			return .handled
 		}
 #if os(macOS)
@@ -278,9 +278,9 @@ struct FamilyWindowView: View {
 			renaming = member
 		}
 		if pathMember == member.id {
-			Button("Hide Path") { pathMember = nil }
+			Button("Hide Path") { setPath(nil) }
 		} else {
-			Button("Show Path") { pathMember = member.id }
+			Button("Show Path") { setPath(member.id) }
 		}
 		if family.hasBeenBredFrom(member.id) {
 			Button(member.collapsed ? "Expand Branch" : "Collapse Branch") {
@@ -362,10 +362,27 @@ struct FamilyWindowView: View {
 	private func addRandomLitter() {
 		let litter = document.addRandomLitter(undoManager: undoManager)
 		// Root litters go at the bottom of the first column.
-		let layout = FamilyLayout(family: family, metrics: metrics, expandedLitters: expandedLitters)
+		let layout = currentLayout()
 		if let frame = layout.litterFrames[litter.id] {
 			scrollPosition.scrollTo(point: CGPoint(x: 0, y: max(0, frame.minY)))
 		}
+	}
+
+	private func currentLayout() -> FamilyLayout {
+		FamilyLayout(family: family, metrics: metrics, expandedLitters: expandedLitters, focus: highlightedPath)
+	}
+
+	/// Shows (or with nil, hides) the path to `memberID`. Everything off
+	/// the path changes size, so the member keeps its place on screen.
+	private func setPath(_ memberID: String?) {
+		let anchor = memberID ?? pathMember
+		let before = currentLayout()
+		pathMember = memberID
+		let after = currentLayout()
+		let visibleRect = scrollTracker.visibleRect
+		guard !visibleRect.isEmpty, let anchor, let old = before.cells[anchor]?.frame, let new = after.cells[anchor]?.frame else { return }
+		scrollPosition.scrollTo(point: CGPoint(x: max(0, visibleRect.minX + new.minX - old.minX),
+											   y: max(0, visibleRect.minY + new.minY - old.minY)))
 	}
 
 	/// Adds the genotype on the clipboard as a root of its own.
@@ -388,7 +405,7 @@ struct FamilyWindowView: View {
 		}
 		do {
 			let litter = try document.addSeedLitter(expressions: [expression], source: "pasted", undoManager: undoManager)
-			let layout = FamilyLayout(family: family, metrics: metrics, expandedLitters: expandedLitters)
+			let layout = currentLayout()
 			if let frame = layout.litterFrames[litter.id] {
 				scrollPosition.scrollTo(point: CGPoint(x: 0, y: max(0, frame.minY)))
 			}
@@ -408,7 +425,7 @@ struct FamilyWindowView: View {
 	private func breed(_ parents: Set<String>) {
 		guard !parents.isEmpty else { return }
 		let anchor = family.members.map(\.id).first(where: parents.contains)
-		let before = FamilyLayout(family: family, metrics: metrics, expandedLitters: expandedLitters)
+		let before = currentLayout()
 		let litters: [Family.Litter]
 		do {
 			litters = try document.breed(parents, undoManager: undoManager)
@@ -416,7 +433,7 @@ struct FamilyWindowView: View {
 			errorMessage = error.localizedDescription
 			return
 		}
-		let after = FamilyLayout(family: family, metrics: metrics, expandedLitters: expandedLitters)
+		let after = currentLayout()
 		let visibleRect = scrollTracker.visibleRect
 		guard !visibleRect.isEmpty, let anchor, let old = before.cells[anchor]?.frame, let new = after.cells[anchor]?.frame else { return }
 		var offset = CGPoint(x: visibleRect.minX, y: visibleRect.minY + new.minY - old.minY)
@@ -476,7 +493,7 @@ struct FamilyWindowView: View {
 	}
 }
 
-/// One member's render, from FamilyThumbnails.
+/// One member's render, from FamilyThumbnails, scaled to the cell.
 private struct FamilyThumbnail: View {
 	let expression: String
 	let size: CGFloat
@@ -484,12 +501,19 @@ private struct FamilyThumbnail: View {
 	@State private var image: CGImage?
 	@State private var failed = false
 
+	init(expression: String, size: CGFloat) {
+		self.expression = expression
+		self.size = size
+		_image = State(initialValue: FamilyThumbnails.shared.memoryThumbnail(for: expression))
+	}
+
 	var body: some View {
 		ZStack {
 			Rectangle().fill(.quaternary)
 			if let image {
 				Image(decorative: image, scale: 1, orientation: .up)
 					.resizable()
+					.interpolation(.high)
 			} else if failed {
 				Image(systemName: "exclamationmark.triangle")
 					.foregroundStyle(.secondary)
@@ -497,8 +521,9 @@ private struct FamilyThumbnail: View {
 				ProgressView().controlSize(.small)
 			}
 		}
-		.task(id: key) {
-			switch await FamilyThumbnails.shared.thumbnail(for: expression, size: renderSize) {
+		.task(id: expression) {
+			guard image == nil else { return }
+			switch await FamilyThumbnails.shared.thumbnail(for: expression) {
 				case .image(let rendered) where !Task.isCancelled:
 					image = rendered
 				case .unreadable where !Task.isCancelled:
@@ -508,14 +533,6 @@ private struct FamilyThumbnail: View {
 			}
 		}
 	}
-
-	/// Renders at the nearest of a few sizes, so dragging the size slider
-	/// doesn't render every step.
-	private var renderSize: Int {
-		[48, 96, 160, 256].first { CGFloat($0) >= size } ?? 256
-	}
-
-	private var key: String { "\(renderSize) \(expression)" }
 }
 
 /// The family's defaults for new litters. Changes are undoable and don't

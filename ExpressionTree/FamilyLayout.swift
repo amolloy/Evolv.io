@@ -65,10 +65,13 @@ public struct FamilyLayout: Equatable, Sendable {
 	public private(set) var hiddenDescendants: [String: Int] = [:]
 	public private(set) var size: CGSize = .zero
 
-	/// - Parameter expandedLitters: litters to show every member of full
-	///   size, even though someone in them has been bred from.
-	public init(family: Family, metrics: Metrics = Metrics(), expandedLitters: Set<String> = []) {
-		var builder = Builder(family: family, metrics: metrics, expandedLitters: expandedLitters)
+	/// - Parameters:
+	///   - expandedLitters: litters to show every member of full size, even
+	///     though someone in them has been bred from.
+	///   - focus: when set (Show Path), only these members are full size;
+	///     everyone else is a chip, `expandedLitters` notwithstanding.
+	public init(family: Family, metrics: Metrics = Metrics(), expandedLitters: Set<String> = [], focus: Set<String>? = nil) {
+		var builder = Builder(family: family, metrics: metrics, expandedLitters: expandedLitters, focus: focus)
 		var y: CGFloat = 0
 		for litter in family.litters where litter.parents.isEmpty {
 			if y > 0 { y += metrics.litterSpacing }
@@ -89,6 +92,7 @@ public struct FamilyLayout: Equatable, Sendable {
 		let family: Family
 		let metrics: Metrics
 		let expandedLitters: Set<String>
+		let focus: Set<String>?
 		let generations: [String: Int]
 		/// Litters by their first parent, in the order they were made.
 		let littersByPrimaryParent: [String: [Family.Litter]]
@@ -101,10 +105,11 @@ public struct FamilyLayout: Equatable, Sendable {
 		var connectors: [Connector] = []
 		var hiddenDescendants: [String: Int] = [:]
 
-		init(family: Family, metrics: Metrics, expandedLitters: Set<String>) {
+		init(family: Family, metrics: Metrics, expandedLitters: Set<String>, focus: Set<String>?) {
 			self.family = family
 			self.metrics = metrics
 			self.expandedLitters = expandedLitters
+			self.focus = focus
 			generations = family.generations()
 			littersByPrimaryParent = Dictionary(grouping: family.litters.filter { !$0.parents.isEmpty }, by: { $0.parents[0] })
 			bredFrom = Set(family.litters.flatMap(\.parents))
@@ -129,14 +134,18 @@ public struct FamilyLayout: Equatable, Sendable {
 			}
 
 			for member in members {
-				if showAll || bredFrom.contains(member.id) || member.starred {
+				let isFull = focus.map { $0.contains(member.id) } ?? (showAll || bredFrom.contains(member.id) || member.starred)
+				// Off the focused path, a member someone bred from is a chip
+				// of its own, still at the top of its branch.
+				let isBranchChip = !isFull && littersByPrimaryParent[member.id] != nil
+				if isFull || isBranchChip {
 					if !chipRun.isEmpty {
 						startItem()
 						y = placeChips(chipRun, x: x, top: y)
 						chipRun = []
 					}
 					startItem()
-					y = placeFull(member, x: x, top: y)
+					y = placeBranch(member, isChip: isBranchChip, x: x, top: y)
 				} else {
 					chipRun.append(member)
 				}
@@ -158,11 +167,12 @@ public struct FamilyLayout: Equatable, Sendable {
 			return y
 		}
 
-		/// A full-size member at the top of its band, with its litters
-		/// stacked beside it. Returns the band's bottom.
-		private mutating func placeFull(_ member: Family.Member, x: CGFloat, top: CGFloat) -> CGFloat {
-			cells[member.id] = Cell(frame: CGRect(x: x, y: top, width: metrics.cellSize, height: metrics.cellSize), isChip: false)
-			var bottom = top + metrics.cellSize
+		/// A member (full size, or a chip) at the top of its band, with its
+		/// litters stacked beside it. Returns the band's bottom.
+		private mutating func placeBranch(_ member: Family.Member, isChip: Bool, x: CGFloat, top: CGFloat) -> CGFloat {
+			let size = isChip ? metrics.chipSize : metrics.cellSize
+			cells[member.id] = Cell(frame: CGRect(x: x, y: top, width: size, height: size), isChip: isChip)
+			var bottom = top + size
 			let childLitters = littersByPrimaryParent[member.id] ?? []
 			guard !childLitters.isEmpty else { return bottom }
 			if member.collapsed {

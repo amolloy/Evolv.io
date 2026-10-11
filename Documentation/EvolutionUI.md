@@ -124,8 +124,10 @@ size.
 Hundreds of members each need a render, and each distinct tree costs a
 Metal pipeline compile (tens of ms, see `TreeThumbnailStore`). Thumbnails
 are cached on disk in the app's Caches folder, keyed by a hash of the
-expression text plus the node registry's generation (bumped by Reload
-Custom Nodes), so reopening a big family is instant, the same genotype in
+expression text, supersampling and every node definition file (so editing
+a node and reloading, or relaunching after an edit, re-renders). Every
+thumbnail renders at one size (256 pixels) and is scaled to its cell, so
+chips, the size slider and Show Path never re-render, so reopening a big family is instant, the same genotype in
 two families shares one image, and nothing bloats the document or iCloud.
 Renders run a few at a time, visible cells first.
 
@@ -183,7 +185,9 @@ stepper and context menu move here).
   image) plus **Save to Library…**, which writes a `.evolvgenotype` into
   the user Genotypes folder.
 - **Show Path** highlights the chain from a member back to its root and
-  dims everything else, for following one line in a big family.
+  shrinks everything else to chips (`FamilyLayout`'s `focus`), for
+  following one line in a big family. The member keeps its place on
+  screen when it's turned on or off.
 - Starting a family: **New Family** asks how to start: a random litter
   (litter size, depth, optional seed), or a genotype from the library
   (also a **Start Family From This** item on the sidebar's context menu),

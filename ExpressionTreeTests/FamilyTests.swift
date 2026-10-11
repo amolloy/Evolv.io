@@ -230,6 +230,29 @@ struct FamilyLayoutTests {
 		#expect(!outline.intersects(layout.litterOutlines[family.litters[1].id]!))
 	}
 
+	@Test func showPathShrinksEverythingOffThePath() throws {
+		var family = try twoGenerations()
+		let root = family.members[0].id
+		let children = family.members(ofLitter: family.litters[1].id)
+		try family.breed(children[3].id, signatures: signatures, seed: 3)
+		try family.breed(children[7].id, signatures: signatures, seed: 4)
+		let grandchild = family.members(ofLitter: family.litters[2].id)[5].id
+		let path = family.ancestors(of: grandchild).union([grandchild])
+		#expect(path == [root, children[3].id, grandchild])
+
+		let layout = FamilyLayout(family: family, metrics: metrics, focus: path)
+		#expect(layout.cells.count == family.members.count)
+		for (id, cell) in layout.cells {
+			#expect(cell.isChip == !path.contains(id), "\(id)")
+		}
+		// Off the path, a parent is a chip of its own at the top of its
+		// branch, and its litter is still beside it.
+		let offPath = layout.cells[children[7].id]!.frame
+		let offPathLitter = layout.litterFrames[family.litters[3].id]!
+		#expect(offPathLitter.minY == offPath.minY)
+		#expect(layout.connectors.contains { $0.parent == children[7].id && $0.from == CGPoint(x: offPath.maxX, y: offPath.midY) })
+	}
+
 	@Test func collapsedMembersHideTheirBranch() throws {
 		var family = try twoGenerations()
 		let parent = family.members[0].id
