@@ -3,13 +3,14 @@
 //  ExpressionTree
 //
 //  Where the lineage view draws each member of a family: generations left
-//  to right, each litter beside its parent, as a top-aligned tidy tree.
-//  A member sits at the top of its band, and the band is as tall as the
-//  member or everything bred from it, whichever is taller. Breeding only
-//  adds space below and to the right, so nothing above or to the left of
-//  the parent moves. Unexplored siblings in a litter someone has moved past
-//  shrink to chips. With `.vertical` orientation everything is transposed:
-//  generations top to bottom, siblings side by side. See
+//  to right, as a tidy tree. Each litter is centred on its parent, and
+//  branches are packed by their outlines column by column (Reingold and
+//  Tilford's idea): two branches only push apart where they'd overlap in
+//  the same column, so a tall litter far to the right doesn't push down
+//  siblings near the roots, and a chain of single picks stays level
+//  instead of drifting. Unexplored siblings in a litter someone has moved
+//  past shrink to chips, in place. With `.vertical` orientation everything
+//  is transposed: generations top to bottom, siblings side by side. See
 //  Documentation/EvolutionUI.md.
 //
 
@@ -64,11 +65,11 @@ public struct FamilyLayout: Equatable, Sendable {
 
 	/// Visible members by id. Members inside a collapsed branch aren't here.
 	public private(set) var cells: [String: Cell] = [:]
-	/// Each visible litter's band: its column, from its first member's top
-	/// to the bottom of everything bred from its members.
+	/// Each visible litter's own cells, bounded.
 	public private(set) var litterFrames: [String: CGRect] = [:]
 	/// The outline grouping each visible litter's members: around just
-	/// its own cells, `litterPadding` out. Connectors end on its left edge.
+	/// its own cells, `litterPadding` out. Connectors end on its left edge,
+	/// level with the parent where they can.
 	public private(set) var litterOutlines: [String: CGRect] = [:]
 	public private(set) var connectors: [Connector] = []
 	/// How many descendants each collapsed member is hiding.
@@ -86,21 +87,38 @@ public struct FamilyLayout: Equatable, Sendable {
 	///     then run from a parent's bottom edge to the top of its litter.
 	public init(family: Family, metrics: Metrics = Metrics(), expandedLitters: Set<String> = [], focus: Set<String>? = nil,
 				orientation: Orientation = .horizontal) {
-		var builder = Builder(family: family, metrics: metrics, expandedLitters: expandedLitters, focus: focus)
-		var y: CGFloat = 0
+		let builder = Builder(family: family, metrics: metrics, expandedLitters: expandedLitters, focus: focus)
+		var roots = Subtree()
 		for litter in family.litters where litter.parents.isEmpty {
-			if y > 0 { y += metrics.litterSpacing }
-			y = builder.place(litter, top: y)
+			roots.stack(builder.layout(litter), separation: { _ in metrics.litterSpacing })
 		}
-		builder.addSecondaryConnectors()
-		cells = builder.cells
-		litterFrames = builder.litterFrames
-		litterOutlines = builder.litterOutlines
-		connectors = builder.connectors
-		hiddenDescendants = builder.hiddenDescendants
-		let width = cells.values.map(\.frame.maxX).max() ?? 0
+		// The topmost cell at y = 0.
+		roots.shift(-(roots.cells.map(\.frame.minY).min() ?? 0))
+
+		var ownCells: [String: [CGRect]] = [:]
+		for cell in roots.cells {
+			cells[cell.id] = Cell(frame: cell.frame, isChip: cell.isChip)
+			ownCells[cell.litter, default: []].append(cell.frame)
+		}
+		for (litter, frames) in ownCells {
+			let bounds = frames.dropFirst().reduce(frames[0]) { $0.union($1) }
+			litterFrames[litter] = bounds
+			litterOutlines[litter] = bounds.insetBy(dx: -metrics.litterPadding, dy: -metrics.litterPadding)
+		}
+		hiddenDescendants = roots.hidden
+		for litter in family.litters where litterOutlines[litter.id] != nil {
+			for (position, parent) in litter.parents.enumerated() {
+				guard let parentFrame = cells[parent]?.frame, let outline = litterOutlines[litter.id] else { continue }
+				let inset = min(metrics.litterPadding + metrics.chipSize / 2, outline.height / 2)
+				let y = min(max(parentFrame.midY, outline.minY + inset), outline.maxY - inset)
+				connectors.append(Connector(parent: parent, litter: litter.id,
+											from: CGPoint(x: parentFrame.maxX, y: parentFrame.midY),
+											to: CGPoint(x: outline.minX, y: y), isPrimary: position == 0))
+			}
+		}
 		let padding = family.litters.isEmpty ? 0 : metrics.litterPadding
-		size = CGSize(width: width + padding, height: y + padding)
+		size = CGSize(width: (cells.values.map(\.frame.maxX).max() ?? 0) + padding,
+					  height: (cells.values.map(\.frame.maxY).max() ?? 0) + padding)
 		if orientation == .vertical {
 			transpose()
 		}
@@ -121,6 +139,71 @@ public struct FamilyLayout: Equatable, Sendable {
 		orientation = orientation == .horizontal ? .vertical : .horizontal
 	}
 
+	/// A laid-out piece of the tree (a litter, a member and its branch, a
+	/// run of chips) in its own coordinates, with its contour: the top and
+	/// bottom of its cells in each column it reaches.
+	private struct Subtree {
+		struct PlacedCell {
+			let id: String
+			let litter: String
+			var frame: CGRect
+			let isChip: Bool
+		}
+
+		var cells: [PlacedCell] = []
+		var contour: [Int: (top: CGFloat, bottom: CGFloat)] = [:]
+		var hidden: [String: Int] = [:]
+
+		var isEmpty: Bool { cells.isEmpty }
+
+		mutating func add(_ cell: PlacedCell, column: Int) {
+			cells.append(cell)
+			let extent = contour[column]
+			contour[column] = (min(extent?.top ?? cell.frame.minY, cell.frame.minY),
+							   max(extent?.bottom ?? cell.frame.maxY, cell.frame.maxY))
+		}
+
+		mutating func shift(_ dy: CGFloat) {
+			guard dy != 0 else { return }
+			for index in cells.indices {
+				cells[index].frame.origin.y += dy
+			}
+			contour = contour.mapValues { ($0.top + dy, $0.bottom + dy) }
+		}
+
+		mutating func merge(_ other: Subtree) {
+			cells += other.cells
+			for (column, extent) in other.contour {
+				let mine = contour[column]
+				contour[column] = (min(mine?.top ?? extent.top, extent.top), max(mine?.bottom ?? extent.bottom, extent.bottom))
+			}
+			hidden.merge(other.hidden) { first, _ in first }
+		}
+
+		/// Moves `next` as high as it can go below everything here, keeping
+		/// `separation(column)` between them in every column they share, and
+		/// merges it in.
+		mutating func stack(_ next: Subtree, separation: (Int) -> CGFloat) {
+			var next = next
+			guard !isEmpty else {
+				merge(next)
+				return
+			}
+			let shared = Set(contour.keys).intersection(next.contour.keys)
+			let offset: CGFloat
+			if shared.isEmpty {
+				// Nothing to pack against: below everything.
+				let bottom = contour.values.map(\.bottom).max()!
+				let top = next.contour.values.map(\.top).min() ?? 0
+				offset = bottom + separation(-1) - top
+			} else {
+				offset = shared.map { contour[$0]!.bottom + separation($0) - next.contour[$0]!.top }.max()!
+			}
+			next.shift(offset)
+			merge(next)
+		}
+	}
+
 	private struct Builder {
 		let family: Family
 		let metrics: Metrics
@@ -131,12 +214,6 @@ public struct FamilyLayout: Equatable, Sendable {
 		let littersByPrimaryParent: [String: [Family.Litter]]
 		let bredFrom: Set<String>
 		let membersByLitter: [String: [Family.Member]]
-
-		var cells: [String: Cell] = [:]
-		var litterFrames: [String: CGRect] = [:]
-		var litterOutlines: [String: CGRect] = [:]
-		var connectors: [Connector] = []
-		var hiddenDescendants: [String: Int] = [:]
 
 		init(family: Family, metrics: Metrics, expandedLitters: Set<String>, focus: Set<String>?) {
 			self.family = family
@@ -149,109 +226,84 @@ public struct FamilyLayout: Equatable, Sendable {
 			membersByLitter = Dictionary(grouping: family.members, by: \.litter).mapValues { $0.sorted { $0.index < $1.index } }
 		}
 
-		/// Lays out `litter` and everything bred from its members, starting
-		/// at `top`. Returns the bottom of the lowest thing placed.
-		mutating func place(_ litter: Family.Litter, top: CGFloat) -> CGFloat {
+		private func x(ofColumn column: Int) -> CGFloat {
+			CGFloat(column) * (metrics.cellSize + metrics.columnSpacing)
+		}
+
+		/// A litter and everything bred from its members: its members in
+		/// litter order down its column, each member's branch packed
+		/// against the ones above.
+		func layout(_ litter: Family.Litter) -> Subtree {
 			let column = litter.parents.map { (generations[$0] ?? -1) + 1 }.max() ?? 0
-			let x = CGFloat(column) * (metrics.cellSize + metrics.columnSpacing)
 			let members = membersByLitter[litter.id] ?? []
 			let showAll = litter.expanded || expandedLitters.contains(litter.id) || !members.contains { bredFrom.contains($0.id) }
+			// Members of one litter sit `rowSpacing` apart in its column;
+			// their branches are other litters, `litterSpacing` apart.
+			let separation: (Int) -> CGFloat = { $0 == column ? metrics.rowSpacing : metrics.litterSpacing }
 
-			var y = top
-			var first = true
+			var result = Subtree()
 			var chipRun: [Family.Member] = []
-
-			func startItem() {
-				if !first { y += metrics.rowSpacing }
-				first = false
+			func flushChips() {
+				guard !chipRun.isEmpty else { return }
+				result.stack(chips(chipRun, litter: litter.id, column: column), separation: separation)
+				chipRun = []
 			}
-
 			for member in members {
 				let isFull = focus.map { $0.contains(member.id) } ?? (showAll || bredFrom.contains(member.id) || member.starred)
 				// Off the focused path, a member someone bred from is a chip
-				// of its own, still at the top of its branch.
+				// of its own, still with its branch beside it.
 				let isBranchChip = !isFull && littersByPrimaryParent[member.id] != nil
 				if isFull || isBranchChip {
-					if !chipRun.isEmpty {
-						startItem()
-						y = placeChips(chipRun, x: x, top: y)
-						chipRun = []
-					}
-					startItem()
-					y = placeBranch(member, isChip: isBranchChip, x: x, top: y)
+					flushChips()
+					result.stack(branch(member, isChip: isBranchChip, column: column), separation: separation)
 				} else {
 					chipRun.append(member)
 				}
 			}
-			if !chipRun.isEmpty {
-				startItem()
-				y = placeChips(chipRun, x: x, top: y)
-			}
-
-			litterFrames[litter.id] = CGRect(x: x, y: top, width: metrics.cellSize, height: y - top)
-			let ownCells = members.compactMap { cells[$0.id]?.frame }
-			if let first = ownCells.first {
-				litterOutlines[litter.id] = ownCells.dropFirst().reduce(first) { $0.union($1) }
-					.insetBy(dx: -metrics.litterPadding, dy: -metrics.litterPadding)
-			}
-			if let parent = litter.parents.first, let parentCell = cells[parent] {
-				connectors.append(connector(from: parentCell.frame, parent: parent, to: litter.id, isPrimary: true))
-			}
-			return y
+			flushChips()
+			return result
 		}
 
-		/// A member (full size, or a chip) at the top of its band, with its
-		/// litters stacked beside it. Returns the band's bottom.
-		private mutating func placeBranch(_ member: Family.Member, isChip: Bool, x: CGFloat, top: CGFloat) -> CGFloat {
+		/// A member and its litters, which are stacked and then centred
+		/// on it.
+		private func branch(_ member: Family.Member, isChip: Bool, column: Int) -> Subtree {
 			let size = isChip ? metrics.chipSize : metrics.cellSize
-			cells[member.id] = Cell(frame: CGRect(x: x, y: top, width: size, height: size), isChip: isChip)
-			var bottom = top + size
+			var result = Subtree()
+			result.add(Subtree.PlacedCell(id: member.id, litter: member.litter,
+										  frame: CGRect(x: x(ofColumn: column), y: 0, width: size, height: size), isChip: isChip),
+					   column: column)
 			let childLitters = littersByPrimaryParent[member.id] ?? []
-			guard !childLitters.isEmpty else { return bottom }
+			guard !childLitters.isEmpty else { return result }
 			if member.collapsed {
-				hiddenDescendants[member.id] = family.descendants(of: [member.id]).count
-				return bottom
+				result.hidden[member.id] = family.descendants(of: [member.id]).count
+				return result
 			}
-			var childTop = top
+			var group = Subtree()
 			for litter in childLitters {
-				let litterBottom = place(litter, top: childTop)
-				bottom = max(bottom, litterBottom)
-				childTop = litterBottom + metrics.litterSpacing
+				group.stack(layout(litter), separation: { _ in metrics.litterSpacing })
 			}
-			return bottom
+			// Centre the litters' own members (not their branches) on the
+			// member.
+			let childIDs = Set(childLitters.map(\.id))
+			let own = group.cells.filter { childIDs.contains($0.litter) }.map(\.frame)
+			if let top = own.map(\.minY).min(), let bottom = own.map(\.maxY).max() {
+				group.shift(size / 2 - (top + bottom) / 2)
+			}
+			result.merge(group)
+			return result
 		}
 
-		/// Unexplored siblings as a wrapped grid of chips. Returns its bottom.
-		private mutating func placeChips(_ members: [Family.Member], x: CGFloat, top: CGFloat) -> CGFloat {
+		/// Unexplored siblings as a wrapped grid of chips.
+		private func chips(_ members: [Family.Member], litter: String, column: Int) -> Subtree {
 			let perRow = metrics.chipsPerRow
 			let step = metrics.chipSize + metrics.chipSpacing
+			var result = Subtree()
 			for (index, member) in members.enumerated() {
-				let frame = CGRect(x: x + CGFloat(index % perRow) * step, y: top + CGFloat(index / perRow) * step,
+				let frame = CGRect(x: x(ofColumn: column) + CGFloat(index % perRow) * step, y: CGFloat(index / perRow) * step,
 								   width: metrics.chipSize, height: metrics.chipSize)
-				cells[member.id] = Cell(frame: frame, isChip: true)
+				result.add(Subtree.PlacedCell(id: member.id, litter: litter, frame: frame, isChip: true), column: column)
 			}
-			let rows = (members.count + perRow - 1) / perRow
-			return top + CGFloat(rows) * step - metrics.chipSpacing
-		}
-
-		/// Dashed lines from second parents, once everything is placed.
-		mutating func addSecondaryConnectors() {
-			for litter in family.litters where litter.parents.count > 1 && litterFrames[litter.id] != nil {
-				for parent in litter.parents.dropFirst() {
-					if let parentCell = cells[parent] {
-						connectors.append(connector(from: parentCell.frame, parent: parent, to: litter.id, isPrimary: false))
-					}
-				}
-			}
-		}
-
-		private func connector(from parentFrame: CGRect, parent: String, to litterID: String, isPrimary: Bool) -> Connector {
-			let litterFrame = litterFrames[litterID]!
-			let outline = litterOutlines[litterID] ?? litterFrame
-			return Connector(parent: parent, litter: litterID,
-							 from: CGPoint(x: parentFrame.maxX, y: parentFrame.midY),
-							 to: CGPoint(x: outline.minX, y: litterFrame.minY + min(metrics.cellSize, litterFrame.height) / 2),
-							 isPrimary: isPrimary)
+			return result
 		}
 	}
 }

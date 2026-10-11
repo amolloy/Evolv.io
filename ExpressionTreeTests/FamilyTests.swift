@@ -153,6 +153,24 @@ struct FamilyJSONTests {
 struct FamilyLayoutTests {
 	private let metrics = FamilyLayout.Metrics()
 
+	/// No two cells overlap, and no two litters' outlines do.
+	private func expectNoOverlaps(_ layout: FamilyLayout, sourceLocation: SourceLocation = #_sourceLocation) {
+		let cells = layout.cells.sorted { $0.key < $1.key }
+		for i in cells.indices {
+			for j in cells.indices where j > i {
+				#expect(!cells[i].value.frame.intersects(cells[j].value.frame), "\(cells[i].key) overlaps \(cells[j].key)",
+						sourceLocation: sourceLocation)
+			}
+		}
+		let outlines = layout.litterOutlines.sorted { $0.key < $1.key }
+		for i in outlines.indices {
+			for j in outlines.indices where j > i {
+				#expect(!outlines[i].value.intersects(outlines[j].value), "\(outlines[i].key) overlaps \(outlines[j].key)",
+						sourceLocation: sourceLocation)
+			}
+		}
+	}
+
 	@Test func aLitterNobodyHasBredFromIsFullSize() {
 		var family = Family(created: created)
 		family.addRandomLitter(signatures: signatures, seed: 1)
@@ -171,39 +189,73 @@ struct FamilyLayoutTests {
 		let layout = FamilyLayout(family: family, metrics: metrics)
 		let siblings = family.members(ofLitter: roots.id)
 		#expect(siblings.filter { layout.cells[$0.id]!.isChip }.count == 18)
-		// Five chips (one row of three, one of two) before the parent.
+		// Five chips (one row of three, one of two), then the parent, then
+		// the rest right below it: its litter is in the next column, so it
+		// doesn't push them down.
 		let parentFrame = layout.cells[parent.id]!.frame
-		#expect(parentFrame.minY == 2 * (metrics.chipSize + metrics.chipSpacing) - metrics.chipSpacing + metrics.rowSpacing)
-		#expect(layout.cells[siblings[4].id]!.frame.maxY < parentFrame.minY)
-		#expect(layout.cells[siblings[6].id]!.frame.minY > parentFrame.maxY)
-		// The new litter starts level with its parent, one column right.
-		let litterFrame = layout.litterFrames[family.litters[1].id]!
-		#expect(litterFrame.minY == parentFrame.minY)
-		#expect(litterFrame.minX == metrics.cellSize + metrics.columnSpacing)
-		// Siblings after the parent sit below its whole band.
-		#expect(layout.cells[siblings[6].id]!.frame.minY > litterFrame.maxY)
-		#expect(layout.connectors == [FamilyLayout.Connector(
-			parent: parent.id, litter: family.litters[1].id,
-			from: CGPoint(x: parentFrame.maxX, y: parentFrame.midY),
-			to: CGPoint(x: litterFrame.minX - metrics.litterPadding, y: litterFrame.minY + metrics.cellSize / 2), isPrimary: true)])
+		let chipRows = 2 * (metrics.chipSize + metrics.chipSpacing) - metrics.chipSpacing
+		#expect(layout.cells[siblings[4].id]!.frame.maxY + metrics.rowSpacing == parentFrame.minY)
+		#expect(layout.cells[siblings[6].id]!.frame.minY == parentFrame.maxY + metrics.rowSpacing)
+		#expect(layout.cells[siblings[0].id]!.frame.minY + chipRows + metrics.rowSpacing == parentFrame.minY)
+		expectNoOverlaps(layout)
 	}
 
-	@Test func breedingAgainMovesNothingAboveOrInsideTheParentsBranch() throws {
-		var family = try twoGenerations()
-		let parent = family.members[0].id
-		let child = family.members(ofLitter: family.litters[1].id)[3].id
-		try family.breed(child, signatures: signatures, seed: 3)
-		let before = FamilyLayout(family: family, metrics: metrics)
-		try family.breed(parent, signatures: signatures, seed: 4)
-		let after = FamilyLayout(family: family, metrics: metrics)
+	@Test func aLitterIsCentredOnItsParent() throws {
+		var family = Family(created: created)
+		let roots = family.addRandomLitter(signatures: signatures, seed: 1)
+		let parent = family.members(ofLitter: roots.id)[5]
+		let litter = try family.breed(parent.id, signatures: signatures, seed: 2)
+		let layout = FamilyLayout(family: family, metrics: metrics)
+		let parentFrame = layout.cells[parent.id]!.frame
+		let litterFrame = layout.litterFrames[litter.id]!
+		#expect(litterFrame.midY == parentFrame.midY)
+		#expect(litterFrame.minX == metrics.cellSize + metrics.columnSpacing)
+		// It reaches above the parent, so everything is shifted to keep the
+		// topmost cell at 0.
+		#expect(litterFrame.minY == 0)
+		// The line runs straight across.
+		let line = try #require(layout.connectors.first)
+		#expect(line == FamilyLayout.Connector(parent: parent.id, litter: litter.id,
+											   from: CGPoint(x: parentFrame.maxX, y: parentFrame.midY),
+											   to: CGPoint(x: litterFrame.minX - metrics.litterPadding, y: parentFrame.midY),
+											   isPrimary: true))
+	}
 
-		let parentTop = before.cells[parent]!.frame.minY
-		let branch = family.descendants(of: [parent]).union([parent])
-		for (id, cell) in before.cells where cell.frame.minY <= parentTop || branch.contains(id) {
-			#expect(after.cells[id] == cell, "\(id) moved")
+	/// What the centring is for: always picking the last child used to
+	/// step the whole chain down a litter's worth each generation.
+	@Test func aChainOfLastChildrenStaysLevel() throws {
+		var family = Family(created: created)
+		var litter = family.addRandomLitter(signatures: signatures, seed: 1)
+		for generation in 0..<6 {
+			let last = family.members(ofLitter: litter.id).last!.id
+			litter = try family.breed(last, signatures: signatures, seed: UInt64(10 + generation))
 		}
-		// The new litter goes under the parent's first one.
-		#expect(after.litterFrames[family.litters[3].id]!.minY == before.litterFrames[family.litters[1].id]!.maxY + metrics.litterSpacing)
+		let layout = FamilyLayout(family: family, metrics: metrics)
+		let fullLitter = 19 * metrics.cellSize + 18 * metrics.rowSpacing
+		#expect(layout.size.height < 1.6 * fullLitter)
+		#expect(layout.cells.values.map(\.frame.minX).max()! == 6 * (metrics.cellSize + metrics.columnSpacing))
+		expectNoOverlaps(layout)
+	}
+
+	@Test func branchesPackWithoutOverlapping() throws {
+		var family = Family(created: created)
+		family.addRandomLitter(signatures: signatures, seed: 1)
+		var rng = SeededRandomNumberGenerator(seed: 77)
+		for step in 0..<14 {
+			let parent = family.members.randomElement(using: &rng)!.id
+			try family.breed(parent, signatures: signatures, seed: UInt64(100 + step))
+			if step % 4 == 3 {
+				let a = family.members.randomElement(using: &rng)!.id
+				let b = family.members.randomElement(using: &rng)!.id
+				if a != b { _ = try? family.mate(a, b, method: .graft, signatures: signatures, seed: UInt64(step)) }
+			}
+		}
+		for focus in [nil, family.ancestors(of: family.members.last!.id).union([family.members.last!.id])] {
+			let layout = FamilyLayout(family: family, metrics: metrics, focus: focus)
+			#expect(layout.cells.count == family.members.count)
+			#expect(layout.cells.values.map(\.frame.minY).min() == 0)
+			expectNoOverlaps(layout)
+		}
 	}
 
 	@Test func litterOutlinesSurroundOnlyTheirOwnMembers() throws {
@@ -216,18 +268,6 @@ struct FamilyLayoutTests {
 			#expect(outline.minX == cells.map(\.minX).min()! - pad && outline.maxX == cells.map(\.maxX).max()! + pad)
 			#expect(outline.minY == cells.map(\.minY).min()! - pad && outline.maxY == cells.map(\.maxY).max()! + pad)
 		}
-	}
-
-	@Test func anOutlineStopsAtItsLastMemberNotItsBranch() throws {
-		var family = Family(created: created)
-		let roots = family.addRandomLitter(signatures: signatures, seed: 1)
-		try family.breed(family.members(ofLitter: roots.id)[18].id, signatures: signatures, seed: 2)
-		let layout = FamilyLayout(family: family, metrics: metrics)
-		let outline = layout.litterOutlines[roots.id]!
-		let band = layout.litterFrames[roots.id]!
-		#expect(outline.maxY == layout.cells[family.members(ofLitter: roots.id)[18].id]!.frame.maxY + metrics.litterPadding)
-		#expect(outline.maxY < band.maxY)
-		#expect(!outline.intersects(layout.litterOutlines[family.litters[1].id]!))
 	}
 
 	@Test func showPathShrinksEverythingOffThePath() throws {
@@ -245,12 +285,13 @@ struct FamilyLayoutTests {
 		for (id, cell) in layout.cells {
 			#expect(cell.isChip == !path.contains(id), "\(id)")
 		}
-		// Off the path, a parent is a chip of its own at the top of its
-		// branch, and its litter is still beside it.
+		// Off the path, a parent is a chip of its own with its litter
+		// centred on it.
 		let offPath = layout.cells[children[7].id]!.frame
 		let offPathLitter = layout.litterFrames[family.litters[3].id]!
-		#expect(offPathLitter.minY == offPath.minY)
+		#expect(offPathLitter.midY == offPath.midY)
 		#expect(layout.connectors.contains { $0.parent == children[7].id && $0.from == CGPoint(x: offPath.maxX, y: offPath.midY) })
+		expectNoOverlaps(layout)
 	}
 
 	@Test func anExpandedLitterKeepsEverySiblingFullSize() throws {
@@ -298,12 +339,11 @@ struct FamilyLayoutTests {
 		let layout = FamilyLayout(family: family, metrics: metrics)
 		let column = metrics.cellSize + metrics.columnSpacing
 		#expect(layout.litterFrames["L7"]!.minX == 2 * column)
-		#expect(layout.litterFrames["L7"]!.minY == layout.cells["g5"]!.frame.minY)
+		#expect(layout.litterFrames["L7"]!.midY == layout.cells["g5"]!.frame.midY)
 		let lines = layout.connectors.filter { $0.litter == "L7" }
 		#expect(lines.map(\.parent) == ["g5", "g3"])
 		#expect(lines.map(\.isPrimary) == [true, false])
-		// g3 sits below g2's whole branch.
-		#expect(layout.cells["g3"]!.frame.minY > layout.litterFrames["L7"]!.maxY)
+		expectNoOverlaps(layout)
 	}
 }
 

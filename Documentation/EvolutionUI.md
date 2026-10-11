@@ -225,39 +225,32 @@ stepper and context menu move here).
 The tree grows downward as well as rightward when you breed from several
 members, so the question is where each litter block goes vertically.
 
-**Proposal: a top-aligned tidy tree.** Each member owns a horizontal band
-as tall as the larger of its own cell and the stacked heights of all its
-litters' blocks (recursively). A member sits at the **top** of its band,
-not centred; its litters stack beneath each other in the next column,
-starting level with it; the next sibling starts below the band.
+**Built: a centred tidy tree, packed by outline** (Andy, 2026-10-11).
+Each litter is centred on its parent, and each piece of the tree carries
+its contour, the top and bottom of its cells in every column it reaches.
+Siblings, and a member's litters, are packed as close as their contours
+allow: members of one litter `rowSpacing` apart in its column, different
+litters `litterSpacing` apart wherever they share a column. Afterwards
+everything shifts so the topmost cell is at 0. This is Reingold and
+Tilford's idea, done naively (contours as per-column extents).
 
-- Top-aligned rather than centred (Reingold–Tilford style) because it's
-  **stable**: breeding adds space below and to the right, but nothing
-  above or to the left moves. With centring, every breed re-centres every
-  ancestor and the thing you were looking at jumps.
-- Bands never overlap, so connectors never cross, and a column can hold
-  litters from many parents with each one beside its parent.
-- The cost is empty space under a parent whose subtree is tall. Shrinking
-  unexplored siblings to chips is what keeps that manageable; a branch can
-  also be **collapsed** to a single "+42" badge (stored per member as view
-  state in the document, so it reopens the same way).
-
-Alternatives considered:
-
-- **Plain columns** (every generation a flat list, parents and children
-  linked by lines): compact, but lines cross everywhere as soon as two
-  parents breed in the same generation. Fine for 3 litters, unreadable at
-  10.
-- **One litter per row, grid per litter** (Sims' 4×5 sheet for each
-  generation, scrolled vertically): close to the original tool, but loses
-  the left-to-right history.
-- **Centred tidy tree**: prettier, unstable while you work.
+- A chain of single picks stays level instead of stepping down a litter's
+  worth each generation, and a tall litter far to the right no longer
+  pushes down siblings near the roots, since they never share a column.
+- Lines meet the litter's outline level with the parent where they can,
+  so most run straight across.
+- The cost: a new litter spreads both ways, so other branches can shift
+  when one grows. The view keeps the parent (or whatever the action was
+  on) in place on screen.
+- First version (until 2026-10-11): top-aligned bands, each member owning
+  the full height of its branch in every later column. Stable (breeding
+  never moved anything above the parent) but it grew diagonally.
 
 ### Room for mating
 
 Mating makes the tree a graph: a child with two parents in two branches.
 The layout stays a tree by putting a mating litter in its **primary
-parent's** band (the first one selected), in the column after the
+parent's** branch (the first one selected), centred on it, in the column after the
 higher-generation parent, and drawing a **dashed connector** from the
 second parent. That's the usual family-tree compromise. Nothing in the file
 format changes: a mating litter is a litter with two `parents`. Mating
