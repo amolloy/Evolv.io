@@ -92,9 +92,9 @@ final class FamilyDocument: ReferenceFileDocument {
 
 	/// A root litter of random genotypes, with the family's settings.
 	@discardableResult
-	func addRandomLitter(undoManager: UndoManager?) -> Family.Litter {
+	func addRandomLitter(seed: UInt64? = nil, undoManager: UndoManager?) -> Family.Litter {
 		change("New Random Litter", undoManager: undoManager) { family in
-			family.addRandomLitter(signatures: NodeRegistry.shared.signatures, seed: UInt64.random(in: 0...UInt64.max))
+			family.addRandomLitter(signatures: NodeRegistry.shared.signatures, seed: seed ?? UInt64.random(in: 0...UInt64.max))
 		}
 	}
 

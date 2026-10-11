@@ -281,8 +281,24 @@ document edited and can be undone in the window. `family` is an id from
 `list_families` (`f1`), the family's name or its path, and can be left out
 when only one is open. Source: `Evolv.io/MCP/MCPFamilyTools.swift`.
 
-- `list_families()`: id, name, path (once saved), and member, litter and
-  generation counts.
+- `new_family(path)`: a new, empty family in a window, as File > New does;
+  with `path`, saved there at once.
+- `open_family(path)`: a saved family in a window, as File > Open does.
+- `save_family(family, path)`: File > Save, or with `path` Save As (the
+  window follows the new file). An untitled family needs a path.
+- `close_family(family, discard_changes)`: closes the window; fails on
+  unsaved changes unless `discard_changes` is true.
+- `list_families()`: id, name, path (once saved), `edited` (unsaved
+  changes), and member, litter and generation counts.
+- `update_family_settings(family, litter_size, mutations_per_child,
+  max_depth, excluded_functions, excluded_root_functions,
+  excluded_variables)`: Family Settings, for new litters; only the given
+  fields change. Ranges match the popover (1-60, 0.25-8, 1-20).
+- `add_random_litter(family, seed)`: a root litter of random genotypes, as
+  New Random Litter does; the same seed and settings give the same
+  genotypes as `generate_genotypes`.
+- `add_seed_litter(family, expressions, names, source)`: a root litter of
+  given genotypes.
 - `read_family(family, generation, include_mutations)`: settings, litters
   (id, kind, parents, generation, seed, source, member ids) and members
   (id, litter, index, generation, expression, `bred_from`, name, starred,
@@ -302,8 +318,19 @@ when only one is open. Source: `Evolv.io/MCP/MCPFamilyTools.swift`.
 - `update_family_member(family, member, name, starred)`: `""` removes the
   name.
 
-New families can't be made over MCP yet; make one in the app (File > New,
-or Start Family From This in the library).
+`path` is a `.evolvfamily` path (`~/` allowed, the extension added if
+missing) or a bare name, which means `~/Documents/Evolv Families/<name>`.
+The app is sandboxed, so it can only write where it's been given access:
+that folder, through a temporary-exception entitlement in
+`Evolv_io.entitlements`, and families the user has opened. Elsewhere,
+`save_family` and `open_family` fail and say so; open such a file with
+Finder or `open` first.
+
+Changes made over MCP go on the document's own undo manager (the
+window's can be missing when it registers), which is also what marks the
+document edited. That happens when the undo group ends, at the end of the
+run loop pass, so `edited` can read false straight after a change;
+`close_family` waits for it before checking.
 
 ## What's *not* exposed yet
 

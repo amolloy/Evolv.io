@@ -3,7 +3,8 @@
 //  Evolv.io
 //
 //  MCP tools on the family documents open in windows (see OpenFamilies and
-//  Documentation/EvolutionUI.md): list them, read one, breed, mate,
+//  Documentation/EvolutionUI.md): make, open, save and close them, list
+//  them, read one, change its settings, add root litters, breed, mate,
 //  reject, and name or star members. `mate_genotypes` mates two
 //  expressions without a family, like `mutate_genotype`. Changes go through FamilyDocument like the
 //  window's own, so they show up at once, mark the document edited and can
@@ -13,6 +14,10 @@
 import Foundation
 import MCP
 import ExpressionTree
+import UniformTypeIdentifiers
+#if os(macOS)
+import AppKit
+#endif
 
 enum MCPFamilyTools {
 	private static let familySchema: MCP.Value = .object([
@@ -28,12 +33,150 @@ enum MCPFamilyTools {
 		])
 	}
 
+	private static let pathSchema: MCP.Value = .object([
+		"type": .string("string"),
+		"description": .string("A .evolvfamily path (~ allowed), or a bare name for ~/Documents/Evolv Families/<name>.evolvfamily."),
+	])
+
+	private static func nameList(_ description: String) -> MCP.Value {
+		.object([
+			"type": .string("array"),
+			"items": .object(["type": .string("string")]),
+			"description": .string(description),
+		])
+	}
+
 	static let tools: [Tool] = [
+		Tool(
+			name: "new_family",
+			description: """
+			Opens a new, empty family in a window, as File > New does, and returns its id. With \
+			`path` it's saved there at once (see save_family). Start it with add_random_litter \
+			or add_seed_litter.
+			""",
+			inputSchema: .object([
+				"type": .string("object"),
+				"properties": .object([
+					"path": pathSchema,
+				]),
+			])
+		),
+		Tool(
+			name: "open_family",
+			description: """
+			Opens a saved .evolvfamily in a window, as File > Open does, and returns its id (an \
+			already open one isn't opened twice). The app is sandboxed: it can open families in \
+			~/Documents/Evolv Families/ and ones it has opened before; for others, open the file \
+			with Finder or `open` first.
+			""",
+			inputSchema: .object([
+				"type": .string("object"),
+				"properties": .object([
+					"path": pathSchema,
+				]),
+				"required": .array([.string("path")]),
+			])
+		),
+		Tool(
+			name: "save_family",
+			description: """
+			Saves an open family, as File > Save does. Without `path` it saves where it is (an \
+			untitled family needs a path). With `path` it's saved there and the window follows \
+			it, as Save As does. A bare name such as "Blue Ripples" goes in ~/Documents/Evolv \
+			Families/, the folder the sandboxed app can always write; elsewhere works only where \
+			the app already has access.
+			""",
+			inputSchema: .object([
+				"type": .string("object"),
+				"properties": .object([
+					"family": familySchema,
+					"path": pathSchema,
+				]),
+			])
+		),
+		Tool(
+			name: "close_family",
+			description: """
+			Closes an open family's window. Fails if it has unsaved changes, unless \
+			discard_changes is true.
+			""",
+			inputSchema: .object([
+				"type": .string("object"),
+				"properties": .object([
+					"family": familySchema,
+					"discard_changes": .object([
+						"type": .string("boolean"),
+						"description": .string("Close even with unsaved changes, losing them. Default false."),
+					]),
+				]),
+			])
+		),
+		Tool(
+			name: "update_family_settings",
+			description: """
+			Changes an open family's settings for new litters, as Family Settings does (litters \
+			already made keep theirs). Only the given fields change. Returns the settings. \
+			Undoable in the window.
+			""",
+			inputSchema: .object([
+				"type": .string("object"),
+				"properties": .object([
+					"family": familySchema,
+					"litter_size": .object(["type": .string("integer"), "description": .string("Children per litter, 1-60.")]),
+					"mutations_per_child": .object(["type": .string("number"),
+													"description": .string("Average mutations per child, 0.25-8.")]),
+					"max_depth": .object(["type": .string("integer"),
+										  "description": .string("Deepest nesting of function calls in new random material, 1-20.")]),
+					"excluded_functions": nameList("Functions never introduced by a mutation or random litter."),
+					"excluded_root_functions": nameList("Functions never at the root of a random genotype."),
+					"excluded_variables": nameList("Variables (x, y, z) never introduced."),
+				]),
+			])
+		),
+		Tool(
+			name: "add_random_litter",
+			description: """
+			Adds a root litter of random genotypes (the family's litter size, made with its \
+			settings), as New Random Litter does in the window. The same seed and settings give \
+			the same genotypes as generate_genotypes. Undoable in the window.
+			""",
+			inputSchema: .object([
+				"type": .string("object"),
+				"properties": .object([
+					"family": familySchema,
+					"seed": .object([
+						"type": .array([.string("integer"), .string("string")]),
+						"description": .string("UInt64 seed, as an integer or a decimal string. Default: random."),
+					]),
+				]),
+			])
+		),
+		Tool(
+			name: "add_seed_litter",
+			description: """
+			Adds a root litter of given genotypes, as adding genotypes from files or the \
+			clipboard does in the window. Undoable in the window.
+			""",
+			inputSchema: .object([
+				"type": .string("object"),
+				"properties": .object([
+					"family": familySchema,
+					"expressions": .object(["type": .string("array"), "items": .object(["type": .string("string")]),
+											"description": .string("S-expressions, one per member.")]),
+					"names": .object(["type": .string("array"), "items": .object(["type": .string("string")]),
+									  "description": .string("Optional names for the members, in the same order.")]),
+					"source": .object(["type": .string("string"),
+									   "description": .string("Where they came from, shown with the litter.")]),
+				]),
+				"required": .array([.string("expressions")]),
+			])
+		),
 		Tool(
 			name: "list_families",
 			description: """
 			Lists the family documents open in Evolv.io windows as JSON: id (for the other family \
-			tools), name, path (absent until first saved), member, litter and generation counts.
+			tools), name, path (absent until first saved), edited (unsaved changes), member, \
+			litter and generation counts.
 			""",
 			inputSchema: .object(["type": .string("object"), "properties": .object([:])])
 		),
@@ -173,10 +316,16 @@ enum MCPFamilyTools {
 	static func call(name: String, arguments: [String: MCP.Value]?) async -> CallTool.Result? {
 		guard tools.contains(where: { $0.name == name }) else { return nil }
 		let args = arguments ?? [:]
+		if ["new_family", "open_family", "save_family", "close_family"].contains(name) {
+			return await asyncCall(name: name, args: args)
+		}
 		return await MainActor.run {
 			do {
 				let json: Any
 				switch name {
+					case "update_family_settings": json = try updateSettings(args)
+					case "add_random_litter": json = try addRandomLitter(args)
+					case "add_seed_litter": json = try addSeedLitter(args)
 					case "list_families": json = list()
 					case "read_family": json = try read(args)
 					case "breed_family": json = try breed(args)
@@ -185,14 +334,40 @@ enum MCPFamilyTools {
 					case "reject_family_members": json = try reject(args)
 					default: json = try update(args)
 				}
-				let data = try JSONSerialization.data(withJSONObject: json, options: [.prettyPrinted, .sortedKeys])
-				return CallTool.Result(content: [.text(text: String(decoding: data, as: UTF8.self), annotations: nil, _meta: nil)])
-			} catch let failure as Failure {
-				return errorResult(failure.message)
+				return try result(json)
 			} catch {
-				return errorResult("\(name) failed: \(error.localizedDescription)")
+				return errorResult(name, error)
 			}
 		}
+	}
+
+	/// The tools that wait for a window to open or a save to finish.
+	@MainActor
+	private static func asyncCall(name: String, args: [String: MCP.Value]) async -> CallTool.Result {
+		do {
+			let json: Any
+			switch name {
+				case "new_family": json = try await newFamily(args)
+				case "open_family": json = try await open(args)
+				case "close_family": json = try await close(args)
+				default: json = try await save(args)
+			}
+			return try result(json)
+		} catch {
+			return errorResult(name, error)
+		}
+	}
+
+	private static func result(_ json: Any) throws -> CallTool.Result {
+		let data = try JSONSerialization.data(withJSONObject: json, options: [.prettyPrinted, .sortedKeys])
+		return CallTool.Result(content: [.text(text: String(decoding: data, as: UTF8.self), annotations: nil, _meta: nil)])
+	}
+
+	private static func errorResult(_ name: String, _ error: Error) -> CallTool.Result {
+		if let failure = error as? Failure {
+			return errorResult(failure.message)
+		}
+		return errorResult("\(name) failed: \(error.localizedDescription)")
 	}
 
 	// MARK: - Tools
@@ -209,6 +384,9 @@ enum MCPFamilyTools {
 				"generations": (family.generations().values.max() ?? -1) + 1,
 			]
 			json["path"] = entry.fileURL?.path
+#if os(macOS)
+			json["edited"] = entry.nsDocument?.isDocumentEdited
+#endif
 			return json
 		}
 	}
@@ -254,16 +432,10 @@ enum MCPFamilyTools {
 			json["method"] = litter.method
 			return json
 		}
-		let settings = family.settings
 		return [
 			"id": entry.id,
 			"name": entry.name,
-			"settings": [
-				"litter_size": settings.litterSize,
-				"mutations_per_child": settings.mutationsPerChild,
-				"max_depth": settings.maxDepth,
-				"excluded_functions": settings.excludedFunctions,
-			] as [String: Any],
+			"settings": settingsJSON(family.settings),
 			"litters": litterJSON,
 			"members": memberJSON,
 		]
@@ -274,7 +446,7 @@ enum MCPFamilyTools {
 		let entry = try family(args)
 		let parents = try strings(args["parents"], "parents")
 		try checkMembers(parents, in: entry)
-		let litters = try entry.document.breed(Set(parents), seed: try seed(args["seed"]), undoManager: entry.undoManager)
+		let litters = try entry.document.breed(Set(parents), seed: try seed(args["seed"]), undoManager: entry.changeUndoManager)
 		let family = entry.document.family
 		return [
 			"litters": litters.map { litter in
@@ -295,7 +467,7 @@ enum MCPFamilyTools {
 		guard parents.count == 2 else { throw Failure(message: "parents must be two member ids.") }
 		try checkMembers(parents, in: entry)
 		let litter = try entry.document.mate(parents[0], parents[1], method: try method(args), seed: try seed(args["seed"]),
-											 undoManager: entry.undoManager)
+											 undoManager: entry.changeUndoManager)
 		return [
 			"id": litter.id,
 			"method": litter.method ?? "",
@@ -362,7 +534,7 @@ enum MCPFamilyTools {
 		let members = try strings(args["members"], "members")
 		try checkMembers(members, in: entry)
 		let includeDescendants = args["include_descendants"]?.boolValue ?? false
-		let removed = try entry.document.reject(Set(members), includingDescendants: includeDescendants, undoManager: entry.undoManager)
+		let removed = try entry.document.reject(Set(members), includingDescendants: includeDescendants, undoManager: entry.changeUndoManager)
 		return ["removed": removed.sorted()]
 	}
 
@@ -374,16 +546,260 @@ enum MCPFamilyTools {
 		}
 		try checkMembers([id], in: entry)
 		if case .string(let name)? = args["name"] {
-			entry.document.rename(id, to: name, undoManager: entry.undoManager)
+			entry.document.rename(id, to: name, undoManager: entry.changeUndoManager)
 		}
 		if let starred = args["starred"]?.boolValue {
-			entry.document.setStarred(starred, for: [id], undoManager: entry.undoManager)
+			entry.document.setStarred(starred, for: [id], undoManager: entry.changeUndoManager)
 		}
 		let member = entry.document.family.member(id: id)!
 		var json: [String: Any] = ["id": id, "starred": member.starred]
 		json["name"] = member.name
 		return json
 	}
+
+
+	private static func settingsJSON(_ settings: Family.Settings) -> [String: Any] {
+		[
+			"litter_size": settings.litterSize,
+			"mutations_per_child": settings.mutationsPerChild,
+			"max_depth": settings.maxDepth,
+			"excluded_functions": settings.excludedFunctions,
+			"excluded_root_functions": settings.excludedRootFunctions,
+			"excluded_variables": settings.excludedVariables,
+		]
+	}
+
+	@MainActor
+	private static func updateSettings(_ args: [String: MCP.Value]) throws -> [String: Any] {
+		let entry = try family(args)
+		var settings = entry.document.family.settings
+		if let size = try integer(args["litter_size"], "litter_size") {
+			guard (1...60).contains(size) else { throw Failure(message: "litter_size must be 1-60.") }
+			settings.litterSize = size
+		}
+		if let rate = try number(args["mutations_per_child"], "mutations_per_child") {
+			guard (0.25...8).contains(rate) else { throw Failure(message: "mutations_per_child must be 0.25-8.") }
+			settings.mutationsPerChild = rate
+		}
+		if let depth = try integer(args["max_depth"], "max_depth") {
+			guard (1...20).contains(depth) else { throw Failure(message: "max_depth must be 1-20.") }
+			settings.maxDepth = depth
+		}
+		let signatures = NodeRegistry.shared.signatures
+		if let names = try names(args["excluded_functions"], "excluded_functions") {
+			try checkFunctions(names, signatures, "excluded_functions")
+			settings.excludedFunctions = names.sorted()
+		}
+		if let names = try names(args["excluded_root_functions"], "excluded_root_functions") {
+			try checkFunctions(names, signatures, "excluded_root_functions")
+			settings.excludedRootFunctions = names.sorted()
+		}
+		if let names = try names(args["excluded_variables"], "excluded_variables") {
+			let unknown = names.filter { !["x", "y", "z"].contains($0) }
+			guard unknown.isEmpty else { throw Failure(message: "excluded_variables can only hold x, y and z, not \(unknown.joined(separator: ", ")).") }
+			settings.excludedVariables = names.sorted()
+		}
+		if settings != entry.document.family.settings {
+			entry.document.change("Change Family Settings", undoManager: entry.changeUndoManager) { $0.settings = settings }
+		}
+		return settingsJSON(entry.document.family.settings)
+	}
+
+	private static func checkFunctions(_ names: [String], _ signatures: [String: NodeSignature], _ argument: String) throws {
+		let unknown = names.filter { signatures[$0] == nil }
+		guard unknown.isEmpty else {
+			throw Failure(message: "\(argument) has functions that aren't loaded: \(unknown.joined(separator: ", ")).")
+		}
+	}
+
+	@MainActor
+	private static func addRandomLitter(_ args: [String: MCP.Value]) throws -> [String: Any] {
+		let entry = try family(args)
+		let litter = entry.document.addRandomLitter(seed: try seed(args["seed"]), undoManager: entry.changeUndoManager)
+		return litterJSON(litter, in: entry)
+	}
+
+	@MainActor
+	private static func addSeedLitter(_ args: [String: MCP.Value]) throws -> [String: Any] {
+		let entry = try family(args)
+		guard let expressions = try names(args["expressions"], "expressions"), !expressions.isEmpty else {
+			throw Failure(message: "expressions must be a non-empty array of s-expressions.")
+		}
+		for text in expressions {
+			do {
+				_ = try GeneratedExpression(parsing: text)
+			} catch {
+				throw Failure(message: "Couldn't read \(text): \(error)")
+			}
+		}
+		let memberNames = try names(args["names"], "names") ?? []
+		guard memberNames.count <= expressions.count else { throw Failure(message: "There are more names than expressions.") }
+		var source: String?
+		if case .string(let text)? = args["source"] { source = text }
+		let litter = try entry.document.addSeedLitter(expressions: expressions, names: memberNames, source: source,
+													  undoManager: entry.changeUndoManager)
+		return litterJSON(litter, in: entry)
+	}
+
+	@MainActor
+	private static func litterJSON(_ litter: Family.Litter, in entry: OpenFamilies.Entry) -> [String: Any] {
+		var json: [String: Any] = [
+			"id": litter.id,
+			"kind": litter.kind.rawValue,
+			"members": entry.document.family.members(ofLitter: litter.id).map { member in
+				var json: [String: Any] = ["id": member.id, "expression": member.expression]
+				json["name"] = member.name
+				return json
+			},
+		]
+		json["seed"] = litter.seed.map(String.init)
+		json["source"] = litter.source
+		return json
+	}
+
+	// MARK: - Windows and files
+
+	/// Where a bare name goes: the folder the sandboxed app is allowed to
+	/// write (see the temporary exception in Evolv_io.entitlements).
+	static let defaultFolderName = "Documents/Evolv Families"
+
+	/// The user's real home, not the sandbox container's.
+	private static var homeDirectory: URL {
+		if let home = getpwuid(getuid())?.pointee.pw_dir {
+			return URL(fileURLWithPath: String(cString: home), isDirectory: true)
+		}
+		return FileManager.default.homeDirectoryForCurrentUser
+	}
+
+	private static func fileURL(_ args: [String: MCP.Value]) throws -> URL? {
+		let text: String
+		switch args["path"] {
+			case nil, .null?: return nil
+			case .string(let value)?: text = value
+			default: throw Failure(message: "path must be a string.")
+		}
+		let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+		guard !trimmed.isEmpty else { throw Failure(message: "path is empty.") }
+		var url: URL
+		if trimmed.hasPrefix("~/") {
+			url = homeDirectory.appending(path: String(trimmed.dropFirst(2)))
+		} else if trimmed.hasPrefix("/") {
+			url = URL(fileURLWithPath: trimmed)
+		} else if !trimmed.contains("/") {
+			url = homeDirectory.appending(path: defaultFolderName).appending(path: trimmed)
+		} else {
+			throw Failure(message: "path must be absolute, start with ~/, or be a bare name.")
+		}
+		if url.pathExtension != "evolvfamily" {
+			url = url.appendingPathExtension("evolvfamily")
+		}
+		return url.standardizedFileURL
+	}
+
+#if os(macOS)
+	/// Waits for the window showing `document` to register.
+	@MainActor
+	private static func entry(for document: NSDocument) async throws -> OpenFamilies.Entry {
+		for _ in 0..<100 {
+			if let entry = OpenFamilies.shared.all.first(where: { $0.nsDocument === document }) {
+				return entry
+			}
+			try await Task.sleep(for: .milliseconds(50))
+		}
+		throw Failure(message: "The family opened, but its window didn't appear.")
+	}
+
+	@MainActor
+	private static func nsDocument(_ entry: OpenFamilies.Entry) throws -> NSDocument {
+		guard let document = entry.nsDocument else {
+			throw Failure(message: "\(entry.name)'s window isn't ready; try again.")
+		}
+		return document
+	}
+
+	@MainActor
+	private static func newFamily(_ args: [String: MCP.Value]) async throws -> [String: Any] {
+		let url = try fileURL(args)
+		let document = try NSDocumentController.shared.openUntitledDocumentAndDisplay(true)
+		let entry = try await entry(for: document)
+		if let url {
+			try await save(entry, to: url)
+		}
+		return try describe(entry.id)
+	}
+
+	@MainActor
+	private static func open(_ args: [String: MCP.Value]) async throws -> [String: Any] {
+		guard let url = try fileURL(args) else { throw Failure(message: "open_family needs a path.") }
+		let document: NSDocument
+		do {
+			(document, _) = try await NSDocumentController.shared.openDocument(withContentsOf: url, display: true)
+		} catch {
+			throw Failure(message: "Couldn't open \(url.path): \(error.localizedDescription) Outside ~/\(defaultFolderName), the sandboxed app can only open files it's been given, so open it with Finder or `open` instead.")
+		}
+		return try describe(try await entry(for: document).id)
+	}
+
+	@MainActor
+	private static func save(_ args: [String: MCP.Value]) async throws -> [String: Any] {
+		let entry = try family(args)
+		if let url = try fileURL(args) {
+			try await save(entry, to: url)
+		} else {
+			let document = try nsDocument(entry)
+			guard let url = document.fileURL else {
+				throw Failure(message: "\(entry.name) hasn't been saved yet; give a path or a name.")
+			}
+			try await document.save(to: url, ofType: document.fileType ?? UTType.evolvFamily.identifier, for: .saveOperation)
+		}
+		return try describe(entry.id)
+	}
+
+	/// Saves as `url`, which the window then shows.
+	@MainActor
+	private static func save(_ entry: OpenFamilies.Entry, to url: URL) async throws {
+		let document = try nsDocument(entry)
+		do {
+			try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+			try await document.save(to: url, ofType: document.fileType ?? UTType.evolvFamily.identifier, for: .saveAsOperation)
+		} catch {
+			throw Failure(message: "Couldn't save to \(url.path): \(error.localizedDescription) The sandboxed app can always save in ~/\(defaultFolderName); pass a bare name to save there.")
+		}
+		OpenFamilies.shared.register(entry.document, fileURL: document.fileURL ?? url, undoManager: nil)
+	}
+
+	@MainActor
+	private static func close(_ args: [String: MCP.Value]) async throws -> [String: Any] {
+		let entry = try family(args)
+		let document = try nsDocument(entry)
+		// A change marks the document edited when its undo group ends, at
+		// the end of the run loop pass, so let a change just made land.
+		try await Task.sleep(for: .milliseconds(100))
+		if document.isDocumentEdited && args["discard_changes"]?.boolValue != true {
+			throw Failure(message: "\(entry.name) has unsaved changes; save it first, or pass discard_changes.")
+		}
+		document.close()
+		return ["closed": entry.id, "name": entry.name]
+	}
+
+	/// list_families' entry for one family.
+	@MainActor
+	private static func describe(_ id: String) throws -> [String: Any] {
+		guard let json = list().first(where: { $0["id"] as? String == id }) else {
+			throw Failure(message: "The family closed.")
+		}
+		return json
+	}
+#else
+	private static func unavailable() -> Failure {
+		Failure(message: "Family windows and files are only available over MCP on macOS.")
+	}
+
+	@MainActor private static func newFamily(_ args: [String: MCP.Value]) async throws -> [String: Any] { throw unavailable() }
+	@MainActor private static func open(_ args: [String: MCP.Value]) async throws -> [String: Any] { throw unavailable() }
+	@MainActor private static func save(_ args: [String: MCP.Value]) async throws -> [String: Any] { throw unavailable() }
+	@MainActor private static func close(_ args: [String: MCP.Value]) async throws -> [String: Any] { throw unavailable() }
+#endif
 
 	// MARK: - Arguments
 
@@ -440,6 +856,30 @@ enum MCPFamilyTools {
 			case .int(let int)?: return int
 			case .double(let double)? where double == double.rounded(): return Int(double)
 			default: throw Failure(message: "\(name) must be an integer.")
+		}
+	}
+
+	private static func number(_ value: MCP.Value?, _ name: String) throws -> Double? {
+		switch value {
+			case nil, .null?: return nil
+			case .int(let int)?: return Double(int)
+			case .double(let double)?: return double
+			default: throw Failure(message: "\(name) must be a number.")
+		}
+	}
+
+	/// An array of strings, possibly empty.
+	private static func names(_ value: MCP.Value?, _ name: String) throws -> [String]? {
+		switch value {
+			case nil, .null?: return nil
+			case .array(let values)?:
+				let names = values.compactMap { value -> String? in
+					if case .string(let text) = value { return text }
+					return nil
+				}
+				guard names.count == values.count else { throw Failure(message: "\(name) must be an array of strings.") }
+				return names
+			default: throw Failure(message: "\(name) must be an array of strings.")
 		}
 	}
 

@@ -77,6 +77,9 @@ struct FamilyWindowView: View {
 		.onChange(of: fileURL) { _, url in OpenFamilies.shared.register(document, fileURL: url, undoManager: undoManager) }
 		.onDisappear { OpenFamilies.shared.unregister(document) }
 #if os(macOS)
+		.background(WindowReader { window in OpenFamilies.shared.setWindow(window, for: document) })
+#endif
+#if os(macOS)
 		.navigationSubtitle(family.members.isEmpty ? "" : "\(family.members.count) genotypes")
 #endif
 		.toolbar { toolbar }
