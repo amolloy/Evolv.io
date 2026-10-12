@@ -40,8 +40,9 @@ worth adding.
 2. **Apple Vision** (v1, built). `CalculateImageAestheticsScoresRequest`
    (macOS 15+) gives Apple's on-device aesthetics score. It was trained on
    photos, so it is reported separately and weighted lightly until it shows
-   it agrees with Andy's picks. `GenerateImageFeaturePrintRequest` gives an
-   embedding, which v1 doesn't use yet (see 4).
+   it agrees with Andy's picks. `GenerateImageFeaturePrintRequest` gives a
+   768-number feature print, returned on request so clients can tell
+   near-copies from new looks (see "Novelty" below and 4).
 3. **CLIP + LAION aesthetic predictor in Core ML** (later). The usual open
    "aesthetic score" model: a CLIP ViT-L/14 image embedding plus a small
    MLP. It needs a one-time download and a coremltools conversion, so it
@@ -63,8 +64,8 @@ worth adding.
 One executable, `EvolvScorer`, with two modes.
 
 ```
-EvolvScorer score [--json] <image>...        # score files, print results
-EvolvScorer serve [--port 4850] [--lan]      # HTTP service
+EvolvScorer score [--json] [--feature-print] [--no-vision] <image>...
+EvolvScorer serve [--port 4850] [--lan] [--no-vision]
 ```
 
 `serve` speaks plain HTTP/1.1 (Network.framework, no dependencies):
@@ -72,7 +73,8 @@ EvolvScorer serve [--port 4850] [--lan]      # HTTP service
 - `GET /health` returns `{"status":"ok","version":"…","vision":true}`.
 - `POST /score` takes the image bytes as the body (`image/png` or
   `image/jpeg`; any format ImageIO reads). The optional `?id=` is echoed
-  back so a client can match replies. Response:
+  back so a client can match replies, and `?featurePrint=1` adds
+  `featurePrint` (Vision's feature print, 768 floats). Response:
 
 ```json
 {
@@ -80,12 +82,12 @@ EvolvScorer serve [--port 4850] [--lan]      # HTTP service
   "score": 0.91,
   "dud": false,
   "structure": {
-    "score": 0.90,
-    "coverage": 0.99, "variety": 1.0, "coherence": 0.67, "richness": 1.0,
+    "score": 0.91,
+    "coverage": 1.0, "variety": 0.77, "coherence": 0.99, "richness": 0.99,
     "raw": {
       "contrast": 0.30, "clipped": 0.09, "fineEnergy": 0.31,
       "bandEnergy": [0.31, 0.14, 0.20, 0.21, 0.13],
-      "coverage": 0.99, "variety": 0.35, "coherence": 0.68, "richness": 0.97
+      "coverage": 0.94, "variety": 0.34, "coherence": 0.68, "richness": 0.97
     }
   },
   "aesthetics": { "overall": 0.87, "isUtility": false },
@@ -104,6 +106,23 @@ By default `serve` listens on loopback only. `--lan` listens on all
 interfaces and advertises `_evolvscore._tcp` over Bonjour, so an Apple TV
 can find the mini without a hard-coded address. There is no authentication,
 so `--lan` is for the home network only.
+
+### Novelty
+
+The score says how good one image is; it can't say whether an image is
+just a near-copy of something already picked. That is the client's job,
+using feature prints. They are unit length, and the Euclidean distance
+between two of them reads roughly as:
+
+- below 0.15: near-copies (siblings differing in one constant);
+- about 0.3: the same lineage a few generations apart;
+- 0.65 and up: different looks (random roots are 0.65-1.07 apart).
+
+The hunt driver picks parents greedily by
+`score - 0.3 * max(0, 1 - d / 0.5)`, where `d` is the distance to the
+nearest parent already picked this generation, with at most two parents
+per root lineage. The TV client can use the same rule against what it has
+recently shown.
 
 Later endpoints, when the TV client exists: `POST /score?expression=…` to
 render and score in one call (EvolvScorer would link ExpressionTree and
@@ -171,3 +190,28 @@ static, gradients, plain halves and quadrants).
 - Vision's aesthetics score likes bright, colourful images and dislikes
   dark ones, which is roughly right, but it is noisy on abstract images,
   so it stays at 20% of the score.
+
+### Retune after the first scorer-driven hunt (2026-10-11)
+
+The first hunt ("Scorer Hunt": 57 random roots, 5 generations bred from
+the top 4 overall) collapsed onto one grey contour-marbling lineage, with
+good images saturating at 0.95-0.98, and a lineage that was mostly a plain
+white gradient with a seam still scored 0.96. Changes:
+
+- A tile now needs a mean |gradient| of 0.01-0.04 (was 0.004-0.02) to count
+  as detail, so smooth gradients no longer count toward coverage.
+- Mappings widened: coverage 0.2-0.9 (was raw), variety 0.18-0.42 (was
+  0.15-0.33), coherence 0.35-0.70 (was 0.40-0.85; coherence only needs to
+  separate lines from speckle, and higher isn't better), richness
+  0.55-1.0 (was 0.45-0.90).
+- Weights: coverage 0.2, variety 0.35, coherence 0.15, richness 0.3.
+
+Now: butterflies about 0.91, contour marbling 0.83, the seam images
+0.62-0.72, synthetic leopard spots 0.12-0.22, marbling of large blobs 0.37,
+fBm clouds 0.15.
+
+The second hunt ("Scorer Hunt 2", same roots, novelty penalty and at most
+two parents per lineage) kept four lineages alive for all five
+generations, and its nine finalists come from five lineages. Lineages
+whose children never beat the parent get re-picked unchanged, which a
+driver could treat as "stalled" and replace with a fresh root.

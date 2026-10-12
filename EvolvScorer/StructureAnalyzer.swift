@@ -50,7 +50,7 @@ enum StructureAnalyzer {
     static let bandSigmas: [Float] = [1, 2, 4, 8, 16]
     /// Mean |gradient| per tile (luminance units per px at 256) that counts
     /// as "has detail": soft between these two.
-    static let activeTile: (Double, Double) = (0.004, 0.02)
+    static let activeTile: (Double, Double) = (0.01, 0.04)
 
     static func analyze(_ image: AnalysisImage) -> StructureMetrics {
         let w = image.width, h = image.height, n = w * h
@@ -140,10 +140,10 @@ enum StructureAnalyzer {
     // MARK: - Mapping and the dud filter
 
     static func combine(_ raw: StructureMetrics.Raw) -> StructureMetrics {
-        let coverage = raw.coverage
-        let variety = smoothstep(0.15, 0.33, raw.variety)
-        let coherence = smoothstep(0.40, 0.85, raw.coherence)
-        let richness = smoothstep(0.45, 0.90, raw.richness)
+        let coverage = smoothstep(0.20, 0.90, raw.coverage)
+        let variety = smoothstep(0.18, 0.42, raw.variety)
+        let coherence = smoothstep(0.35, 0.70, raw.coherence)
+        let richness = smoothstep(0.55, 1.00, raw.richness)
 
         var dudReason: String?
         if raw.contrast < 0.03 {
@@ -156,7 +156,7 @@ enum StructureAnalyzer {
 
         // Weighted geometric mean, so an image has to do reasonably on every
         // axis; the floor keeps one zero from erasing everything else.
-        let parts: [(Double, Double)] = [(coverage, 0.2), (variety, 0.3), (coherence, 0.25), (richness, 0.25)]
+        let parts: [(Double, Double)] = [(coverage, 0.2), (variety, 0.35), (coherence, 0.15), (richness, 0.3)]
         let floor = 0.02
         var score = exp(parts.reduce(0) { $0 + $1.1 * log(max($1.0, floor)) })
         if dudReason != nil { score = 0 }

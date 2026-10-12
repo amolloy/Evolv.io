@@ -9,13 +9,14 @@
 import Foundation
 
 let usage = """
-usage: EvolvScorer score [--json] [--no-vision] <image>...
+usage: EvolvScorer score [--json] [--feature-print] [--no-vision] <image>...
        EvolvScorer serve [--port 4850] [--lan] [--no-vision]
 
 score   Score image files and print one line (or one JSON object) per file.
 serve   Run the HTTP service: GET /health, POST /score (image bytes as body,
         optional ?id= echoed back). Loopback only unless --lan, which also
-        advertises _evolvscore._tcp over Bonjour.
+        advertises _evolvscore._tcp over Bonjour. ?featurePrint=1 adds Vision's
+        feature print to the reply, for telling near-copies apart.
 """
 
 func fail(_ message: String) -> Never {
@@ -27,7 +28,7 @@ var arguments = Array(CommandLine.arguments.dropFirst())
 guard let command = arguments.first else { fail(usage) }
 arguments.removeFirst()
 
-var json = false, lan = false, useVision = true
+var json = false, lan = false, useVision = true, featurePrint = false
 var port: UInt16 = 4850
 var files: [String] = []
 var index = 0
@@ -36,6 +37,7 @@ while index < arguments.count {
     case "--json": json = true
     case "--lan": lan = true
     case "--no-vision": useVision = false
+    case "--feature-print": featurePrint = true
     case "--port":
         index += 1
         guard index < arguments.count, let value = UInt16(arguments[index]) else { fail("--port needs a number") }
@@ -62,7 +64,7 @@ case "score":
             FileHandle.standardError.write(Data("\(file): not an image ImageIO can read\n".utf8))
             continue
         }
-        let result = try await scorer.score(image, id: file)
+        let result = try await scorer.score(image, id: file, featurePrint: featurePrint)
         if json {
             print(String(data: try JSONEncoder.scorer.encode(result), encoding: .utf8)!)
         } else {

@@ -142,7 +142,8 @@ final class HTTPServer: @unchecked Sendable {
                 return
             }
             do {
-                let result = try await scorer.score(request.body, id: request.query["id"])
+                let wantsFeaturePrint = ["1", "true", "yes"].contains(request.query["featurePrint"] ?? "")
+                let result = try await scorer.score(request.body, id: request.query["id"], featurePrint: wantsFeaturePrint)
                 send(status: 200, body: try JSONEncoder.scorer.encode(result), on: connection)
             } catch {
                 send(status: 422, json: ["error": "\(error)"], on: connection)
